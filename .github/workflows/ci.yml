@@ -4,8 +4,12 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tests:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,47 +19,56 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.3"
+          php-version: '8.3'
           coverage: none
-          extensions: mbstring, dom, fileinfo, sqlite3
+          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
+          tools: composer
 
       - name: Validate composer.json
         run: composer validate --no-check-publish
 
-      - name: Cache Composer dependencies
+      - name: Cache Composer
         uses: actions/cache@v4
         with:
           path: |
             ~/.composer/cache/files
-            vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Prepare environment
+      - name: Prepare app (.env, key)
         run: |
-          cp .env.example .env
+          cp .env.example .env || true
           php artisan key:generate
+          php artisan config:clear
+
+      - name: Prepare SQLite database
+        run: |
           mkdir -p database
           touch database/database.sqlite
-        shell: bash
 
-      - name: Configure .env for sqlite
-        run: |
-          php -r "file_put_contents('.env', preg_replace('/^DB_CONNECTION=.*$/m', 'DB_CONNECTION=sqlite', file_get_contents('.env')));"
-          php -r "file_put_contents('.env', preg_replace('/^DB_DATABASE=.*$/m', 'DB_DATABASE=' . __DIR__ . '/../database/database.sqlite', file_get_contents('.env')));"
-        shell: bash
-
-      - name: Migrate database
+      - name: Run migrations
         env:
           APP_ENV: testing
-        run: php artisan migrate --no-interaction -v
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+        run: php artisan migrate --force --no-interaction -v
+
+      # Opsional: generate Swagger (kalau belum siap, boleh dihapus/skip error)
+      - name: Generate OpenAPI (l5-swagger)
+        run: php artisan l5-swagger:generate
+        continue-on-error: true
 
       - name: Run tests (Pest/Laravel)
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
         run: php artisan test --colors=always
 
+      # Opsional: Pint check (jangan fail build kalau belum pasang)
       - name: Run Pint (optional)
         run: |
           if [ -f vendor/bin/pint ]; then
@@ -63,4 +76,3 @@ jobs:
           else
             echo "Laravel Pint not installed; skipping."
           fi
-        shell: bash
