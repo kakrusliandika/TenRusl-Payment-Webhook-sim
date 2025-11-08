@@ -98,14 +98,13 @@ Tambahkan ke `.env` (contoh minimal):
 ---
 
 ## 📡 Endpoint API
+**Base URL:** `http://127.0.0.1:8000/api/v1`
 
-Base URL: `http://127.0.0.1:8000/api/v1`
-
-| Method & Path               | Deskripsi                   | Header Penting            | Body                                             |
-| --------------------------- | --------------------------- | ------------------------- | ------------------------------------------------ | -------------------- | ------------------------------------ |
-| `POST /payments`            | Buat payment (idempotent)   | `Idempotency-Key: <uuid>` | `{ amount, currency?, description?, metadata? }` |
-| `GET /payments/{id}`        | Lihat status payment        | –                         | –                                                |
-| `POST /webhooks/{provider}` | Terima event webhook (`mock | xendit                    | midtrans`)                                       | Lihat tabel di bawah | `{ event_id, type, data, sent_at? }` |
+| Method | Path                    | Deskripsi                                         | Header Penting                 | Body (ringkas)                                                                 |
+|:------:|-------------------------|---------------------------------------------------|--------------------------------|--------------------------------------------------------------------------------|
+| POST   | `/payments`            | Buat payment (idempotent)                         | `Idempotency-Key: <uuid>`      | `{ "amount": 25000, "currency": "IDR", "description": "Topup", "metadata": {…} }` |
+| GET    | `/payments/{id}`       | Lihat status payment                              | –                              | –                                                                              |
+| POST   | `/webhooks/{provider}` | Terima event webhook (mock • xendit • midtrans)   | Lihat tabel Signature di bawah | `{ "event_id": "...", "type": "payment.paid", "data": {…}, "sent_at": "..." }` |
 
 ---
 
