@@ -1,0 +1,29 @@
+﻿name: PHP CI
+on:
+  push:
+  pull_request:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: composer
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Install Dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Prepare App
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate || true
+      - name: Run Tests (Pest)
+        run: vendor/bin/pest -q

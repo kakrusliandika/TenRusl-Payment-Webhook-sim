@@ -1,0 +1,22 @@
+* text=auto eol=lf
+
+# Treat these as binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# Diff drivers
+*.md diff=markdown
+*.php diff=php
+
+# Export ignores (lighter source tarballs)
+.github export-ignore
+.vscode export-ignore
+docker export-ignore
+postman export-ignore
+
+# Improve GitHub linguist accuracy
+vendor/* linguist-vendored

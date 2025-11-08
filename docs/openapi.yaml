@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: TenRusl Payment Webhook Simulator
+  description: >
+    Demo Laravel untuk arsitektur payment: idempotency, webhook dedup, signature verification,
+    serta exponential backoff retry (simulasi). Tidak memerlukan kredensial gateway asli.
+  version: 0.1.0
+  contact:
+    name: TenRusl
+servers:
+  - url: http://localhost:8000/api
+    description: Local
+
+tags:
+  - name: Payments
+  - name: Webhooks
+
+paths:
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Create payment (idempotent)
+      description: Membuat payment baru dengan dukungan Idempotency-Key.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+            examples:
+              default:
+                value:
+                  amount: 25000
+                  currency: IDR
+                  description: Topup
+                  metadata:
+                    customer_id: cus_1
+      responses:
+        "201":
+          description: Payment created (or replayed) with snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          description: Bad Request (missing/invalid fields or missing Idempotency-Key)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Duplicate request currently being processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /payments/{id}:
+    get:
+      tags: [Payments]
+      summary: Get payment status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Payment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /webhooks/{provider}:
+    post:
+      tags: [Webhooks]
+      summary: Receive webhook event
+      description: >
+        Receiver webhook untuk provider: mock | xendit | midtrans.
+        Verifikasi signature/token dilakukan via header per provider.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [mock, xendit, midtrans]
+        - $ref: "#/components/parameters/MockSignature"
+        - $ref: "#/components/parameters/XenditCallbackToken"
+        - $ref: "#/components/parameters/MidtransSignatureKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookEvent"
+            examples:
+              paid:
+                value:
+                  event_id: evt_123
+                  type: payment.paid
+                  data:
+                    payment_id: pay_abc123
+                    amount: 25000
+                    currency: IDR
+                  sent_at: 2025-11-08T12:01:00Z
+      responses:
+        "200":
+          description: Event processed (idempotent)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: boolean }
+                  provider: { type: string }
+                  event_id: { type: string }
+                  status: { type: string, enum: [processed] }
+        "400":
+          description: Bad payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Signature/token invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Duplicate event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8 }
+      description: Unique key per intent; server menyimpan snapshot response.
+    MockSignature:
+      name: X-Mock-Signature
+      in: header
+      required: false
+      schema: { type: string }
+      description: HMAC-SHA256 dari raw body menggunakan MOCK_SECRET (untuk provider=mock).
+    XenditCallbackToken:
+      name: x-callback-token
+      in: header
+      required: false
+      schema: { type: string }
+      description: Token callback yang cocok dengan XENDIT_CALLBACK_TOKEN (untuk provider=xendit).
+    MidtransSignatureKey:
+      name: Signature-Key
+      in: header
+      required: false
+      schema: { type: string }
+      description: SHA512(order_id+status_code+gross_amount+server_key) (untuk provider=midtrans).
+
+  schemas:
+    Payment:
+      type: object
+      properties:
+        id: { type: string, example: pay_abc123 }
+        status:
+          type: string
+          enum: [pending, paid, failed, refunded]
+          example: pending
+        amount: { type: integer, minimum: 1000, example: 25000 }
+        currency: { type: string, example: IDR }
+        description: { type: string, maxLength: 140, example: Topup }
+        metadata:
+          type: object
+          additionalProperties: true
+          example: { customer_id: "cus_1" }
+        idempotency_key: { type: string, example: 9f6b8a74-... }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreatePaymentRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: integer, minimum: 1000 }
+        currency: { type: string, default: IDR }
+        description: { type: string, maxLength: 140 }
+        metadata:
+          type: object
+          additionalProperties: true
+    WebhookEvent:
+      type: object
+      required: [event_id, type, data]
+      properties:
+        event_id: { type: string, example: evt_123 }
+        type: { type: string, example: payment.paid }
+        data:
+          type: object
+          additionalProperties: true
+          example:
+            payment_id: pay_abc123
+            amount: 25000
+            currency: IDR
+        sent_at:
+          { type: string, format: date-time, example: 2025-11-08T12:01:00Z }
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        message: { type: string }
+        code: { type: string }

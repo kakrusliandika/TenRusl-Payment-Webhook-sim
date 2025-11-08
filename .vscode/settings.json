@@ -1,0 +1,18 @@
+{
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "editor.tabSize": 2,
+  "editor.formatOnSave": true,
+
+  "search.exclude": {
+    "**/vendor": true,
+    "**/node_modules": true,
+    "**/storage": true,
+    "**/bootstrap/cache": true
+  },
+
+  // JANGAN exclude vendor di Intelephense, biar bisa baca tipe Laravel
+  "intelephense.environment.phpVersion": "8.3",
+  "intelephense.files.exclude": ["**/storage/**", "**/node_modules/**"]
+}

@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "bmewburn.vscode-intelephense-client",
+    "EditorConfig.EditorConfig",
+    "esbenp.prettier-vscode",
+    "ms-azuretools.vscode-docker",
+    "github.vscode-pull-request-github",
+    "streetsidesoftware.code-spell-checker"
+  ]
+}

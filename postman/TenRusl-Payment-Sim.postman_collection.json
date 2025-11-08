@@ -1,0 +1,253 @@
+{
+  "info": {
+    "name": "TenRusl Payment Webhook Simulator",
+    "_postman_id": "f7e8a1f4-1111-2222-3333-444455556666",
+    "description": "Koleksi request untuk Payments & Webhooks (Laravel 12). Termasuk pre-request scripts untuk Idempotency-Key, HMAC mock, callback token Xendit, dan Signature-Key Midtrans.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create Payment (idempotent)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate Idempotency-Key sekali kalau belum ada",
+                  "if (!pm.environment.get('idempotencyKey')) {",
+                  "  pm.environment.set('idempotencyKey', crypto.randomUUID());",
+                  "}",
+                  "// Upsert header",
+                  "pm.request.headers.upsert({ key: 'Idempotency-Key', value: pm.environment.get('idempotencyKey') });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Terima 201 (created) atau 200 (snapshot replay)",
+                  "pm.test('Status 201/200', function () {",
+                  "  pm.expect([200,201]).to.include(pm.response.code);",
+                  "});",
+                  "",
+                  "// Simpan paymentId dari response (support Resource wrapper)",
+                  "let pid = pm.response.json()?.id || pm.response.json()?.data?.id;",
+                  "if (pid) {",
+                  "  pm.environment.set('paymentId', pid);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotencyKey}}",
+                "description": "UUID unik per niat transaksi"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 25000,\n  \"currency\": \"IDR\",\n  \"description\": \"Topup\",\n  \"metadata\": { \"customer_id\": \"cus_1\" }\n}"
+            },
+            "description": "Membuat payment baru dengan dukungan Idempotency-Key.\nReplay request dengan key yang sama akan mengembalikan snapshot (200)."
+          }
+        },
+        {
+          "name": "Get Payment Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/payments/{{paymentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["payments", "{{paymentId}}"]
+            },
+            "description": "Ambil status payment terakhir (environment var paymentId di-set dari response Create Payment)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks - Mock",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Hitung HMAC-SHA256 raw body untuk X-Mock-Signature",
+              "const raw = pm.request.body ? pm.request.body.raw || '' : '';",
+              "const secret = pm.environment.get('MOCK_SECRET') || '';",
+              "if (!secret) {",
+              "  console.warn('MOCK_SECRET belum di-set di environment.');",
+              "}",
+              "if (raw && secret && typeof CryptoJS !== 'undefined') {",
+              "  const sig = CryptoJS.HmacSHA256(raw, secret).toString(CryptoJS.enc.Hex);",
+              "  pm.request.headers.upsert({ key: 'X-Mock-Signature', value: sig });",
+              "  pm.environment.set('lastMockSignature', sig);",
+              "} else {",
+              "  // Fallback (tidak direkomendasikan) pakai env MIDTRANS_SIGNATURE_KEY jika benar2 kosong",
+              "  const fallback = pm.environment.get('MIDTRANS_SIGNATURE_KEY') || '';",
+              "  if (fallback) pm.request.headers.upsert({ key: 'X-Mock-Signature', value: fallback });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Mock Paid",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/mock",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "mock"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt_123\",\n  \"type\": \"payment.paid\",\n  \"data\": {\"payment_id\": \"{{paymentId}}\", \"amount\": 25000, \"currency\": \"IDR\"},\n  \"sent_at\": \"{{$isoTimestamp}}\"\n}"
+            },
+            "description": "Contoh event paid untuk provider mock. Signature otomatis dihitung dari raw body + MOCK_SECRET."
+          }
+        },
+        {
+          "name": "Mock Failed",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/mock",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "mock"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt_124\",\n  \"type\": \"payment.failed\",\n  \"data\": {\"payment_id\": \"{{paymentId}}\", \"amount\": 25000, \"currency\": \"IDR\"},\n  \"sent_at\": \"{{$isoTimestamp}}\"\n}"
+            },
+            "description": "Contoh event failed untuk provider mock."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks - Xendit Ready",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Sisipkan x-callback-token dari environment",
+              "const cb = pm.environment.get('XENDIT_CALLBACK_TOKEN') || '';",
+              "if (!cb) {",
+              "  console.warn('XENDIT_CALLBACK_TOKEN belum di-set di environment.');",
+              "}",
+              "pm.request.headers.upsert({ key: 'x-callback-token', value: cb });"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Xendit Example",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/xendit",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "xendit"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt_x_01\",\n  \"type\": \"payment.paid\",\n  \"data\": {\"payment_id\": \"{{paymentId}}\"}\n}"
+            },
+            "description": "Contoh webhook Xendit; header x-callback-token diambil dari env."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks - Midtrans Ready",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// (Opsional) Hitung Signature-Key Midtrans: sha512(order_id+status_code+gross_amount+server_key)",
+              "const serverKey = pm.environment.get('MIDTRANS_SERVER_KEY') || '';",
+              "try {",
+              "  const raw = pm.request.body ? pm.request.body.raw || '{}' : '{}';",
+              "  const obj = JSON.parse(raw);",
+              "  const orderId = _.get(obj, 'data.order_id', '');",
+              "  const statusCode = _.get(obj, 'data.status_code', '');",
+              "  const grossAmount = _.get(obj, 'data.gross_amount', '');",
+              "  if (serverKey && orderId && statusCode && grossAmount && typeof CryptoJS !== 'undefined') {",
+              "    const sign = CryptoJS.SHA512(orderId + statusCode + grossAmount + serverKey).toString(CryptoJS.enc.Hex);",
+              "    pm.request.headers.upsert({ key: 'Signature-Key', value: sign });",
+              "  } else {",
+              "    // Fallback: pakai env MIDTRANS_SIGNATURE_KEY bila perhitungan tidak memungkinkan",
+              "    const fallback = pm.environment.get('MIDTRANS_SIGNATURE_KEY') || '';",
+              "    if (fallback) pm.request.headers.upsert({ key: 'Signature-Key', value: fallback });",
+              "  }",
+              "} catch (e) {",
+              "  console.warn('Midtrans signature compute error:', e.message);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Midtrans Example",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/midtrans",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "midtrans"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt_m_01\",\n  \"type\": \"payment.paid\",\n  \"data\": {\n    \"payment_id\": \"{{paymentId}}\",\n    \"order_id\": \"ORDER-123\",\n    \"status_code\": \"200\",\n    \"gross_amount\": \"25000\"\n  }\n}"
+            },
+            "description": "Contoh webhook Midtrans. Middleware kamu saat ini hanya mengecek keberadaan header Signature-Key; script ini bisa menghitung signature realistis jika SERVER_KEY tersedia."
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level: seed Idempotency-Key sekali (bisa di-replay untuk snapshot)",
+          "if (!pm.environment.get('idempotencyKey')) {",
+          "  pm.environment.set('idempotencyKey', crypto.randomUUID());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": []
+}
