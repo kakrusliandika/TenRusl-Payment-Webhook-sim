@@ -1,15 +1,31 @@
-# Railway Blueprint for TenRusl Payment Webhook Simulator
-# Place at repo root and connect via "New Project > Deploy from GitHub".
-# Uses Nixpacks (no Docker required). Starts Laravel with migrations & workers.
+# # Railway Blueprint for TenRusl Payment Webhook Simulator
+# # Place at repo root and connect via "New Project > Deploy from GitHub".
+# # Uses Nixpacks (no Docker required). Starts Laravel with migrations & workers.
+
+# [build]
+# builder = "NIXPACKS"
+# # Install prod deps only for faster boot
+# buildCommand = "composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader"
+
+# [deploy]
+# # Run Laravel bootstrap, migrations, workers, then serve
+# startCommand = "sh start.sh"
+# healthcheckPath = "/up"
+# healthcheckTimeout = 60
+# restartPolicyType = "ON_FAILURE"
+# numReplicas = 1
+
+
+# Railway Postgres-only config for TenRusl Payment Webhook Simulator
+# Rename this to 'railway.toml' if you want to use Postgres config by default.
+# Deploy from GitHub in Railway. Add the Postgres plugin to your project so DATABASE_URL is injected.
 
 [build]
 builder = "NIXPACKS"
-# Install prod deps only for faster boot
 buildCommand = "composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader"
 
 [deploy]
-# Run Laravel bootstrap, migrations, workers, then serve
-startCommand = "sh start.sh"
+startCommand = "sh start-postgres.sh"
 healthcheckPath = "/up"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
