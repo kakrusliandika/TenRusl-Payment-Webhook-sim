@@ -48,7 +48,7 @@ Demo **Laravel 12** untuk memamerkan arsitektur payment yang rapi: **idempotency
 flowchart TD
   A[Client] -->|Idempotency-Key| B[POST /api/v1/payments]
   B -->|create pending| P[(payments)]
-  W[Provider] -->|POST /api/v1/webhooks/{provider}| C[WebhooksController]
+  W[Provider] -->|POST /api/v1/webhooks/&#123;provider&#125;| C[WebhooksController]
   C -->|Verify Signature| S[SignatureVerifier]
   C -->|Dedup + Orkestrasi| R[WebhookProcessor]
   R -->|Update Status| P
