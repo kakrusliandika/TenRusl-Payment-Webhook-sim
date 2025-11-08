@@ -1,0 +1,16 @@
+# Railway Blueprint for TenRusl Payment Webhook Simulator
+# Place at repo root and connect via "New Project > Deploy from GitHub".
+# Uses Nixpacks (no Docker required). Starts Laravel with migrations & workers.
+
+[build]
+builder = "NIXPACKS"
+# Install prod deps only for faster boot
+buildCommand = "composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader"
+
+[deploy]
+# Run Laravel bootstrap, migrations, workers, then serve
+startCommand = "sh start.sh"
+healthcheckPath = "/up"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+numReplicas = 1
