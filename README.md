@@ -7,7 +7,7 @@
 ![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)
 ![Pest](https://img.shields.io/badge/Tests-Pest-18181B?logo=pestphp&logoColor=white)
 
-Demo **Laravel 12** untuk memamerkan arsitektur payment yang rapi: **idempotency**, **dedup webhook**, **signature verification**, dan **exponential backoff retry (simulasi)** — tanpa kredensial gateway asli. Cocok untuk portfolio & pembelajaran praktik produksi.
+Demo **Laravel 12** untuk mengilustrasikan arsitektur payment: **idempotency**, **dedup webhook**, **signature verification**, dan **exponential backoff retry (simulasi)** — tanpa kredensial gateway asli. Cocok untuk portfolio & pembelajaran praktik produksi.
 
 > **Catatan**: Semua provider di mode *simulator*. Jangan memakai kredensial asli di repo.
 
