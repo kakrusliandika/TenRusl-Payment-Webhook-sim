@@ -1,44 +1,41 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console;
 
+use App\Console\Commands\RetryWebhookCommand;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
     /**
-     * Daftarkan command artisan kustom (opsional — auto-discover juga jalan).
+     * Daftar command aplikasi (opsional; Laravel juga mendeteksi otomatis via artisan).
+     *
      * @var array<class-string>
      */
     protected $commands = [
-        \App\Console\Commands\RetryWebhookCommand::class,
+        RetryWebhookCommand::class,
     ];
 
     /**
-     * Definisikan jadwal eksekusi artisan commands.
+     * Definisikan jadwal tugas.
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Jalankan setiap menit, tanpa overlap, di background
-        $schedule->command('tenrusl:webhooks:retry --limit=100 --max=5')
+        // Jalankan setiap menit, cegah overlap jika proses sebelumnya belum selesai.
+        $schedule->command('tenrusl:webhooks:retry --limit=200 --max-attempts=' . (int) config('tenrusl.max_retry_attempts', 5))
             ->everyMinute()
-            ->withoutOverlapping()
-            ->runInBackground()
-            ->onOneServer(); // jika pakai multiple worker/server
-
-        // (opsional) Tambahkan pembersihan event processed lama
-        // $schedule->call(fn () => app(\App\Repositories\WebhookEventRepository::class)->purgeProcessedOlderThan(30))
-        //     ->dailyAt('02:00')
-        //     ->runInBackground();
+            ->withoutOverlapping(); // gunakan cache lock default
     }
 
     /**
-     * Daftarkan closures command dari routes/console.php
+     * Daftarkan file route konsol (jika diperlukan).
      */
     protected function commands(): void
     {
-        $this->load(__DIR__.'/Commands');
+        $this->load(__DIR__ . '/Commands');
         require base_path('routes/console.php');
     }
 }

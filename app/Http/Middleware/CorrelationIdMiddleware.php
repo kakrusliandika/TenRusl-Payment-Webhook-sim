@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Middleware;
 
 use Closure;
@@ -8,16 +10,25 @@ use Illuminate\Support\Str;
 
 class CorrelationIdMiddleware
 {
+    public const HEADER = 'X-Correlation-Id';
+    public const ATTR   = 'correlation_id';
+
+    /**
+     * Tambah / jaga Correlation-Id di setiap request & response.
+     */
     public function handle(Request $request, Closure $next)
     {
-        $header = 'X-Request-Id';
-        $id = $request->headers->get($header) ?: (string) Str::uuid();
+        $incoming = (string) ($request->headers->get(self::HEADER) ?? '');
+        $cid      = $incoming !== '' ? $incoming : strtolower((string) Str::ulid());
 
-        // simpan di attributes agar bisa dipakai di log/response builder
-        $request->attributes->set('request_id', $id);
+        // simpan ke attribute agar bisa diakses handler / logger
+        $request->attributes->set(self::ATTR, $cid);
 
+        /** @var \Symfony\Component\HttpFoundation\Response $response */
         $response = $next($request);
-        $response->headers->set($header, $id);
+
+        // propagate ke response
+        $response->headers->set(self::HEADER, $cid);
 
         return $response;
     }

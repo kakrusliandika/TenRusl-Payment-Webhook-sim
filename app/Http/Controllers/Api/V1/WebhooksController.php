@@ -1,55 +1,110 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\WebhookRequest;
-use App\Services\Signatures\SignatureVerifier;
 use App\Services\Webhooks\WebhookProcessor;
-use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 class WebhooksController extends Controller
 {
     public function __construct(
-        private SignatureVerifier $signatures,
-        private WebhookProcessor $processor
+        private readonly WebhookProcessor $processor
     ) {}
 
-    public function store(string $provider, WebhookRequest $request)
+    /** POST /api/v1/webhooks/{provider} */
+    public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
-        /** @var SymfonyRequest $sym */
-        $sym = $request; // hint tipe agar Intelephense paham properti headers
-        $sigHash = (string) $sym->headers->get('X-Webhook-Signature-Hash', '');
+        $rawBody     = $request->rawBody();
+        $contentType = $this->detectContentType();
+        $payload     = $this->parsePayload($rawBody, $contentType);
 
-        if ($sigHash === '') {
-            $res = $this->signatures->verify($provider, $request);
-            if (! $res['ok']) {
-                return response()->json([
-                    'error'   => 'unauthorized',
-                    'message' => $res['msg'] ?? 'Signature verification failed',
-                    'code'    => '401',
-                ], 401);
-            }
-            $sigHash = (string) $res['hash'];
-        }
+        // Ekstrak event id & type jika tersedia — buatkan bila tidak ada
+        $eventId = $this->extractEventId($payload) ?? ('evt_' . Str::ulid());
+        $type    = $this->extractType($payload);
 
-        $body    = $request->validated();
-        $outcome = $this->processor->process($provider, $body, $sigHash);
-
-        if ($outcome['status'] === 'processed') {
-            return response()->json([
-                'received'   => true,
-                'provider'   => $provider,
-                'event_id'   => $body['event_id'] ?? null,
-                'status'     => 'processed',
-                'duplicated' => (bool) $outcome['duplicated'],
-            ], 200);
-        }
+        $result = $this->processor->process(
+            $provider,
+            $eventId,
+            $type ?? '',
+            $rawBody,
+            $payload
+        );
 
         return response()->json([
-            'error'   => 'processing_failed',
-            'message' => 'Event will be retried',
-            'code'    => '500',
-        ], 500);
+            'data' => [
+                'event' => [
+                    'provider' => $provider,
+                    'event_id' => $eventId,
+                    'type'     => $type,
+                ],
+                'result' => $result,
+            ],
+        ], 202);
+    }
+
+    /** Ambil Content-Type tanpa memanggil helper yang di-flag Intelephense */
+    private function detectContentType(): string
+    {
+        // Gunakan superglobal agar aman untuk static analyzer
+        return (string) (
+            $_SERVER['CONTENT_TYPE']
+            ?? $_SERVER['HTTP_CONTENT_TYPE']
+            ?? ''
+        );
+    }
+
+    /** Parse payload sesuai content-type. */
+    private function parsePayload(string $rawBody, ?string $contentType): array
+    {
+        $ct = strtolower((string) $contentType);
+
+        if (str_contains($ct, 'application/json')) {
+            $arr = json_decode($rawBody, true);
+            return is_array($arr) ? $arr : [];
+        }
+
+        if (str_contains($ct, 'application/x-www-form-urlencoded')) {
+            $out = [];
+            parse_str($rawBody, $out);
+            return is_array($out) ? $out : [];
+        }
+
+        return [];
+    }
+
+    private function extractEventId(array $p): ?string
+    {
+        foreach ([
+            Arr::get($p, 'id'),
+            Arr::get($p, 'event_id'),
+            Arr::get($p, 'data.id'),
+            Arr::get($p, 'resource.id'),
+            Arr::get($p, 'object.id'),
+        ] as $v) {
+            if (is_string($v) && $v !== '') {
+                return $v;
+            }
+        }
+        return null;
+    }
+
+    private function extractType(array $p): ?string
+    {
+        foreach ([
+            Arr::get($p, 'type'),
+            Arr::get($p, 'event'),
+            Arr::get($p, 'data.object'),
+        ] as $v) {
+            if (is_string($v) && $v !== '') {
+                return $v;
+            }
+        }
+        return null;
     }
 }

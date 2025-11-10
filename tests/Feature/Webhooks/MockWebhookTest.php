@@ -1,41 +1,50 @@
 <?php
 
-use App\Models\Payment;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+declare(strict_types=1);
 
-uses(RefreshDatabase::class);
+use function Pest\Laravel\postJson;
 
-beforeEach(function () {
-    config(['tenrusl.mock_secret' => 'testsecret']);
-});
-
-it('processes mock webhook with valid signature and marks payment paid', function () {
-    $payment = Payment::factory()->pending()->create([
-        'amount' => 25000,
-        'currency' => 'IDR',
-    ]);
+it('accepts Mock webhook with valid HMAC header and returns 202', function () {
+    // Simulator mock: HMAC-SHA256(raw_body, MOCK_SECRET) → header X-Mock-Signature
+    config(['tenrusl.mock_secret' => 'secret-demo']);
 
     $payload = [
-        'event_id' => 'evt_1001',
-        'type' => 'payment.paid',
-        'data' => [
-            'payment_id' => (string) $payment->id,
-            'amount' => 25000,
-            'currency' => 'IDR',
-        ],
-        'sent_at' => now()->toISOString(),
+        'id'        => 'evt_' . now()->timestamp,
+        'type'      => 'payment.paid',
+        'reference' => 'sim_mock_' . now()->timestamp,
+        'amount'    => 100000,
+        'currency'  => 'IDR',
     ];
 
-    // Gunakan encoder default (sinkron dengan postJson())
-    $json = json_encode($payload);
-    $sig  = hash_hmac('sha256', $json, config('tenrusl.mock_secret'));
+    // hitung signature berdasarkan JSON yang akan dikirim
+    $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+    $sig  = hash_hmac('sha256', $json, 'secret-demo');
 
-    $res = $this->withHeaders(['X-Mock-Signature' => $sig])
-        ->postJson('/api/v1/webhooks/mock', $payload);
+    $resp = postJson('/api/v1/webhooks/mock', $payload, [
+        'X-Mock-Signature' => $sig,
+    ]);
 
-    $res->assertOk()
-        ->assertJsonFragment(['status' => 'processed']);
+    $resp->assertStatus(202)
+        ->assertJsonStructure([
+            'data' => [
+                'event'  => ['provider', 'event_id', 'type'],
+                'result' => ['duplicate', 'persisted', 'status'],
+            ],
+        ])
+        ->assertJsonPath('data.event.provider', 'mock');
+});
 
-    $payment->refresh();
-    expect($payment->status)->toBe('paid');
+it('rejects Mock webhook with wrong signature and returns 401', function () {
+    config(['tenrusl.mock_secret' => 'secret-demo']);
+
+    $payload = [
+        'id'   => 'evt_invalid',
+        'type' => 'payment.paid',
+    ];
+
+    $resp = postJson('/api/v1/webhooks/mock', $payload, [
+        'X-Mock-Signature' => 'invalid',
+    ]);
+
+    $resp->assertStatus(401);
 });

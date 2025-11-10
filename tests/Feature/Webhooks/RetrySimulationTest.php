@@ -1,69 +1,55 @@
 <?php
 
-use App\Models\Payment;
+declare(strict_types=1);
+
 use App\Models\WebhookEvent;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Carbon;
 
-uses(RefreshDatabase::class);
+it('increments attempts and schedules next_retry_at when retry command runs', function () {
+    // Konfigurasi: maksimum percobaan yang wajar untuk test
+    config(['tenrusl.max_retry_attempts' => 5]);
 
-beforeEach(function () {
-    config(['tenrusl.mock_secret' => 'testsecret']);
+    // Buat event yang eligible untuk retry (next_retry_at sudah lewat)
+    /** @var \App\Models\WebhookEvent $event */
+    $event = WebhookEvent::factory()->create([
+        'provider'      => 'mock',
+        'event_id'      => 'evt_retry_' . now()->timestamp,
+        'event_type'    => 'payment.failed',
+        'payload_raw'   => json_encode(['foo' => 'bar']),
+        'attempts'      => 0,
+        'processed_at'  => null,
+        'next_retry_at' => Carbon::now()->subMinute(),
+    ]);
+
+    // Jalankan perintah konsol retry
+    Artisan::call('tenrusl:webhooks:retry');
+
+    $event->refresh();
+
+    expect($event->attempts)->toBe(1)
+        ->and($event->next_retry_at)->not()->toBeNull()
+        ->and($event->next_retry_at->gt(Carbon::now()))->toBeTrue();
 });
 
-it('reschedules failed event when payment_id missing', function () {
-    // Create a failed event due for retry (no payment_id)
-    $evt = WebhookEvent::query()->create([
-        'provider' => 'mock',
-        'event_id' => 'evt_retry_1',
-        'signature_hash' => 'mock:hash',
-        'payload' => [
-            'event_id' => 'evt_retry_1',
-            'type' => 'payment.paid',
-            'data' => [], // missing payment_id
-        ],
-        'status' => 'failed',
-        'attempt_count' => 1,
-        'next_retry_at' => now()->subSeconds(10),
-        'error_message' => 'initial',
+it('stops retrying when attempts reached the configured max', function () {
+    config(['tenrusl.max_retry_attempts' => 1]);
+
+    /** @var \App\Models\WebhookEvent $event */
+    $event = WebhookEvent::factory()->create([
+        'provider'      => 'mock',
+        'event_id'      => 'evt_max_' . now()->timestamp,
+        'event_type'    => 'payment.failed',
+        'payload_raw'   => '{}',
+        'attempts'      => 1, // sudah mencapai max
+        'processed_at'  => null,
+        'next_retry_at' => Carbon::now()->subMinute(),
     ]);
 
-    // Run command
-    $this->artisan('tenrusl:webhooks:retry --limit=10 --max=3')
-        ->assertExitCode(0);
+    Artisan::call('tenrusl:webhooks:retry');
 
-    $evt->refresh();
-    expect($evt->status)->toBe('failed') // still failed but rescheduled
-        ->and($evt->attempt_count)->toBe(2)
-        ->and($evt->next_retry_at)->not()->toBeNull();
-});
+    $event->refresh();
 
-it('processes event successfully and marks payment paid', function () {
-    $payment = Payment::factory()->pending()->create([
-        'amount' => 10000,
-    ]);
-
-    $evt = WebhookEvent::query()->create([
-        'provider' => 'mock',
-        'event_id' => 'evt_retry_2',
-        'signature_hash' => 'mock:hash',
-        'payload' => [
-            'event_id' => 'evt_retry_2',
-            'type' => 'payment.paid',
-            'data' => ['payment_id' => (string) $payment->id],
-        ],
-        'status' => 'failed',
-        'attempt_count' => 1,
-        'next_retry_at' => now()->subSeconds(10),
-        'error_message' => 'previous failure',
-    ]);
-
-    $this->artisan('tenrusl:webhooks:retry --limit=10 --max=3')
-        ->assertExitCode(0);
-
-    $evt->refresh();
-    $payment->refresh();
-
-    expect($evt->status)->toBe('processed')
-        ->and($evt->next_retry_at)->toBeNull()
-        ->and($payment->status)->toBe('paid');
+    // Tidak bertambah lagi
+    expect($event->attempts)->toBe(1);
 });

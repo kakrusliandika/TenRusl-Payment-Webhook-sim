@@ -1,148 +1,134 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\OpenApi;
+
+use OpenApi\Annotations as OA;
 
 /**
  * @OA\Info(
- *   title="TenRusl Payment Webhook Simulator",
- *   version="0.1.0",
- *   description="Demo Laravel: idempotency, webhook dedup, signature verification, dan exponential backoff retry (simulasi)."
+ *   version="1.0.0",
+ *   title="TenRusl Payment Webhook Simulator API",
+ *   description="Dokumentasi OpenAPI untuk endpoint Payments & Webhooks (simulator)."
  * )
  *
  * @OA\Server(
- *   url="/api/v1",
- *   description="Local API base (Laravel 12)"
+ *   url="/",
+ *   description="Default App URL"
  * )
  *
- * @OA\Tag(name="Payments", description="Endpoints untuk membuat & membaca Payment")
- * @OA\Tag(name="Webhooks", description="Receiver webhook dari provider (mock|xendit|midtrans)")
+ * @OA\Tag(
+ *   name="Payments",
+ *   description="Buat dan cek status pembayaran simulasi"
+ * )
+ *
+ * @OA\Tag(
+ *   name="Webhooks",
+ *   description="Terima webhook dari berbagai provider (simulasi verifikasi signature)"
+ * )
  *
  * @OA\Schema(
  *   schema="Payment",
  *   type="object",
- *   @OA\Property(property="id", type="string", example="01JF3XQ9H0N7E7Q0ZR3R0B3K9R"),
- *   @OA\Property(property="status", type="string", enum={"pending","paid","failed","refunded"}, example="pending"),
- *   @OA\Property(property="amount", type="integer", minimum=1000, example=25000),
+ *   required={"provider","provider_ref","status"},
+ *   @OA\Property(property="id", type="string", example="01JCDZQ2F1G8W3X1R7SZM3KZ2S"),
+ *   @OA\Property(property="provider", type="string", example="xendit"),
+ *   @OA\Property(property="provider_ref", type="string", example="sim_xendit_01JCDZQ2F1..."),
+ *   @OA\Property(property="amount", type="string", example="100000.00"),
  *   @OA\Property(property="currency", type="string", example="IDR"),
- *   @OA\Property(property="description", type="string", example="Topup"),
- *   @OA\Property(property="metadata", type="object", additionalProperties=true, example={"customer_id":"cus_1"}),
- *   @OA\Property(property="idempotency_key", type="string", example="9f6b8a74-1b2c-4d3e-9f00-1234567890ab"),
+ *   @OA\Property(property="status", type="string", enum={"pending","succeeded","failed"}, example="pending"),
+ *   @OA\Property(property="meta", type="object"),
  *   @OA\Property(property="created_at", type="string", format="date-time"),
- *   @OA\Property(property="updated_at", type="string", format="date-time"),
- * )
- *
- * @OA\Schema(
- *   schema="CreatePaymentRequest",
- *   type="object",
- *   required={"amount"},
- *   @OA\Property(property="amount", type="integer", minimum=1000, example=25000),
- *   @OA\Property(property="currency", type="string", example="IDR"),
- *   @OA\Property(property="description", type="string", maxLength=140, example="Topup"),
- *   @OA\Property(property="metadata", type="object", additionalProperties=true, example={"customer_id":"cus_1"})
+ *   @OA\Property(property="updated_at", type="string", format="date-time")
  * )
  *
  * @OA\Schema(
  *   schema="WebhookEvent",
  *   type="object",
- *   required={"event_id","type","data"},
- *   @OA\Property(property="event_id", type="string", example="evt_123"),
- *   @OA\Property(property="type", type="string", example="payment.paid"),
- *   @OA\Property(property="data", type="object", additionalProperties=true, example={"payment_id":"01JF3XQ9H0N7E7Q0ZR3R0B3K9R","amount":25000,"currency":"IDR"}),
- *   @OA\Property(property="sent_at", type="string", format="date-time", example="2025-11-08T12:01:00Z")
- * )
- *
- * @OA\Schema(
- *   schema="Error",
- *   type="object",
- *   @OA\Property(property="error", type="string", example="invalid_request"),
- *   @OA\Property(property="message", type="string", example="Idempotency-Key header is required"),
- *   @OA\Property(property="code", type="string", example="400")
- * )
- *
- * @OA\Parameter(
- *   parameter="IdempotencyKey",
- *   name="Idempotency-Key",
- *   in="header",
- *   required=true,
- *   @OA\Schema(type="string", minLength=8),
- *   description="Unique key per intent; server menyimpan snapshot response."
- * )
- *
- * @OA\Parameter(
- *   parameter="MockSignature",
- *   name="X-Mock-Signature",
- *   in="header",
- *   required=false,
- *   @OA\Schema(type="string"),
- *   description="HMAC-SHA256 dari raw body menggunakan MOCK_SECRET (untuk provider=mock)."
- * )
- *
- * @OA\Parameter(
- *   parameter="XenditCallbackToken",
- *   name="x-callback-token",
- *   in="header",
- *   required=false,
- *   @OA\Schema(type="string"),
- *   description="Token callback yang cocok dengan XENDIT_CALLBACK_TOKEN (untuk provider=xendit)."
- * )
- *
- * @OA\Parameter(
- *   parameter="MidtransSignatureKey",
- *   name="Signature-Key",
- *   in="header",
- *   required=false,
- *   @OA\Schema(type="string"),
- *   description="SHA512(order_id+status_code+gross_amount+server_key) (untuk provider=midtrans)."
+ *   required={"provider","event_id"},
+ *   @OA\Property(property="id", type="string", example="01JCDZQ5M3..."),
+ *   @OA\Property(property="provider", type="string", example="midtrans"),
+ *   @OA\Property(property="event_id", type="string", example="evt_01JCDZQ5M3..."),
+ *   @OA\Property(property="event_type", type="string", example="invoice.paid"),
+ *   @OA\Property(property="payment_provider_ref", type="string", example="sim_midtrans_01J..."),
+ *   @OA\Property(property="payment_status", type="string", enum={"pending","succeeded","failed"}),
+ *   @OA\Property(property="attempts", type="integer", example=2),
+ *   @OA\Property(property="received_at", type="string", format="date-time"),
+ *   @OA\Property(property="last_attempt_at", type="string", format="date-time"),
+ *   @OA\Property(property="processed_at", type="string", format="date-time"),
+ *   @OA\Property(property="next_retry_at", type="string", format="date-time"),
+ *   @OA\Property(property="payload", type="object")
  * )
  *
  * @OA\Post(
- *   path="/payments",
+ *   path="/api/v1/payments",
+ *   summary="Buat pembayaran simulasi",
  *   tags={"Payments"},
- *   summary="Create payment (idempotent)",
- *   @OA\Parameter(ref="#/components/parameters/IdempotencyKey"),
- *   @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/CreatePaymentRequest")),
- *   @OA\Response(response=201, description="Created", @OA\JsonContent(ref="#/components/schemas/Payment")),
- *   @OA\Response(response=400, description="Bad Request", @OA\JsonContent(ref="#/components/schemas/Error")),
- *   @OA\Response(response=409, description="Conflict", @OA\JsonContent(ref="#/components/schemas/Error"))
+ *   @OA\RequestBody(
+ *     required=true,
+ *     @OA\JsonContent(
+ *       required={"provider","amount"},
+ *       @OA\Property(property="provider", type="string", example="xendit"),
+ *       @OA\Property(property="amount", type="number", format="float", example=100000),
+ *       @OA\Property(property="currency", type="string", example="IDR"),
+ *       @OA\Property(property="description", type="string", example="Top up"),
+ *       @OA\Property(property="metadata", type="object")
+ *     )
+ *   ),
+ *   @OA\Response(
+ *     response=201,
+ *     description="Created",
+ *     @OA\JsonContent(
+ *       @OA\Property(property="data", ref="#/components/schemas/Payment")
+ *     )
+ *   )
  * )
  *
  * @OA\Get(
- *   path="/payments/{id}",
+ *   path="/api/v1/payments/{provider}/{provider_ref}/status",
+ *   summary="Cek status pembayaran",
  *   tags={"Payments"},
- *   summary="Get payment status",
- *   @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string")),
- *   @OA\Response(response=200, description="OK", @OA\JsonContent(ref="#/components/schemas/Payment")),
- *   @OA\Response(response=404, description="Not Found", @OA\JsonContent(ref="#/components/schemas/Error"))
+ *   @OA\Parameter(name="provider", in="path", required=true, @OA\Schema(type="string")),
+ *   @OA\Parameter(name="provider_ref", in="path", required=true, @OA\Schema(type="string")),
+ *   @OA\Response(
+ *     response=200,
+ *     description="OK",
+ *     @OA\JsonContent(
+ *       @OA\Property(property="data", ref="#/components/schemas/Payment")
+ *     )
+ *   )
  * )
  *
  * @OA\Post(
- *   path="/webhooks/{provider}",
+ *   path="/api/v1/webhooks/{provider}",
+ *   summary="Terima webhook dari provider",
  *   tags={"Webhooks"},
- *   summary="Receive webhook event",
- *   description="Provider: mock | xendit | midtrans.",
- *   @OA\Parameter(name="provider", in="path", required=true, @OA\Schema(type="string", enum={"mock","xendit","midtrans"})),
- *   @OA\Parameter(ref="#/components/parameters/MockSignature"),
- *   @OA\Parameter(ref="#/components/parameters/XenditCallbackToken"),
- *   @OA\Parameter(ref="#/components/parameters/MidtransSignatureKey"),
- *   @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/WebhookEvent")),
+ *   @OA\Parameter(name="provider", in="path", required=true, @OA\Schema(type="string")),
+ *   @OA\RequestBody(required=true, description="Payload dari provider (JSON atau form)"),
  *   @OA\Response(
- *     response=200,
- *     description="Event processed (idempotent)",
+ *     response=202,
+ *     description="Accepted (diproses asinkron / retry-aware)",
  *     @OA\JsonContent(
- *       type="object",
- *       @OA\Property(property="received", type="boolean", example=true),
- *       @OA\Property(property="provider", type="string", example="mock"),
- *       @OA\Property(property="event_id", type="string", example="evt_123"),
- *       @OA\Property(property="status", type="string", example="processed"),
- *       @OA\Property(property="duplicated", type="boolean", example=false),
+ *       @OA\Property(property="data", type="object",
+ *         @OA\Property(property="event", type="object",
+ *           @OA\Property(property="provider", type="string"),
+ *           @OA\Property(property="event_id", type="string"),
+ *           @OA\Property(property="type", type="string")
+ *         ),
+ *         @OA\Property(property="result", type="object",
+ *           @OA\Property(property="duplicate", type="boolean"),
+ *           @OA\Property(property="persisted", type="boolean"),
+ *           @OA\Property(property="status", type="string"),
+ *           @OA\Property(property="payment_provider_ref", type="string", nullable=true),
+ *           @OA\Property(property="next_retry_ms", type="integer", nullable=true)
+ *         )
+ *       )
  *     )
- *   ),
- *   @OA\Response(response=400, description="Bad Request", @OA\JsonContent(ref="#/components/schemas/Error")),
- *   @OA\Response(response=401, description="Unauthorized", @OA\JsonContent(ref="#/components/schemas/Error")),
- *   @OA\Response(response=409, description="Conflict", @OA\JsonContent(ref="#/components/schemas/Error"))
+ *   )
  * )
  */
-class Docs
+final class Docs
 {
-    // hanya tempat anotasi OpenAPI — tidak ada kode eksekusi
+    // Kelas dummy sebagai host untuk anotasi global OpenAPI.
 }

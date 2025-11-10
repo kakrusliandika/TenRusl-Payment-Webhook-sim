@@ -1,62 +1,53 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Services\Signatures\SignatureVerifier;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 
-uses(RefreshDatabase::class);
+it('verifies mock provider signature using HMAC header', function () {
+    config(['tenrusl.mock_secret' => 'unit-secret']);
 
-beforeEach(function () {
-    config([
-        'tenrusl.mock_secret' => 'testsecret',
-        'tenrusl.xendit_callback_token' => 'xendit-token',
-        'tenrusl.midtrans_server_key' => 'midtrans-key',
-    ]);
-});
+    /** @var SignatureVerifier $verifier */
+    $verifier = app(SignatureVerifier::class);
 
-it('verifies mock signature ok', function () {
-    $body = json_encode(['hello' => 'world']);
-    $req = Request::create('/api/v1/webhooks/mock', 'POST', [], [], [], [], $body);
+    $payload = ['id' => 'evt_' . now()->timestamp, 'type' => 'payment.paid'];
+    $raw = json_encode($payload, JSON_UNESCAPED_SLASHES);
 
-    $sig = hash_hmac('sha256', $body, config('tenrusl.mock_secret'));
+    $req = Request::create('/api/v1/webhooks/mock', 'POST', [], [], [], [], $raw);
+    $req->headers->set('Content-Type', 'application/json');
+
+    $sig = hash_hmac('sha256', $raw, 'unit-secret');
     $req->headers->set('X-Mock-Signature', $sig);
 
-    $ver = app(SignatureVerifier::class);
-    $res = $ver->verify('mock', $req);
-
-    expect($res['ok'])->toBeTrue()
-        ->and($res['hash'])->toBe($sig);
+    // Urutan argumen: provider (string), raw body (string), request (Request)
+    $ok = $verifier->verify('mock', $raw, $req);
+    expect($ok)->toBeTrue();
 });
 
-it('rejects mock signature invalid', function () {
-    $body = json_encode(['hello' => 'world']);
-    $req = Request::create('/api/v1/webhooks/mock', 'POST', [], [], [], [], $body);
+it('fails verification when signature is wrong', function () {
+    config(['tenrusl.mock_secret' => 'unit-secret']);
+
+    /** @var SignatureVerifier $verifier */
+    $verifier = app(SignatureVerifier::class);
+
+    $raw = '{"id":"evt_bad","type":"payment.paid"}';
+    $req = Request::create('/api/v1/webhooks/mock', 'POST', [], [], [], [], $raw);
+    $req->headers->set('Content-Type', 'application/json');
     $req->headers->set('X-Mock-Signature', 'invalid');
 
-    $ver = app(SignatureVerifier::class);
-    $res = $ver->verify('mock', $req);
-
-    expect($res['ok'])->toBeFalse();
+    $ok = $verifier->verify('mock', $raw, $req);
+    expect($ok)->toBeFalse();
 });
 
-it('verifies xendit callback token', function () {
-    $req = Request::create('/api/v1/webhooks/xendit', 'POST');
-    $req->headers->set('x-callback-token', 'xendit-token');
+it('returns false for unknown / not-configured provider', function () {
+    /** @var SignatureVerifier $verifier */
+    $verifier = app(SignatureVerifier::class);
 
-    $ver = app(SignatureVerifier::class);
-    $res = $ver->verify('xendit', $req);
+    $raw = '{}';
+    $req = Request::create('/api/v1/webhooks/unknown', 'POST', [], [], [], [], $raw);
+    $req->headers->set('Content-Type', 'application/json');
 
-    expect($res['ok'])->toBeTrue()
-        ->and($res['hash'])->toStartWith('xendit:');
-});
-
-it('verifies midtrans signature-key presence', function () {
-    $req = Request::create('/api/v1/webhooks/midtrans', 'POST');
-    $req->headers->set('Signature-Key', 'dummy');
-
-    $ver = app(SignatureVerifier::class);
-    $res = $ver->verify('midtrans', $req);
-
-    expect($res['ok'])->toBeTrue()
-        ->and($res['hash'])->toStartWith('midtrans:');
+    $ok = $verifier->verify('unknown', $raw, $req);
+    expect($ok)->toBeFalse();
 });

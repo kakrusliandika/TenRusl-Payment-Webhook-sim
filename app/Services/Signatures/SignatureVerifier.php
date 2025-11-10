@@ -1,39 +1,87 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Signatures;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 /**
- * Fasad verifikasi signature/token untuk berbagai provider.
- * Middleware boleh menggunakan kelas ini untuk memusatkan aturan verifikasi.
+ * Router verifikasi signature berbasis nama provider.
+ *
+ * Semua kelas *Signature* masing-masing provider harus memiliki:
+ *   public static function verify(string $rawBody, Request $request): bool
  */
-class SignatureVerifier
+final class SignatureVerifier
 {
-    public function verify(string $provider, Request $request): array
+    /**
+     * Pemetaan provider → kelas verifier.
+     *
+     * @var array<string, class-string>
+     */
+    private const MAP = [
+        // existing
+        'mock'        => MockSignature::class,
+        'xendit'      => XenditSignature::class,
+        'midtrans'    => MidtransSignature::class,
+
+        // tambahan
+        'stripe'      => StripeSignature::class,
+        'paypal'      => PaypalSignature::class,
+        'paddle'      => PaddleSignature::class,
+        'lemonsqueezy'=> LemonSqueezySignature::class,
+        'airwallex'   => AirwallexSignature::class,
+        'tripay'      => TripaySignature::class,
+        'doku'        => DokuSignature::class,
+        'dana'        => DanaSignature::class,
+        'oy'          => OySignature::class,
+        'payoneer'    => PayoneerSignature::class,
+        'skrill'      => SkrillSignature::class,
+        'amazon_bwp'  => AmazonBwpSignature::class,
+    ];
+
+    /**
+     * Verifikasi signature untuk provider tertentu.
+     */
+    public static function verify(string $provider, string $rawBody, Request $request): bool
     {
-        $raw = $request->getContent();
-
-        if ($provider === 'mock') {
-            $impl = new MockSignature();
-            return $impl->verify($raw, (string) config('tenrusl.mock_secret'), $request->header('X-Mock-Signature'));
+        // Opsional: batasi ke allowlist dari config
+        $allow = (array) config('tenrusl.providers_allowlist', []);
+        if (!empty($allow) && !in_array($provider, $allow, true)) {
+            return false;
         }
 
-        if ($provider === 'xendit') {
-            $impl = new XenditCallbackToken();
-            return $impl->verify((string) config('tenrusl.xendit_callback_token'), $request->header('x-callback-token'));
+        $class = self::MAP[$provider] ?? null;
+        if ($class === null) {
+            return false;
         }
 
-        if ($provider === 'midtrans') {
-            $impl = new MidtransSignature();
-            return $impl->verify($request);
+        if (!method_exists($class, 'verify')) {
+            return false;
         }
 
-        return [
-            'ok'   => false,
-            'hash' => null,
-            'msg'  => 'Unknown provider',
-        ];
+        /** @var callable(string, \Illuminate\Http\Request):bool $call */
+        $call = [$class, 'verify'];
+        return (bool) call_user_func($call, $rawBody, $request);
+    }
+
+    /**
+     * Daftar provider yang didukung oleh verifier ini (interseksi allowlist jika ada).
+     *
+     * @return string[]
+     */
+    public static function supported(): array
+    {
+        $providers = array_keys(self::MAP);
+        $allow     = (array) config('tenrusl.providers_allowlist', []);
+
+        if (empty($allow)) {
+            sort($providers);
+            return $providers;
+        }
+
+        $filtered = array_values(array_intersect($providers, $allow));
+        sort($filtered);
+        return $filtered;
     }
 }

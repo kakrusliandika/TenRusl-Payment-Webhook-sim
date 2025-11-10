@@ -1,36 +1,53 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Payments\Adapters;
 
 use App\Services\Payments\Contracts\PaymentAdapter;
+use Illuminate\Support\Str;
 
-/**
- * Stub adapter. Tidak memanggil API Xendit sungguhan.
- * Disediakan agar arsitektur siap integrasi nyata di masa depan.
- */
-class XenditAdapter implements PaymentAdapter
+final class XenditAdapter implements PaymentAdapter
 {
-    public function createCharge(array $payload): array
+    public function provider(): string
     {
+        return 'xendit';
+    }
+
+    /**
+     * Simulator "create payment" untuk Xendit.
+     * Tidak memanggil API Xendit; status final menunggu webhook (x-callback-token).
+     *
+     * @param  array{amount:int|string, currency?:string, description?:string, metadata?:array} $input
+     * @return array{provider:string, provider_ref:string, status:string, snapshot:array}
+     */
+    public function create(array $input): array
+    {
+        $ref = 'sim_xendit_' . Str::ulid()->toBase32();
+
         return [
-            'provider'  => 'xendit',
-            'reference' => 'xnd_' . substr(md5(json_encode($payload)), 0, 12),
-            'status'    => 'pending',
-            'raw'       => [
-                'note' => 'XenditAdapter is a stub in this demo.',
+            'provider'     => $this->provider(),
+            'provider_ref' => $ref,
+            'status'       => 'pending',
+            'snapshot'     => [
+                'amount'       => (string) ($input['amount'] ?? '0'),
+                'currency'     => strtoupper((string) ($input['currency'] ?? 'IDR')),
+                'description'  => (string) ($input['description'] ?? ''),
+                'metadata'     => (array)  ($input['metadata'] ?? []),
+                'checkout_url' => "/simulate/redirect/{$this->provider()}/{$ref}",
             ],
         ];
     }
 
-    public function fetchStatus(string $reference): array
+    /**
+     * @return array{provider:string, provider_ref:string, status:string}
+     */
+    public function status(string $providerRef): array
     {
         return [
-            'provider'  => 'xendit',
-            'reference' => $reference,
-            'status'    => 'unknown',
-            'raw'       => [
-                'note' => 'XenditAdapter fetchStatus is a stub.',
-            ],
+            'provider'     => $this->provider(),
+            'provider_ref' => $providerRef,
+            'status'       => 'pending',
         ];
     }
 }

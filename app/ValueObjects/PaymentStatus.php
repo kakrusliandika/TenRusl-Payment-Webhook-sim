@@ -5,29 +5,41 @@ declare(strict_types=1);
 namespace App\ValueObjects;
 
 /**
- * Value Object untuk status pembayaran.
- * Gunakan ->value saat menyimpan ke DB (string).
+ * Status pembayaran generik untuk simulator.
+ *
+ * Gunakan PaymentStatus::fromString($anyProviderStatus) untuk memetakan
+ * berbagai status provider ke 3 status inti: pending|succeeded|failed.
  */
 enum PaymentStatus: string
 {
-    case PENDING  = 'pending';
-    case PAID     = 'paid';
-    case FAILED   = 'failed';
-    case REFUNDED = 'refunded';
+    case Pending   = 'pending';
+    case Succeeded = 'succeeded';
+    case Failed    = 'failed';
 
-    public function isTerminal(): bool
-    {
-        return in_array($this, [self::PAID, self::FAILED, self::REFUNDED], true);
-    }
-
+    /**
+     * Normalisasi dari status provider apa pun ke 3 status inti.
+     */
     public static function fromString(string $value): self
     {
-        return match (strtolower($value)) {
-            'pending'  => self::PENDING,
-            'paid'     => self::PAID,
-            'failed'   => self::FAILED,
-            'refunded' => self::REFUNDED,
-            default    => self::PENDING,
+        $v = strtolower(trim($value));
+
+        return match ($v) {
+            // truthy
+            'paid', 'paid_out', 'succeeded', 'success', 'completed', 'captured', 'settled',
+            'charge.succeeded', 'payment_intent.succeeded' => self::Succeeded,
+
+            // falsy
+            'failed', 'fail', 'canceled', 'cancelled', 'void', 'expired', 'denied', 'rejected',
+            'charge.failed', 'payment_intent.canceled' => self::Failed,
+
+            default => self::Pending,
         };
     }
+
+    public function isPending(): bool   { return $this === self::Pending; }
+    public function isSucceeded(): bool { return $this === self::Succeeded; }
+    public function isFailed(): bool    { return $this === self::Failed; }
+    public function isFinal(): bool     { return $this !== self::Pending; }
+
+    public function toString(): string  { return $this->value; }
 }

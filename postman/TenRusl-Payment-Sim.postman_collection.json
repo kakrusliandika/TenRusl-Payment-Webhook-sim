@@ -1,253 +1,491 @@
 {
   "info": {
     "name": "TenRusl Payment Webhook Simulator",
-    "_postman_id": "f7e8a1f4-1111-2222-3333-444455556666",
-    "description": "Koleksi request untuk Payments & Webhooks (Laravel 12). Termasuk pre-request scripts untuk Idempotency-Key, HMAC mock, callback token Xendit, dan Signature-Key Midtrans.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "_postman_id": "0b6f8a9a-3b82-4a5f-9c3a-8c8f1b2c7f10",
+    "description": "Koleksi request untuk simulator pembayaran: create payment (idempotent) & webhook per provider.",
+    "schema": "https://schema.getpostman.com/collection/json/v2.1.0/collection.json"
   },
   "item": [
     {
       "name": "Payments",
       "item": [
         {
-          "name": "Create Payment (idempotent)",
+          "name": "Create Payment (generic) – pilih provider di body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotency_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"xendit\",\n  \"amount\": 100000,\n  \"currency\": \"IDR\",\n  \"description\": \"Top up via simulator\",\n  \"metadata\": {\"order_id\": \"ORD-{{$timestamp}}\"}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/payments",
+              "host": ["{{base_url}}"],
+              "path": ["payments"]
+            }
+          },
           "event": [
             {
               "listen": "prerequest",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Generate Idempotency-Key sekali kalau belum ada",
-                  "if (!pm.environment.get('idempotencyKey')) {",
-                  "  pm.environment.set('idempotencyKey', crypto.randomUUID());",
-                  "}",
-                  "// Upsert header",
-                  "pm.request.headers.upsert({ key: 'Idempotency-Key', value: pm.environment.get('idempotencyKey') });"
-                ]
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "// Terima 201 (created) atau 200 (snapshot replay)",
-                  "pm.test('Status 201/200', function () {",
-                  "  pm.expect([200,201]).to.include(pm.response.code);",
-                  "});",
-                  "",
-                  "// Simpan paymentId dari response (support Resource wrapper)",
-                  "let pid = pm.response.json()?.id || pm.response.json()?.data?.id;",
-                  "if (pid) {",
-                  "  pm.environment.set('paymentId', pid);",
+                  "if (!pm.environment.get('idempotency_key')) {",
+                  "  pm.environment.set('idempotency_key', `${Date.now()}-${pm.variables.replaceIn('{{$randomUUID}}')}`);",
                   "}"
                 ]
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Get Payment Status (by provider/ref)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/payments/{{status_provider}}/{{status_provider_ref}}/status",
+              "host": ["{{base_url}}"],
+              "path": [
+                "payments",
+                "{{status_provider}}",
+                "{{status_provider_ref}}",
+                "status"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "mock – POST /webhooks/mock",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Mock-Signature", "value": "{{MOCK_SIGNATURE}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_{{$timestamp}}\",\n  \"type\": \"payment.paid\",\n  \"provider_ref\": \"sim_mock_{{$timestamp}}\",\n  \"amount\": 100000,\n  \"currency\": \"IDR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/mock",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "mock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// HMAC-SHA256(raw body, MOCK_SECRET) → X-Mock-Signature",
+                  "const body = pm.request.body.raw || '';",
+                  "const sig = CryptoJS.HmacSHA256(body, pm.environment.get('MOCK_SECRET'));",
+                  "pm.environment.set('MOCK_SIGNATURE', CryptoJS.enc.Hex.stringify(sig));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "xendit – POST /webhooks/xendit",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
               {
-                "key": "Idempotency-Key",
-                "value": "{{idempotencyKey}}",
-                "description": "UUID unik per niat transaksi"
+                "key": "x-callback-token",
+                "value": "{{XENDIT_CALLBACK_TOKEN}}"
               }
             ],
-            "url": {
-              "raw": "{{baseUrl}}/payments",
-              "host": ["{{baseUrl}}"],
-              "path": ["payments"]
-            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"amount\": 25000,\n  \"currency\": \"IDR\",\n  \"description\": \"Topup\",\n  \"metadata\": { \"customer_id\": \"cus_1\" }\n}"
+              "raw": "{\n  \"id\": \"evt_{{$timestamp}}\",\n  \"type\": \"invoice.paid\",\n  \"data\": {\"id\": \"sim_xendit_{{$timestamp}}\"}\n}"
             },
-            "description": "Membuat payment baru dengan dukungan Idempotency-Key.\nReplay request dengan key yang sama akan mengembalikan snapshot (200)."
-          }
-        },
-        {
-          "name": "Get Payment Status",
-          "request": {
-            "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/payments/{{paymentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["payments", "{{paymentId}}"]
-            },
-            "description": "Ambil status payment terakhir (environment var paymentId di-set dari response Create Payment)."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Webhooks - Mock",
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "// Hitung HMAC-SHA256 raw body untuk X-Mock-Signature",
-              "const raw = pm.request.body ? pm.request.body.raw || '' : '';",
-              "const secret = pm.environment.get('MOCK_SECRET') || '';",
-              "if (!secret) {",
-              "  console.warn('MOCK_SECRET belum di-set di environment.');",
-              "}",
-              "if (raw && secret && typeof CryptoJS !== 'undefined') {",
-              "  const sig = CryptoJS.HmacSHA256(raw, secret).toString(CryptoJS.enc.Hex);",
-              "  pm.request.headers.upsert({ key: 'X-Mock-Signature', value: sig });",
-              "  pm.environment.set('lastMockSignature', sig);",
-              "} else {",
-              "  // Fallback (tidak direkomendasikan) pakai env MIDTRANS_SIGNATURE_KEY jika benar2 kosong",
-              "  const fallback = pm.environment.get('MIDTRANS_SIGNATURE_KEY') || '';",
-              "  if (fallback) pm.request.headers.upsert({ key: 'X-Mock-Signature', value: fallback });",
-              "}"
-            ]
-          }
-        }
-      ],
-      "item": [
-        {
-          "name": "Mock Paid",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{baseUrl}}/webhooks/mock",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "mock"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"event_id\": \"evt_123\",\n  \"type\": \"payment.paid\",\n  \"data\": {\"payment_id\": \"{{paymentId}}\", \"amount\": 25000, \"currency\": \"IDR\"},\n  \"sent_at\": \"{{$isoTimestamp}}\"\n}"
-            },
-            "description": "Contoh event paid untuk provider mock. Signature otomatis dihitung dari raw body + MOCK_SECRET."
-          }
-        },
-        {
-          "name": "Mock Failed",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{baseUrl}}/webhooks/mock",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "mock"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"event_id\": \"evt_124\",\n  \"type\": \"payment.failed\",\n  \"data\": {\"payment_id\": \"{{paymentId}}\", \"amount\": 25000, \"currency\": \"IDR\"},\n  \"sent_at\": \"{{$isoTimestamp}}\"\n}"
-            },
-            "description": "Contoh event failed untuk provider mock."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Webhooks - Xendit Ready",
-      "event": [
-        {
-          "listen": "prerequest",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "// Sisipkan x-callback-token dari environment",
-              "const cb = pm.environment.get('XENDIT_CALLBACK_TOKEN') || '';",
-              "if (!cb) {",
-              "  console.warn('XENDIT_CALLBACK_TOKEN belum di-set di environment.');",
-              "}",
-              "pm.request.headers.upsert({ key: 'x-callback-token', value: cb });"
-            ]
-          }
-        }
-      ],
-      "item": [
-        {
-          "name": "Xendit Example",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{baseUrl}}/webhooks/xendit",
-              "host": ["{{baseUrl}}"],
+              "raw": "{{base_url}}/webhooks/xendit",
+              "host": ["{{base_url}}"],
               "path": ["webhooks", "xendit"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"event_id\": \"evt_x_01\",\n  \"type\": \"payment.paid\",\n  \"data\": {\"payment_id\": \"{{paymentId}}\"}\n}"
-            },
-            "description": "Contoh webhook Xendit; header x-callback-token diambil dari env."
+            }
           }
-        }
-      ]
-    },
-    {
-      "name": "Webhooks - Midtrans Ready",
-      "event": [
+        },
         {
-          "listen": "prerequest",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "// (Opsional) Hitung Signature-Key Midtrans: sha512(order_id+status_code+gross_amount+server_key)",
-              "const serverKey = pm.environment.get('MIDTRANS_SERVER_KEY') || '';",
-              "try {",
-              "  const raw = pm.request.body ? pm.request.body.raw || '{}' : '{}';",
-              "  const obj = JSON.parse(raw);",
-              "  const orderId = _.get(obj, 'data.order_id', '');",
-              "  const statusCode = _.get(obj, 'data.status_code', '');",
-              "  const grossAmount = _.get(obj, 'data.gross_amount', '');",
-              "  if (serverKey && orderId && statusCode && grossAmount && typeof CryptoJS !== 'undefined') {",
-              "    const sign = CryptoJS.SHA512(orderId + statusCode + grossAmount + serverKey).toString(CryptoJS.enc.Hex);",
-              "    pm.request.headers.upsert({ key: 'Signature-Key', value: sign });",
-              "  } else {",
-              "    // Fallback: pakai env MIDTRANS_SIGNATURE_KEY bila perhitungan tidak memungkinkan",
-              "    const fallback = pm.environment.get('MIDTRANS_SIGNATURE_KEY') || '';",
-              "    if (fallback) pm.request.headers.upsert({ key: 'Signature-Key', value: fallback });",
-              "  }",
-              "} catch (e) {",
-              "  console.warn('Midtrans signature compute error:', e.message);",
-              "}"
-            ]
-          }
-        }
-      ],
-      "item": [
-        {
-          "name": "Midtrans Example",
+          "name": "midtrans – POST /webhooks/midtrans",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": {
-              "raw": "{{baseUrl}}/webhooks/midtrans",
-              "host": ["{{baseUrl}}"],
-              "path": ["webhooks", "midtrans"]
-            },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"event_id\": \"evt_m_01\",\n  \"type\": \"payment.paid\",\n  \"data\": {\n    \"payment_id\": \"{{paymentId}}\",\n    \"order_id\": \"ORDER-123\",\n    \"status_code\": \"200\",\n    \"gross_amount\": \"25000\"\n  }\n}"
+              "raw": "{\n  \"order_id\": \"INV-{{$timestamp}}\",\n  \"status_code\": \"200\",\n  \"gross_amount\": \"100000.00\",\n  \"signature_key\": \"{{MIDTRANS_SIGNATURE}}\"\n}"
             },
-            "description": "Contoh webhook Midtrans. Middleware kamu saat ini hanya mengecek keberadaan header Signature-Key; script ini bisa menghitung signature realistis jika SERVER_KEY tersedia."
+            "url": {
+              "raw": "{{base_url}}/webhooks/midtrans",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "midtrans"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// signature_key = SHA512(order_id + status_code + gross_amount + server_key)",
+                  "const body = JSON.parse(pm.request.body.raw);",
+                  "const raw = body.order_id + body.status_code + body.gross_amount + pm.environment.get('MIDTRANS_SERVER_KEY');",
+                  "const sig = CryptoJS.SHA512(raw);",
+                  "pm.environment.set('MIDTRANS_SIGNATURE', CryptoJS.enc.Hex.stringify(sig));",
+                  "pm.request.body.update(JSON.stringify(body));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "stripe – POST /webhooks/stripe",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Stripe-Signature", "value": "{{STRIPE_SIGNATURE}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_{{$timestamp}}\",\n  \"type\": \"charge.succeeded\",\n  \"data\": {\"object\": {\"id\": \"pi_{{$timestamp}}\"}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/stripe",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "stripe"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Stripe: header format 't=UNIX,v1=HMAC_SHA256(t.payload)'",
+                  "const t = Math.floor(Date.now()/1000).toString();",
+                  "const payload = t + '.' + (pm.request.body.raw || '');",
+                  "const h = CryptoJS.HmacSHA256(payload, pm.environment.get('STRIPE_WEBHOOK_SECRET'));",
+                  "pm.environment.set('STRIPE_SIGNATURE', `t=${t},v1=${CryptoJS.enc.Hex.stringify(h)}`);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "paypal – POST /webhooks/paypal (placeholder)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-{{$timestamp}}\",\n  \"event_type\": \"PAYMENT.SALE.COMPLETED\",\n  \"resource\": {\"id\": \"sale_{{$timestamp}}\"}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/paypal",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "paypal"]
+            }
+          },
+          "description": "PayPal signature biasanya diverifikasi via API. Request ini untuk alur dasar/placeholder."
+        },
+        {
+          "name": "paddle – POST /webhooks/paddle (signing secret)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "alert_id",
+                  "value": "evt_{{$timestamp}}",
+                  "type": "text"
+                },
+                {
+                  "key": "alert_name",
+                  "value": "payment_succeeded",
+                  "type": "text"
+                },
+                {
+                  "key": "p_signature",
+                  "value": "{{PADDLE_SIGNATURE}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/paddle",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "paddle"]
+            }
+          },
+          "description": "Tandatangan Paddle bervariasi (RSA lama / signing secret baru). Isi manual jika verifikasi diaktifkan."
+        },
+        {
+          "name": "lemonsqueezy – POST /webhooks/lemonsqueezy",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature", "value": "{{LS_SIGNATURE}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meta\": {\"event_name\": \"order_paid\"},\n  \"data\": {\"id\": \"ls_{{$timestamp}}\", \"attributes\": {\"total\": 1000}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/lemonsqueezy",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "lemonsqueezy"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// LS: X-Signature = HMAC_SHA256(rawBody, secret) hex",
+                  "const body = pm.request.body.raw || '';",
+                  "const sig = CryptoJS.HmacSHA256(body, pm.environment.get('LS_WEBHOOK_SECRET'));",
+                  "pm.environment.set('LS_SIGNATURE', CryptoJS.enc.Hex.stringify(sig));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "airwallex – POST /webhooks/airwallex",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-timestamp", "value": "{{AW_TS}}" },
+              { "key": "x-signature", "value": "{{AW_SIG}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"aw_{{$timestamp}}\",\n  \"type\": \"payment_succeeded\",\n  \"data\": {\"id\": \"pay_{{$timestamp}}\"}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/airwallex",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "airwallex"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Airwallex: HMAC_SHA256(ts + rawBody, secret) → hex",
+                  "const ts = Date.now().toString();",
+                  "const body = pm.request.body.raw || '';",
+                  "const sig = CryptoJS.HmacSHA256(ts + body, pm.environment.get('AIRWALLEX_WEBHOOK_SECRET'));",
+                  "pm.environment.set('AW_TS', ts);",
+                  "pm.environment.set('AW_SIG', CryptoJS.enc.Hex.stringify(sig));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "tripay – POST /webhooks/tripay",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Callback-Signature", "value": "{{TRIPAY_SIG}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"tp_{{$timestamp}}\",\n  \"event\": \"payment_status\",\n  \"reference\": \"TRX-{{$timestamp}}\",\n  \"status\": \"PAID\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/tripay",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "tripay"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Tripay: HMAC_SHA256(rawBody, PRIVATE_KEY) → hex",
+                  "const body = pm.request.body.raw || '';",
+                  "const sig = CryptoJS.HmacSHA256(body, pm.environment.get('TRIPAY_PRIVATE_KEY'));",
+                  "pm.environment.set('TRIPAY_SIG', CryptoJS.enc.Hex.stringify(sig));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "doku – POST /webhooks/doku",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Client-Id", "value": "{{DOKU_CLIENT_ID}}" },
+              { "key": "Request-Id", "value": "{{DOKU_REQUEST_ID}}" },
+              {
+                "key": "Request-Timestamp",
+                "value": "{{DOKU_REQUEST_TIMESTAMP}}"
+              },
+              { "key": "Request-Target", "value": "{{DOKU_REQUEST_TARGET}}" },
+              { "key": "Digest", "value": "{{DOKU_DIGEST}}" },
+              { "key": "Signature", "value": "{{DOKU_SIGNATURE}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order\": {\"invoice_number\": \"INV-{{$timestamp}}\"},\n  \"amount\": 100000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/doku",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "doku"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// DOKU: Signature dengan stringToSign & Digest base64(sha256(body))",
+                  "const body = pm.request.body.raw || '';",
+                  "const digestBin = CryptoJS.SHA256(CryptoJS.enc.Utf8.parse(body));",
+                  "const digestB64 = CryptoJS.enc.Base64.stringify(digestBin);",
+                  "const clientId = pm.environment.get('DOKU_CLIENT_ID');",
+                  "const requestId = pm.variables.replaceIn('{{$randomUUID}}');",
+                  "const ts = new Date().toISOString();",
+                  "const target = pm.environment.get('DOKU_REQUEST_TARGET');",
+                  "const stringToSign = `Client-Id:${clientId}\\nRequest-Id:${requestId}\\nRequest-Timestamp:${ts}\\nRequest-Target:${target}\\nDigest:${digestB64}`;",
+                  "const sigBin = CryptoJS.HmacSHA256(stringToSign, pm.environment.get('DOKU_SECRET_KEY'));",
+                  "const sigB64 = CryptoJS.enc.Base64.stringify(sigBin);",
+                  "pm.environment.set('DOKU_REQUEST_ID', requestId);",
+                  "pm.environment.set('DOKU_REQUEST_TIMESTAMP', ts);",
+                  "pm.environment.set('DOKU_DIGEST', digestB64);",
+                  "pm.environment.set('DOKU_SIGNATURE', `HMACSHA256=${sigB64}`);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "dana – POST /webhooks/dana (placeholder)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"dana_{{$timestamp}}\",\n  \"event\": \"payment_succeeded\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/dana",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "dana"]
+            }
+          }
+        },
+        {
+          "name": "oy – POST /webhooks/oy (placeholder)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"payment_success\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/oy",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "oy"]
+            }
+          }
+        },
+        {
+          "name": "payoneer – POST /webhooks/payoneer (placeholder)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"payment.approved\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/payoneer",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "payoneer"]
+            }
+          }
+        },
+        {
+          "name": "skrill – POST /webhooks/skrill (placeholder)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "transaction_id",
+                  "value": "sk_{{$timestamp}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/skrill",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "skrill"]
+            }
+          }
+        },
+        {
+          "name": "amazon_bwp – POST /webhooks/amazon_bwp (placeholder)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"detail-type\": \"BuyWithPrime.OrderCompleted\",\n  \"detail\": {\"orderId\": \"amzn_{{$timestamp}}\"}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/amazon_bwp",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "amazon_bwp"]
+            }
           }
         }
       ]
     }
   ],
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "// Collection-level: seed Idempotency-Key sekali (bisa di-replay untuk snapshot)",
-          "if (!pm.environment.get('idempotencyKey')) {",
-          "  pm.environment.set('idempotencyKey', crypto.randomUUID());",
-          "}"
-        ]
-      }
-    }
-  ],
-  "variable": []
+  "protocolProfileBehavior": {}
 }

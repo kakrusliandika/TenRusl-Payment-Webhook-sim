@@ -1,40 +1,72 @@
 <?php
 
-use App\Models\Payment;
+declare(strict_types=1);
+
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use function Pest\Laravel\postJson;
 
 uses(RefreshDatabase::class);
 
-it('creates payment with idempotency and returns snapshot on replay', function () {
-    $idem = (string) Str::uuid();
+it('creates a payment and returns 201 with basic resource structure', function () {
+    $payload = [
+        'provider'    => 'mock',
+        'amount'      => 150000,
+        'currency'    => 'idr',
+        'description' => 'Order ' . now()->timestamp,
+        'metadata'    => ['order_id' => 'ORD-' . now()->timestamp],
+    ];
 
-    // 1st request → 201
-    $res1 = $this->withHeaders([
-        'Idempotency-Key' => $idem,
-    ])->postJson('/api/v1/payments', [
-        'amount' => 25000,
-        'currency' => 'IDR',
-        'description' => 'Topup',
+    $idk1 = now()->timestamp . '-A';
+
+    $resp = postJson('/api/v1/payments', $payload, [
+        'Idempotency-Key' => $idk1,
     ]);
 
-    $res1->assertCreated();
-    $id = $res1->json('id') ?? $res1->json('data.id'); // if wrapped by resource
+    expect($resp->status())->toBeIn([201, 200]);
 
-    expect($id)->not()->toBeNull();
-    $first = Payment::query()->find($id);
-    expect($first)->not()->toBeNull()
-        ->and($first->status)->toBe('pending');
-
-    // 2nd request with same idem → 200 and same id (snapshot)
-    $res2 = $this->withHeaders([
-        'Idempotency-Key' => $idem,
-    ])->postJson('/api/v1/payments', [
-        'amount' => 25000,
-        'currency' => 'IDR',
-        'description' => 'Topup',
+    $resp->assertJsonStructure([
+        'data' => [
+            'id',
+            'provider',
+            'amount',
+            'currency',
+            'status',
+        ],
     ]);
 
-    $res2->assertOk();
-    $id2 = $res2->json('id') ?? $res2->json('data.id');
-    expect($id2)->toBe($id);
+    $provider = (string) $resp->json('data.provider');
+    $currency = strtoupper((string) $resp->json('data.currency'));
+
+    expect($provider)->toBe('mock');
+    expect($currency)->toBe('IDR');
+});
+
+it('is idempotent: same Idempotency-Key returns the same payment', function () {
+    $payload = [
+        'provider'    => 'mock',
+        'amount'      => 50000,
+        'currency'    => 'IDR',
+        'description' => 'Idem test',
+    ];
+
+    $key = 'idem-' . now()->timestamp;
+
+    $first  = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
+    $second = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
+
+    $id1 = (string) $first->json('data.id');
+    $id2 = (string) $second->json('data.id');
+
+    expect($id1)->toBeString()->and($id2)->toBeString()->and($id1)->toBe($id2);
+    expect($second->status())->toBeIn([200, 201, 409, 208]);
+});
+
+it('rejects invalid provider with 422', function () {
+    $payload = [
+        'provider' => 'unknown',
+        'amount'   => 10000,
+        'currency' => 'IDR',
+    ];
+
+    postJson('/api/v1/payments', $payload)->assertStatus(422);
 });

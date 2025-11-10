@@ -1,65 +1,35 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
-use App\Models\Payment;
-use Illuminate\Http\Request;
+use App\Services\Payments\PaymentsService;
+use Illuminate\Http\JsonResponse;
 
 class PaymentController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Daftar provider aktif (untuk halaman/info sederhana via web route).
      */
-    public function index()
+    public function providers(PaymentsService $payments): JsonResponse
     {
-        //
+        return response()->json([
+            'providers' => $payments->providers(),
+        ], 200);
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Ambil status simulasi dari adapter (tanpa menyentuh DB).
+     * Endpoint web sederhana; untuk API V1 gunakan controller API.
      */
-    public function create()
-    {
-        //
-    }
+    public function status(
+        string $provider,
+        string $providerRef,
+        PaymentsService $payments
+    ): JsonResponse {
+        $status = $payments->status($provider, $providerRef);
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(Payment $payment)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Payment $payment)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Payment $payment)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Payment $payment)
-    {
-        //
+        return response()->json($status, 200);
     }
 }

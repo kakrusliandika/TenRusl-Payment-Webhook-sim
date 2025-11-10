@@ -1,27 +1,36 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Payments\Contracts;
 
 /**
- * Kontrak adapter pembayaran eksternal (simulasi).
- * Implementasi: MockAdapter, XenditAdapter, MidtransAdapter (stub).
+ * Kontrak umum untuk adapter pembayaran di simulator.
+ *
+ * Setiap adapter harus:
+ * - Mengembalikan nama provider (harus selaras dengan allowlist & route param).
+ * - Menyediakan operasi create() (membuat referensi pembayaran simulasi).
+ * - Menyediakan operasi status() (mengambil status berdasarkan provider_ref).
  */
 interface PaymentAdapter
 {
     /**
-     * Simulasikan pembuatan "charge" di provider eksternal.
-     * Mengembalikan array standar (tidak mengubah DB internal).
-     *
-     * @param array $payload  amount, currency, description, metadata
-     * @return array{provider:string, reference:string, status:string, raw:array}
+     * Nama provider, contoh: "mock", "xendit", "midtrans", "stripe", dll.
      */
-    public function createCharge(array $payload): array;
+    public function provider(): string;
 
     /**
-     * Simulasikan cek status transaksi di provider.
+     * Buat pembayaran simulasi.
      *
-     * @param string $reference
-     * @return array{provider:string, reference:string, status:string, raw:array}
+     * @param  array $input bebas (amount/currency/description/metadata, dsb.)
+     * @return array{provider:string, provider_ref:string, status:string, snapshot:array}
      */
-    public function fetchStatus(string $reference): array;
+    public function create(array $input): array;
+
+    /**
+     * Ambil status simulasi berdasarkan provider_ref.
+     *
+     * @return array{provider:string, provider_ref:string, status:string}
+     */
+    public function status(string $providerRef): array;
 }

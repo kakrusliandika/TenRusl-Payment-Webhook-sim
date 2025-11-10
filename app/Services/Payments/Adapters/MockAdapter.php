@@ -1,38 +1,52 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Payments\Adapters;
 
 use App\Services\Payments\Contracts\PaymentAdapter;
 use Illuminate\Support\Str;
 
-class MockAdapter implements PaymentAdapter
+final class MockAdapter implements PaymentAdapter
 {
-    public function createCharge(array $payload): array
+    public function provider(): string
     {
-        $ref = 'mock_' . Str::ulid();
+        return 'mock';
+    }
+
+    /**
+     * Adapter dummy untuk keperluan demo/idempotency flow.
+     *
+     * @param  array{amount:int|string, currency?:string, description?:string, metadata?:array} $input
+     * @return array{provider:string, provider_ref:string, status:string, snapshot:array}
+     */
+    public function create(array $input): array
+    {
+        $ref = 'sim_mock_' . Str::ulid()->toBase32();
 
         return [
-            'provider'  => 'mock',
-            'reference' => $ref,
-            'status'    => 'pending',
-            'raw'       => [
-                'echo'     => $payload,
-                'hint'     => 'This is a mock provider. Use webhook to mark paid/failed.',
-                'ref_note' => 'Use POST /webhooks/mock to deliver events for this reference/payment.',
+            'provider'     => $this->provider(),
+            'provider_ref' => $ref,
+            'status'       => 'pending',
+            'snapshot'     => [
+                'amount'       => (string) ($input['amount'] ?? '0'),
+                'currency'     => strtoupper((string) ($input['currency'] ?? 'IDR')),
+                'description'  => (string) ($input['description'] ?? ''),
+                'metadata'     => (array)  ($input['metadata'] ?? []),
+                'checkout_url' => "/simulate/redirect/{$this->provider()}/{$ref}",
             ],
         ];
     }
 
-    public function fetchStatus(string $reference): array
+    /**
+     * @return array{provider:string, provider_ref:string, status:string}
+     */
+    public function status(string $providerRef): array
     {
-        // Simulasi: status tidak berubah di provider mock (kendalikan lewat webhook)
         return [
-            'provider'  => 'mock',
-            'reference' => $reference,
-            'status'    => 'unknown',
-            'raw'       => [
-                'hint' => 'Mock does not track status; update via webhook.',
-            ],
+            'provider'     => $this->provider(),
+            'provider_ref' => $providerRef,
+            'status'       => 'pending',
         ];
     }
 }

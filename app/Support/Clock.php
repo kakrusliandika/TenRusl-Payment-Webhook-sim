@@ -4,38 +4,76 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use Carbon\Carbon;
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 
 /**
- * Abstraksi waktu agar mudah di-test/mocking.
- * - Default implementasi memakai now() / Carbon.
- * - Di test, bisa bind ke container: app()->instance(Clock::class, new FakeClock(...))
+ * Abstraksi waktu sederhana agar mudah di-test.
+ * Default memakai CarbonImmutable::now(); bisa di-freeze / travel via setTestNow().
  */
-class Clock
+final class Clock
 {
-    public function now(): CarbonImmutable
+    private static ?CarbonImmutable $testNow = null;
+
+    /**
+     * Waktu saat ini (ikut testNow jika di-set).
+     */
+    public static function now(?string $tz = null): CarbonImmutable
     {
-        return CarbonImmutable::now();
+        if (self::$testNow instanceof CarbonImmutable) {
+            return $tz ? self::$testNow->setTimezone($tz) : self::$testNow;
+        }
+        return $tz ? CarbonImmutable::now($tz) : CarbonImmutable::now();
     }
 
-    public function nowMutable(): Carbon
+    /**
+     * Waktu sekarang dalam UTC.
+     */
+    public static function utc(): CarbonImmutable
     {
-        return Carbon::now();
+        return self::now('UTC');
     }
 
-    public function today(): CarbonImmutable
+    /**
+     * Set testNow (membekukan waktu) atau kosongkan untuk kembali realtime.
+     */
+    public static function setTestNow(?CarbonImmutable $now): void
     {
-        return CarbonImmutable::today();
+        self::$testNow = $now;
     }
 
-    public function afterSeconds(int $seconds): CarbonImmutable
+    /**
+     * Bekukan waktu ke saat ini.
+     */
+    public static function freeze(): void
     {
-        return $this->now()->addSeconds($seconds);
+        self::$testNow = CarbonImmutable::now();
     }
 
-    public function afterMinutes(int $minutes): CarbonImmutable
+    /**
+     * Geser waktu uji (positif = ke depan; negatif = ke belakang).
+     */
+    public static function travel(int $seconds): void
     {
-        return $this->now()->addMinutes($minutes);
+        self::$testNow = (self::$testNow ?? CarbonImmutable::now())->addSeconds($seconds);
+    }
+
+    /**
+     * Hapus testNow.
+     */
+    public static function clear(): void
+    {
+        self::$testNow = null;
+    }
+
+    /**
+     * Parse string/DateTime menjadi CarbonImmutable.
+     */
+    public static function parse(string|DateTimeInterface $time, ?string $tz = null): CarbonImmutable
+    {
+        if ($time instanceof DateTimeInterface) {
+            return CarbonImmutable::instance($time);
+        }
+        return $tz ? CarbonImmutable::parse($time, $tz) : CarbonImmutable::parse($time);
     }
 }

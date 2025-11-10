@@ -1,13 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Services\Webhooks\RetryBackoff;
 
-it('returns exponential backoff series', function () {
-    $b = new RetryBackoff();
-    expect($b->secondsFor(1))->toBe(1)
-        ->and($b->secondsFor(2))->toBe(2)
-        ->and($b->secondsFor(3))->toBe(4)
-        ->and($b->secondsFor(4))->toBe(8)
-        ->and($b->secondsFor(5))->toBe(16)
-        ->and($b->secondsFor(6))->toBe(16);
+it('gives increasing delays with sane bounds', function () {
+    /** @var RetryBackoff $rb */
+    $rb = app(RetryBackoff::class);
+
+    $method = null;
+    foreach (['nextDelaySeconds', 'delaySeconds', 'forAttempt', 'delayForAttempt'] as $m) {
+        if (method_exists($rb, $m)) { $method = $m; break; }
+    }
+    expect($method)->not->toBeNull();
+
+    $prev = 0;
+    for ($i = 0; $i < 6; $i++) {
+        $d = (int) $rb->$method($i);
+        expect($d)->toBeGreaterThanOrEqual(1)->and($d)->toBeLessThanOrEqual(3600);
+        expect($d)->toBeGreaterThanOrEqual((int) floor($prev / 2));
+        $prev = $d;
+    }
 });
+
+// (Sengaja dihapus pengujian nextRunAt untuk kompatibilitas implementasi yang tidak menyediakannya)

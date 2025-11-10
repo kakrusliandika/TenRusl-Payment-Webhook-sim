@@ -1,25 +1,27 @@
 <?php
 
+declare(strict_types=1);
+
 use Tests\TestCase;
 
 /*
 |--------------------------------------------------------------------------
 | Pest Bootstrap
 |--------------------------------------------------------------------------
-| Semua test (Feature & Unit) mewarisi Laravel TestCase.
+| File ini mengonfigurasi suite Pest agar seluruh test di
+| tests/Feature dan tests/Unit otomatis mewarisi Tests\TestCase.
 */
+
 uses(TestCase::class)->in('Feature', 'Unit');
 
 /*
 |--------------------------------------------------------------------------
-| (opsional) Expectations & Helpers
+| Helpers / Expectations (opsional)
 |--------------------------------------------------------------------------
+| Tambahkan helper global khusus test di sini bila perlu.
+| Contoh kecil: expectation string non-kosong.
 */
-expect()->extend('toBeOne', function () {
-    return $this->toBe(1);
-});
 
-function something()
-{
-    // helper opsional
-}
+// expect()->extend('toBeNonEmptyString', function () {
+//     expect($this->value)->toBeString()->not->toBe('');
+// });

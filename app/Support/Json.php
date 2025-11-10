@@ -4,65 +4,56 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use JsonException;
 
-class Json
+/**
+ * Helper JSON aman:
+ * - encode(): aktifkan JSON_THROW_ON_ERROR + unescaped unicode/slashes
+ * - decode(): gunakan JSON_THROW_ON_ERROR
+ * - tryDecode(), isJson(): utilitas non-throw
+ */
+final class Json
 {
     /**
-     * Respons sukses seragam.
+     * @throws JsonException
      */
-    public static function ok(
-        array|Arrayable|null $data = null,
-        int $status = 200,
-        ?string $requestId = null,
-        array $meta = []
-    ): JsonResponse {
-        $payload = [
-            'success' => true,
-            'data'    => $data instanceof Arrayable ? $data->toArray() : ($data ?? (object) []),
-            'meta'    => $meta,
-        ];
-
-        $resp = response()->json($payload, $status);
-        if ($requestId) {
-            $resp->headers->set('X-Request-Id', $requestId);
-        }
-
-        return $resp;
-    }
-
-    /**
-     * Respons error seragam.
-     */
-    public static function error(
-        string $message,
-        string $code = 'error',
-        int $httpStatus = 400,
-        ?string $requestId = null,
-        array $extra = []
-    ): JsonResponse {
-        $payload = array_merge([
-            'success' => false,
-            'error'   => $code,
-            'message' => $message,
-        ], $extra);
-
-        $resp = response()->json($payload, $httpStatus);
-        if ($requestId) {
-            $resp->headers->set('X-Request-Id', $requestId);
-        }
-
-        return $resp;
-    }
-
-    /**
-     * Ambil X-Request-Id dari Request attributes (di-set oleh CorrelationIdMiddleware).
-     */
-    public static function requestIdFrom(Request $request): ?string
+    public static function encode(mixed $value, int $flags = 0, int $depth = 512): string
     {
-        $id = $request->attributes->get('request_id');
-        return is_string($id) ? $id : null;
+        $flags |= JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR;
+        return json_encode($value, $flags, $depth);
+    }
+
+    /**
+     * @return mixed
+     * @throws JsonException
+     */
+    public static function decode(string $json, bool $assoc = true, int $depth = 512): mixed
+    {
+        return json_decode($json, $assoc, $depth, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * @return mixed|null  null jika gagal decode
+     */
+    public static function tryDecode(string $json, bool $assoc = true, int $depth = 512): mixed
+    {
+        try {
+            return self::decode($json, $assoc, $depth);
+        } catch (JsonException) {
+            return null;
+        }
+    }
+
+    /**
+     * Periksa cepat apakah string berformat JSON valid.
+     */
+    public static function isJson(string $value): bool
+    {
+        try {
+            self::decode($value, true);
+            return true;
+        } catch (JsonException) {
+            return false;
+        }
     }
 }

@@ -5,72 +5,86 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Models\WebhookEvent;
+use App\ValueObjects\PaymentStatus;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Collection;
 
-class WebhookEventRepository
+final class WebhookEventRepository
 {
-    public function findByProviderAndEventId(string $provider, string $eventId): ?WebhookEvent
+    public function findByProviderEvent(string $provider, string $eventId): ?WebhookEvent
     {
-        return WebhookEvent::query()
+        /** @var WebhookEvent|null $e */
+        $e = WebhookEvent::query()
             ->where('provider', $provider)
             ->where('event_id', $eventId)
             ->first();
+
+        return $e;
     }
 
-    public function createReceived(string $provider, string $eventId, ?string $signatureHash, array $payload): WebhookEvent
-    {
-        return WebhookEvent::query()->create([
-            'provider'       => $provider,
-            'event_id'       => $eventId,
-            'signature_hash' => $signatureHash,
-            'payload'        => $payload,
-            'status'         => 'received',
-            'attempt_count'  => 0,
-            'next_retry_at'  => null,
-            'error_message'  => null,
-        ]);
-    }
+    /**
+     * Simpan event baru (dedup berada di layer pemanggil).
+     *
+     * @param array $payload Parsed payload (array)
+     */
+    public function storeNew(
+        string $provider,
+        string $eventId,
+        ?string $eventType,
+        string $rawBody,
+        array $payload,
+        ?CarbonImmutable $receivedAt = null
+    ): WebhookEvent {
+        $now = $receivedAt ?: CarbonImmutable::now();
 
-    public function markProcessed(WebhookEvent $event): WebhookEvent
-    {
-        $event->status = 'processed';
-        $event->error_message = null;
+        $event = new WebhookEvent();
+        $event->provider        = $provider;
+        $event->event_id        = $eventId;
+        $event->event_type      = $eventType;
+        $event->payload_raw     = $rawBody;
+        $event->payload         = $payload;
+        $event->attempts        = 1;
+        $event->received_at     = $now;
+        $event->last_attempt_at = $now;
         $event->save();
 
         return $event;
     }
 
-    public function markFailedAndScheduleRetry(WebhookEvent $event, int $attempt, int $backoffSeconds, string $errorMessage): WebhookEvent
+    /**
+     * Tambah attempt & update cap waktu.
+     */
+    public function touchAttempt(WebhookEvent $event, ?CarbonImmutable $at = null): bool
     {
-        $event->status = 'failed';
-        $event->attempt_count = $attempt;
-        $event->next_retry_at = now()->addSeconds($backoffSeconds);
-        $event->error_message = $errorMessage;
-        $event->save();
-
-        return $event;
+        $event->attempts        = ($event->attempts ?? 0) + 1;
+        $event->last_attempt_at = $at ?: CarbonImmutable::now();
+        return $event->save();
     }
 
-    /** Ambil event yang due untuk retry. @return Collection<int,WebhookEvent> */
-    public function dueForRetry(int $limit = 50): Collection
-    {
-        return WebhookEvent::query()
-            ->where('status', 'failed')
-            ->whereNotNull('next_retry_at')
-            ->where('next_retry_at', '<=', now())
-            ->orderBy('next_retry_at')
-            ->limit($limit)
-            ->get();
+    /**
+     * Tandai event sudah diproses, isi payment_ref & status jika ada.
+     */
+    public function markProcessed(
+        WebhookEvent $event,
+        ?string $paymentProviderRef,
+        string|PaymentStatus|null $status,
+        ?CarbonImmutable $processedAt = null
+    ): bool {
+        $event->payment_provider_ref = $paymentProviderRef;
+
+        if ($status !== null) {
+            $event->payment_status = $status instanceof PaymentStatus ? $status->value : $status;
+        }
+
+        $event->processed_at = $processedAt ?: CarbonImmutable::now();
+        return $event->save();
     }
 
-    /** Bersihkan event processed lebih tua dari $days hari. @return int rows deleted */
-    public function purgeProcessedOlderThan(int $days = 30): int
+    /**
+     * Jadwalkan retry berikutnya.
+     */
+    public function scheduleNextRetry(WebhookEvent $event, CarbonImmutable $nextAt): bool
     {
-        $threshold = CarbonImmutable::now()->subDays($days);
-        return WebhookEvent::query()
-            ->where('status', 'processed')
-            ->where('created_at', '<', $threshold)
-            ->delete();
+        $event->next_retry_at = $nextAt;
+        return $event->save();
     }
 }

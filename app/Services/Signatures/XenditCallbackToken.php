@@ -2,24 +2,31 @@
 
 namespace App\Services\Signatures;
 
+use Illuminate\Http\Request;
+
 class XenditCallbackToken
 {
     /**
-     * Verifikasi token callback Xendit.
-     *
-     * @return array{ok:bool, hash:?string, msg:?string}
+     * Xendit selalu menyertakan token verifikasi pada header:
+     *   x-callback-token (atau X-CALLBACK-TOKEN)
+     * Bandingkan header tersebut dengan nilai di konfigurasi.
      */
-    public function verify(string $expectedToken, ?string $header): array
+    public static function verify(string $rawBody, Request $request): bool
     {
-        if (! $expectedToken || ! $header) {
-            return ['ok' => false, 'hash' => null, 'msg' => 'Missing xendit token'];
+        $expected = (string) config('tenrusl.xendit_callback_token');
+        if ($expected === '' || $expected === null) {
+            return false;
         }
 
-        if (! hash_equals($expectedToken, $header)) {
-            return ['ok' => false, 'hash' => null, 'msg' => 'Invalid xendit token'];
+        // Case-insensitive: beberapa integrasi memakai variasi kapitalisasi
+        $token = $request->header('x-callback-token')
+              ?? $request->header('X-CALLBACK-TOKEN')
+              ?? $request->header('X-Callback-Token');
+
+        if (!is_string($token) || $token === '') {
+            return false;
         }
 
-        // Hash ringkas untuk jejak audit
-        return ['ok' => true, 'hash' => 'xendit:' . substr(hash('sha256', $header), 0, 32), 'msg' => null];
+        return hash_equals($expected, trim($token));
     }
 }

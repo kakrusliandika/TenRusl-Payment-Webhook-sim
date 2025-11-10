@@ -6,64 +6,83 @@ namespace App\Repositories;
 
 use App\Models\Payment;
 use App\ValueObjects\PaymentStatus;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
-class PaymentRepository
+final class PaymentRepository
 {
     /**
-     * Buat payment baru (status default pending).
-     * $data: amount(int), currency(string), description(?string), metadata(array), idempotency_key(string)
+     * Buat record Payment baru.
+     *
+     * @param  array{
+     *   provider:string,
+     *   provider_ref:string,
+     *   amount?:string|int|float,
+     *   currency?:string,
+     *   status?:string|PaymentStatus,
+     *   meta?:array
+     * } $attributes
      */
-    public function create(array $data): Payment
+    public function create(array $attributes): Payment
     {
-        return Payment::query()->create([
-            'amount'          => (int) ($data['amount'] ?? 0),
-            'currency'        => (string) ($data['currency'] ?? 'IDR'),
-            'description'     => $data['description'] ?? null,
-            'metadata'        => $data['metadata'] ?? [],
-            'status'          => (string) ($data['status'] ?? PaymentStatus::PENDING->value),
-            'idempotency_key' => (string) $data['idempotency_key'],
-        ]);
+        return Payment::query()->create($attributes);
     }
 
     public function find(string $id): ?Payment
     {
-        return Payment::query()->find($id);
+        /** @var Payment|null $p */
+        $p = Payment::query()->find($id);
+        return $p;
     }
 
-    public function findByIdempotencyKey(string $key): ?Payment
+    public function findByProviderRef(string $provider, string $providerRef): ?Payment
     {
-        return Payment::query()->where('idempotency_key', $key)->first();
+        /** @var Payment|null $p */
+        $p = Payment::query()
+            ->where('provider', $provider)
+            ->where('provider_ref', $providerRef)
+            ->first();
+
+        return $p;
     }
 
-    /** @return Collection<int,Payment> */
-    public function listByStatus(PaymentStatus|string $status, int $limit = 50): Collection
+    /**
+     * Update status berdasarkan (provider, provider_ref).
+     * Mengembalikan jumlah baris terpengaruh.
+     */
+    public function updateStatusByProviderRef(string $provider, string $providerRef, string|PaymentStatus $status): int
     {
-        $value = $status instanceof PaymentStatus ? $status->value : (string) $status;
-        return Payment::query()->where('status', $value)->limit($limit)->get();
+        $status = $status instanceof PaymentStatus ? $status->value : $status;
+
+        return Payment::query()
+            ->where('provider', $provider)
+            ->where('provider_ref', $providerRef)
+            ->update([
+                'status'     => $status,
+                'updated_at' => now(),
+            ]);
     }
 
-    public function updateStatus(Payment $payment, PaymentStatus|string $status): Payment
+    /**
+     * Simpan perubahan pada model Payment.
+     */
+    public function save(Payment $payment): bool
     {
-        $value = $status instanceof PaymentStatus ? $status->value : (string) $status;
-        $payment->status = $value;
-        $payment->save();
-
-        return $payment;
+        return $payment->save();
     }
 
-    public function markPaid(Payment $payment): Payment
+    /**
+     * Hapus berdasarkan primary key.
+     */
+    public function delete(string $id): bool
     {
-        return $this->updateStatus($payment, PaymentStatus::PAID);
+        return (bool) Payment::query()->whereKey($id)->delete();
     }
 
-    public function markFailed(Payment $payment): Payment
+    /**
+     * Operasi mass update via DB builder (bila perlu hemat memori).
+     */
+    public function massUpdate(array $where, array $payload): int
     {
-        return $this->updateStatus($payment, PaymentStatus::FAILED);
-    }
-
-    public function markRefunded(Payment $payment): Payment
-    {
-        return $this->updateStatus($payment, PaymentStatus::REFUNDED);
+        return DB::table('payments')->where($where)->update($payload);
     }
 }

@@ -7,14 +7,41 @@ namespace App\Traits;
 use Illuminate\Support\Str;
 
 /**
- * Utilitas ringan untuk menghasilkan ULID sebagai string.
- * Catatan: Untuk Eloquent Model, Laravel sudah menyediakan Concerns\HasUlids.
- * Trait ini dipakai umum (mis. untuk ID non-model / keperluan lain).
+ * Trait untuk primary key berbasis ULID pada Eloquent Model.
+ *
+ * - Menyetel $incrementing=false dan $keyType='string'
+ * - Mengisi kolom kunci (getKeyName()) dengan ULID saat creating jika kosong
  */
 trait HasUlid
 {
-    public static function newUlidString(): string
+    /**
+     * Inisialisasi properti model saat trait dipakai.
+     */
+    public function initializeHasUlid(): void
     {
-        return (string) Str::ulid();
+        $this->incrementing = false;
+        $this->keyType = 'string';
+    }
+
+    /**
+     * Hook Eloquent: isi kunci ULID saat creating jika belum ada.
+     */
+    public static function bootHasUlid(): void
+    {
+        static::creating(function ($model): void {
+            $key = $model->getKeyName();
+            if (!isset($model->{$key}) || $model->{$key} === '') {
+                // Str::ulid() membutuhkan symfony/uid; cast ke string untuk penyimpanan
+                $model->{$key} = strtolower((string) Str::ulid());
+            }
+        });
+    }
+
+    /**
+     * Helper untuk memperoleh nilai ULID dari model.
+     */
+    public function getUlid(): string
+    {
+        return (string) $this->getKey();
     }
 }
