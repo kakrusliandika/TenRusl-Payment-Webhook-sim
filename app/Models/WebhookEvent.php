@@ -27,6 +27,7 @@ class WebhookEvent extends Model
      */
     protected $casts = [
         'payload'          => 'array',
+        'payload_raw'      => 'string',
         'attempts'         => 'int',
         'received_at'      => 'datetime',
         'last_attempt_at'  => 'datetime',

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Webhooks;
 
-use App\Models\Payment;
 use App\Models\WebhookEvent;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
@@ -51,7 +50,7 @@ final class WebhookProcessor
 
         if ($event) {
             // Tambah hit counter / attempts
-            $event->attempts = ($event->attempts ?? 1) + 1;
+            $event->attempts        = ($event->attempts ?? 0) + 1;
             $event->last_attempt_at = $now;
             $event->save();
             $duplicate = true;
@@ -87,17 +86,17 @@ final class WebhookProcessor
         // 4) Jadwal retry simulasi (hanya jika butuh retry)
         $nextRetryMs = null;
         if ($status === 'pending') {
-            $nextRetryMs = RetryBackoff::compute($event->attempts + 1);
+            $nextRetryMs = RetryBackoff::compute(($event->attempts ?? 1) + 1);
             $event->next_retry_at = $now->addMilliseconds($nextRetryMs);
             $event->save();
         }
 
         return [
-            'duplicate'             => $duplicate,
-            'persisted'             => $persisted,
-            'status'                => $status,
-            'payment_provider_ref'  => $providerRef,
-            'next_retry_ms'         => $nextRetryMs,
+            'duplicate'            => $duplicate,
+            'persisted'            => $persisted,
+            'status'               => $status,
+            'payment_provider_ref' => $providerRef,
+            'next_retry_ms'        => $nextRetryMs,
         ];
     }
 
@@ -106,13 +105,20 @@ final class WebhookProcessor
      */
     private function inferStatus(string $provider, array $p): string
     {
-        $v = strtolower((string) ($p['status'] ?? $p['payment_status'] ?? $p['transaction_status'] ?? $p['data']['status'] ?? $p['resource']['status'] ?? ''));
+        $v = strtolower((string) ($p['status']
+            ?? $p['payment_status']
+            ?? $p['transaction_status']
+            ?? Arr::get($p, 'data.status')
+            ?? Arr::get($p, 'resource.status')
+            ?? ''));
 
         $truthy = [
-            'paid','succeeded','success','completed','captured','charge.succeeded','payment_intent.succeeded','paid_out','settled'
+            'paid', 'succeeded', 'success', 'completed', 'captured',
+            'charge.succeeded', 'payment_intent.succeeded', 'paid_out', 'settled',
         ];
         $falsy  = [
-            'failed','canceled','cancelled','void','expired','denied','rejected','charge.failed','payment_intent.canceled'
+            'failed', 'canceled', 'cancelled', 'void', 'expired', 'denied', 'rejected',
+            'charge.failed', 'payment_intent.canceled',
         ];
 
         if (in_array($v, $truthy, true)) {
@@ -127,8 +133,8 @@ final class WebhookProcessor
             // midtrans: capture/settlement = success, pending, deny/expire/cancel = failed
             $vt = strtolower((string) ($p['transaction_status'] ?? ''));
             return match ($vt) {
-                'capture','settlement' => 'succeeded',
-                'deny','expire','cancel' => 'failed',
+                'capture', 'settlement' => 'succeeded',
+                'deny', 'expire', 'cancel' => 'failed',
                 default => 'pending',
             };
         }
@@ -183,8 +189,8 @@ final class WebhookProcessor
             ->where('provider', $provider)
             ->where('provider_ref', $providerRef)
             ->update([
-                'status'      => $status,
-                'updated_at'  => now(),
+                'status'     => $status,
+                'updated_at' => now(),
             ]);
     }
 }

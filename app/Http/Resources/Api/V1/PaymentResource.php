@@ -19,9 +19,12 @@ class PaymentResource extends JsonResource
             'id'           => (string) $this->id,
             'provider'     => (string) $this->provider,
             'provider_ref' => (string) $this->provider_ref,
-            'amount'       => (string) $this->amount,
+            // amount diretur sebagai number (integer) agar konsisten dengan skema DB & casts
+            'amount'       => (int) $this->amount,
             'currency'     => (string) $this->currency,
-            'status'       => (string) $this->status, // cast enum → string
+            // enum PaymentStatus dipaksa string agar stabil di API
+            'status'       => (string) $this->status,
+            // meta hanya ditampilkan bila ada
             'meta'         => $this->when($this->meta !== null, (array) $this->meta),
 
             'created_at'   => optional($this->created_at)->toISOString(),

@@ -33,6 +33,8 @@ paths:
                   amount: 100000
                   currency: IDR
                   description: "Top up"
+                  metadata:
+                    order_id: "ORD-12345"
       responses:
         "201":
           description: Created
@@ -147,23 +149,28 @@ components:
   schemas:
     CreatePaymentRequest:
       type: object
-      required: [provider, amount]
+      required: [provider, amount, currency]
       properties:
         provider:
           type: string
           description: Nama provider (harus sesuai allowlist)
         amount:
-          type: number
-          format: float
-          minimum: 0.01
+          type: integer
+          minimum: 1
+          description: Satuan terkecil (mis. IDR)
         currency:
           type: string
           example: IDR
+          pattern: "^[A-Z]{3}$"
         description:
           type: string
           maxLength: 255
+        meta:
+          type: object
+          description: Direkomendasikan; metadata bebas
         metadata:
           type: object
+          description: Alias yang masih diterima; akan dipetakan ke 'meta'
     Payment:
       type: object
       required: [provider, provider_ref, status]
@@ -178,8 +185,9 @@ components:
           type: string
           example: sim_xendit_01JCDZQ2F1...
         amount:
-          type: string
-          example: "100000.00"
+          type: integer
+          example: 100000
+          description: Satuan terkecil
         currency:
           type: string
           example: IDR
@@ -226,8 +234,10 @@ components:
         processed_at:
           type: string
           format: date-time
+          nullable: true
         next_retry_at:
           type: string
           format: date-time
+          nullable: true
         payload:
           type: object

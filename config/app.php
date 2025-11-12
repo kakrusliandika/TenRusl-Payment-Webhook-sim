@@ -84,6 +84,10 @@ return [
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
+    // Tambahkan daftar yang dipakai UI (sinkron dengan flags di navbar)
+    'available_locales' => [
+        'en','id','ar','de','hi','ja','ko','pt','ru','th','zh',
+    ],
     /*
     |--------------------------------------------------------------------------
     | Encryption Key

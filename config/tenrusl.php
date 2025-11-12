@@ -107,4 +107,11 @@ return [
     */
     'max_retry_attempts' => env('TENRUSL_MAX_RETRY_ATTEMPTS', 5),
     'idempotency_ttl'    => env('TENRUSL_IDEMPOTENCY_TTL', 3600),
+
+
+    // Scheduler (untuk Kernel & workflow)
+    'scheduler_provider'      => env('TENRUSL_SCHEDULER_PROVIDER', ''),       // kosong = semua provider
+    'scheduler_backoff_mode'  => env('TENRUSL_SCHEDULER_BACKOFF_MODE', 'full'), // full|equal|decorrelated
+    'scheduler_limit'         => env('TENRUSL_SCHEDULER_LIMIT', 200),
+
 ];

@@ -1,0 +1,73 @@
+name: Retry Webhook Events (Scheduled)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # jalan tiap 15 menit
+  workflow_dispatch: {}     # bisa dijalankan manual
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: production
+      # Untuk workflow ini kita gunakan SQLite ephemeral agar mandiri.
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+
+      # Opsi retry (bisa dioverride di "workflow_dispatch" dengan 'Env vars')
+      RETRY_LIMIT: "100"
+      RETRY_MAX_ATTEMPTS: "5"
+      RETRY_BACKOFF_MODE: "full"   # full|equal|decorrelated
+      RETRY_PROVIDER: ""           # isi "mock" atau provider lain untuk filter opsional
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: composer
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare App
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+          cp .env.example .env || true
+          php artisan key:generate || true
+
+      - name: Run Migrations
+        env:
+          APP_ENV: production
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ env.DB_DATABASE }}
+        run: php artisan migrate --force --no-interaction -v
+
+      - name: Execute Retry Processor
+        env:
+          APP_ENV: production
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ env.DB_DATABASE }}
+          RETRY_LIMIT: ${{ env.RETRY_LIMIT }}
+          RETRY_MAX_ATTEMPTS: ${{ env.RETRY_MAX_ATTEMPTS }}
+          RETRY_BACKOFF_MODE: ${{ env.RETRY_BACKOFF_MODE }}
+          RETRY_PROVIDER: ${{ env.RETRY_PROVIDER }}
+        run: |
+          CMD="php artisan tenrusl:webhooks:retry --limit=${RETRY_LIMIT} --max-attempts=${RETRY_MAX_ATTEMPTS} --mode=${RETRY_BACKOFF_MODE}"
+          if [ -n "${RETRY_PROVIDER}" ]; then
+            CMD="${CMD} --provider=${RETRY_PROVIDER}"
+          fi
+          echo "Running: ${CMD}"
+          ${CMD}

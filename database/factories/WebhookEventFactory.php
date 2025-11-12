@@ -12,42 +12,83 @@ class WebhookEventFactory extends Factory
 
     public function definition(): array
     {
-        $paymentId = (string) Str::ulid();
+        $provider   = $this->faker->randomElement(['mock', 'xendit', 'midtrans']);
+        $eventId    = 'evt_' . Str::ulid()->toBase32();
+        $payRef     = 'sim_' . $provider . '_' . Str::ulid()->toBase32();
+        $sentAtIso  = now()->toISOString();
+
+        // Status event webhook: received | processed | failed
+        $status     = $this->faker->randomElement(['received', 'processed', 'failed']);
 
         return [
-            'id'             => (string) Str::ulid(),
-            'provider'       => $this->faker->randomElement(['mock', 'xendit', 'midtrans']),
-            'event_id'       => 'evt_' . $this->faker->unique()->numerify('#####'),
-            'signature_hash' => $this->faker->sha256(),
-            'payload'        => [
-                'event_id' => 'evt_' . $this->faker->numerify('#####'),
-                'type'     => $this->faker->randomElement(['payment.paid', 'payment.failed']),
-                'data'     => [
-                    'payment_id' => $paymentId,
-                    'amount'     => $this->faker->numberBetween(1000, 250000),
+            'id'                   => (string) Str::ulid(),
+            'provider'             => $provider,
+            'event_id'             => $eventId,
+            'payment_provider_ref' => $payRef,
+
+            'signature_hash'       => $this->faker->sha256(),
+
+            'payload'              => [
+                'event_id'   => $eventId,
+                'type'       => $this->faker->randomElement([
+                    'payment.succeeded',
+                    'payment.failed',
+                    'charge.succeeded',
+                    'charge.failed',
+                ]),
+                'data'       => [
+                    'provider'   => $provider,
+                    'ref'        => $payRef,
+                    'amount'     => $this->faker->numberBetween(1_000, 250_000),
                     'currency'   => 'IDR',
                 ],
-                'sent_at'  => now()->toISOString(),
+                'sent_at'    => $sentAtIso,
             ],
-            'status'         => $this->faker->randomElement(['received', 'processed', 'failed']),
-            'attempt_count'  => $this->faker->numberBetween(0, 3),
-            'next_retry_at'  => null,
-            'error_message'  => null,
+
+            // Status pipeline webhook (bukan status pembayaran)
+            'status'               => $status,
+
+            // Selaras dengan kode: gunakan "attempts" (bukan attempt_count)
+            'attempts'             => $this->faker->numberBetween(0, 3),
+
+            // Waktu audit (opsional)
+            'received_at'          => now(),
+            'last_attempt_at'      => null,
+            'processed_at'         => $status === 'processed' ? now() : null,
+
+            // Status pembayaran yang dinormalisasi (pending|succeeded|failed)
+            'payment_status'       => $this->faker->randomElement(['pending', 'succeeded', 'failed']),
+
+            // Retry window
+            'next_retry_at'        => null,
+            'error_message'        => null,
         ];
     }
 
     public function received(): static
     {
-        return $this->state(fn() => ['status' => 'received']);
+        return $this->state(fn () => [
+            'status'          => 'received',
+            'processed_at'    => null,
+            'payment_status'  => 'pending',
+        ]);
     }
 
     public function processed(): static
     {
-        return $this->state(fn() => ['status' => 'processed']);
+        return $this->state(fn () => [
+            'status'          => 'processed',
+            'processed_at'    => now(),
+            'payment_status'  => 'succeeded',
+        ]);
     }
 
     public function failed(): static
     {
-        return $this->state(fn() => ['status' => 'failed']);
+        return $this->state(fn () => [
+            'status'          => 'failed',
+            'processed_at'    => null,
+            'payment_status'  => 'failed',
+        ]);
     }
 }

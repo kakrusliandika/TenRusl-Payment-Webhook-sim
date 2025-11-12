@@ -11,7 +11,7 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 class Kernel extends ConsoleKernel
 {
     /**
-     * Daftar command aplikasi (opsional; Laravel juga mendeteksi otomatis via artisan).
+     * Daftar command aplikasi.
      *
      * @var array<class-string>
      */
@@ -24,8 +24,25 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Jalankan setiap menit, cegah overlap jika proses sebelumnya belum selesai.
-        $schedule->command('tenrusl:webhooks:retry --limit=200 --max-attempts=' . (int) config('tenrusl.max_retry_attempts', 5))
+        // Jalankan tiap menit; batasi overlap agar aman di beban tinggi.
+        $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
+        $provider    = (string) config('tenrusl.scheduler_provider', '');      // opsional filter
+        $mode        = (string) config('tenrusl.scheduler_backoff_mode', 'full'); // full|equal|decorrelated
+        $limit       = (int) config('tenrusl.scheduler_limit', 200);
+
+        $cmd = sprintf(
+            'tenrusl:webhooks:retry --limit=%d --max-attempts=%d --mode=%s',
+            $limit,
+            $maxAttempts,
+            $mode
+        );
+
+        if ($provider !== '') {
+            $cmd .= ' --provider=' . $provider;
+        }
+
+        $schedule
+            ->command($cmd)
             ->everyMinute()
             ->withoutOverlapping(); // gunakan cache lock default
     }

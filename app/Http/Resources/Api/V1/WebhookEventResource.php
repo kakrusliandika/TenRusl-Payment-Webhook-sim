@@ -31,6 +31,7 @@ class WebhookEventResource extends JsonResource
             'processed_at'           => optional($this->processed_at)->toISOString(),
             'next_retry_at'          => optional($this->next_retry_at)->toISOString(),
 
+            // tampilkan payload terurai (bukan raw) bila tersedia
             'payload'                => $this->when(isset($this->payload), (array) $this->payload),
         ];
     }
