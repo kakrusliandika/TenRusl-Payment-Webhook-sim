@@ -1,403 +1,416 @@
 {
-    "openapi": "3.0.0",
-    "info": {
-        "title": "TenRusl Payment Webhook Simulator",
-        "description": "Demo Laravel: idempotency, webhook dedup, signature verification, dan exponential backoff retry (simulasi).",
-        "version": "0.1.0"
-    },
-    "servers": [
-        {
-            "url": "/api/v1",
-            "description": "Local API base (Laravel 12)"
-        }
-    ],
-    "paths": {
-        "/payments": {
-            "post": {
-                "tags": [
-                    "Payments"
-                ],
-                "summary": "Create payment (idempotent)",
-                "operationId": "75598af922362ec6eb8be4a66535aa30",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/IdempotencyKey"
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/CreatePaymentRequest"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Payment"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Error"
-                                }
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Error"
-                                }
-                            }
-                        }
-                    }
-                }
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TenRusl Payment Webhook Simulator",
+    "description": "Demo Laravel: idempotency, webhook dedup, signature verification, dan exponential backoff retry (simulasi).",
+    "version": "0.2.0"
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Local API base (Laravel 12)"
+    }
+  ],
+  "paths": {
+    "/payments": {
+      "post": {
+        "tags": ["Payments"],
+        "summary": "Create payment (idempotent)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePaymentRequest"
+              }
             }
+          }
         },
-        "/payments/{id}": {
-            "get": {
-                "tags": [
-                    "Payments"
-                ],
-                "summary": "Get payment status",
-                "operationId": "6b8ba2854102ab357d493fd946f7036e",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Payment"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Error"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/webhooks/{provider}": {
-            "post": {
-                "tags": [
-                    "Webhooks"
-                ],
-                "summary": "Receive webhook event",
-                "description": "Provider: mock | xendit | midtrans.",
-                "operationId": "aea64af2c5bb9d74a74735514a228bd1",
-                "parameters": [
-                    {
-                        "name": "provider",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "mock",
-                                "xendit",
-                                "midtrans"
-                            ]
-                        }
-                    },
-                    {
-                        "$ref": "#/components/parameters/MockSignature"
-                    },
-                    {
-                        "$ref": "#/components/parameters/XenditCallbackToken"
-                    },
-                    {
-                        "$ref": "#/components/parameters/MidtransSignatureKey"
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/WebhookEvent"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Event processed (idempotent)",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "received": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
-                                        "provider": {
-                                            "type": "string",
-                                            "example": "mock"
-                                        },
-                                        "event_id": {
-                                            "type": "string",
-                                            "example": "evt_123"
-                                        },
-                                        "status": {
-                                            "type": "string",
-                                            "example": "processed"
-                                        },
-                                        "duplicated": {
-                                            "type": "boolean",
-                                            "example": false
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Error"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Error"
-                                }
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Error"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    },
-    "components": {
-        "schemas": {
-            "Payment": {
-                "properties": {
-                    "id": {
-                        "type": "string",
-                        "example": "01JF3XQ9H0N7E7Q0ZR3R0B3K9R"
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": [
-                            "pending",
-                            "paid",
-                            "failed",
-                            "refunded"
-                        ],
-                        "example": "pending"
-                    },
-                    "amount": {
-                        "type": "integer",
-                        "minimum": 1000,
-                        "example": 25000
-                    },
-                    "currency": {
-                        "type": "string",
-                        "example": "IDR"
-                    },
-                    "description": {
-                        "type": "string",
-                        "example": "Topup"
-                    },
-                    "metadata": {
-                        "type": "object",
-                        "example": {
-                            "customer_id": "cus_1"
-                        },
-                        "additionalProperties": true
-                    },
-                    "idempotency_key": {
-                        "type": "string",
-                        "example": "9f6b8a74-1b2c-4d3e-9f00-1234567890ab"
-                    },
-                    "created_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "updated_at": {
-                        "type": "string",
-                        "format": "date-time"
-                    }
-                },
-                "type": "object"
-            },
-            "CreatePaymentRequest": {
-                "required": [
-                    "amount"
-                ],
-                "properties": {
-                    "amount": {
-                        "type": "integer",
-                        "minimum": 1000,
-                        "example": 25000
-                    },
-                    "currency": {
-                        "type": "string",
-                        "example": "IDR"
-                    },
-                    "description": {
-                        "type": "string",
-                        "maxLength": 140,
-                        "example": "Topup"
-                    },
-                    "metadata": {
-                        "type": "object",
-                        "example": {
-                            "customer_id": "cus_1"
-                        },
-                        "additionalProperties": true
-                    }
-                },
-                "type": "object"
-            },
-            "WebhookEvent": {
-                "required": [
-                    "event_id",
-                    "type",
-                    "data"
-                ],
-                "properties": {
-                    "event_id": {
-                        "type": "string",
-                        "example": "evt_123"
-                    },
-                    "type": {
-                        "type": "string",
-                        "example": "payment.paid"
-                    },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
                     "data": {
-                        "type": "object",
-                        "example": {
-                            "payment_id": "01JF3XQ9H0N7E7Q0ZR3R0B3K9R",
-                            "amount": 25000,
-                            "currency": "IDR"
-                        },
-                        "additionalProperties": true
-                    },
-                    "sent_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "example": "2025-11-08T12:01:00Z"
+                      "$ref": "#/components/schemas/Payment"
                     }
-                },
-                "type": "object"
-            },
-            "Error": {
-                "properties": {
-                    "error": {
-                        "type": "string",
-                        "example": "invalid_request"
-                    },
-                    "message": {
-                        "type": "string",
-                        "example": "Idempotency-Key header is required"
-                    },
-                    "code": {
-                        "type": "string",
-                        "example": "400"
-                    }
-                },
-                "type": "object"
+                  }
+                }
+              }
             }
-        },
-        "parameters": {
-            "IdempotencyKey": {
-                "name": "Idempotency-Key",
-                "in": "header",
-                "description": "Unique key per intent; server menyimpan snapshot response.",
-                "required": true,
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
                 "schema": {
-                    "type": "string",
-                    "minLength": 8
+                  "$ref": "#/components/schemas/Error"
                 }
-            },
-            "MockSignature": {
-                "name": "X-Mock-Signature",
-                "in": "header",
-                "description": "HMAC-SHA256 dari raw body menggunakan MOCK_SECRET (untuk provider=mock).",
-                "required": false,
-                "schema": {
-                    "type": "string"
-                }
-            },
-            "XenditCallbackToken": {
-                "name": "x-callback-token",
-                "in": "header",
-                "description": "Token callback yang cocok dengan XENDIT_CALLBACK_TOKEN (untuk provider=xendit).",
-                "required": false,
-                "schema": {
-                    "type": "string"
-                }
-            },
-            "MidtransSignatureKey": {
-                "name": "Signature-Key",
-                "in": "header",
-                "description": "SHA512(order_id+status_code+gross_amount+server_key) (untuk provider=midtrans).",
-                "required": false,
-                "schema": {
-                    "type": "string"
-                }
+              }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
+      }
     },
-    "tags": [
-        {
-            "name": "Payments",
-            "description": "Endpoints untuk membuat & membaca Payment"
-        },
-        {
-            "name": "Webhooks",
-            "description": "Receiver webhook dari provider (mock|xendit|midtrans)"
+    "/payments/{id}": {
+      "get": {
+        "tags": ["Payments"],
+        "summary": "Get payment status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Payment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         }
-    ]
+      }
+    },
+    "/webhooks/{provider}": {
+      "post": {
+        "tags": ["Webhooks"],
+        "summary": "Receive webhook event",
+        "description": "Provider: mock | xendit | midtrans.",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["mock", "xendit", "midtrans"]
+            }
+          },
+          {
+            "$ref": "#/components/parameters/MockSignature"
+          },
+          {
+            "$ref": "#/components/parameters/XenditCallbackToken"
+          },
+          {
+            "$ref": "#/components/parameters/MidtransSignatureKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted (idempotent & retry-aware)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "event": {
+                          "type": "object",
+                          "properties": {
+                            "provider": {
+                              "type": "string"
+                            },
+                            "event_id": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "duplicate": {
+                              "type": "boolean"
+                            },
+                            "persisted": {
+                              "type": "boolean"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": ["pending", "succeeded", "failed"]
+                            },
+                            "payment_provider_ref": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "next_retry_ms": {
+                              "type": "integer",
+                              "nullable": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Payment": {
+        "type": "object",
+        "required": ["provider", "provider_ref", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "01JCDZQ2F1G8W3X1R7SZM3KZ2S"
+          },
+          "provider": {
+            "type": "string",
+            "example": "xendit"
+          },
+          "provider_ref": {
+            "type": "string",
+            "example": "sim_xendit_01JCDZQ2F1..."
+          },
+          "amount": {
+            "type": "integer",
+            "example": 100000,
+            "description": "Satuan terkecil (minor unit)"
+          },
+          "currency": {
+            "type": "string",
+            "example": "IDR"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "succeeded", "failed"],
+            "example": "pending"
+          },
+          "meta": {
+            "type": "object"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreatePaymentRequest": {
+        "type": "object",
+        "required": ["provider", "amount", "currency"],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Nama provider (harus sesuai allowlist)"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "example": 100000,
+            "description": "Satuan terkecil"
+          },
+          "currency": {
+            "type": "string",
+            "example": "IDR",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "Top up"
+          },
+          "meta": {
+            "type": "object",
+            "description": "Direkomendasikan; metadata bebas"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Alias dari klien; dipetakan ke 'meta'"
+          }
+        }
+      },
+      "WebhookEvent": {
+        "type": "object",
+        "required": ["event_id", "type", "data"],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "example": "evt_123"
+          },
+          "type": {
+            "type": "string",
+            "example": "payment.succeeded"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true,
+            "example": {
+              "payment_id": "sim_xendit_01J...",
+              "amount": 100000,
+              "currency": "IDR"
+            }
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-11-08T12:01:00Z"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "invalid_request"
+          },
+          "message": {
+            "type": "string",
+            "example": "Idempotency-Key header is required"
+          },
+          "code": {
+            "type": "string",
+            "example": "400"
+          }
+        }
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "description": "Unique key per intent; server menyimpan snapshot response.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 8
+        }
+      },
+      "MockSignature": {
+        "name": "X-Mock-Signature",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "description": "HMAC-SHA256(raw body, MOCK_SECRET) — provider=mock."
+      },
+      "XenditCallbackToken": {
+        "name": "x-callback-token",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Cocok dengan XENDIT_CALLBACK_TOKEN — provider=xendit."
+      },
+      "MidtransSignatureKey": {
+        "name": "Signature-Key",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "description": "SHA512(order_id+status_code+gross_amount+server_key) — provider=midtrans."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Payments",
+      "description": "Endpoints untuk membuat & membaca Payment"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Receiver webhook dari provider (mock|xendit|midtrans)"
+    }
+  ]
 }

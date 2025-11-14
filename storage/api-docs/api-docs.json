@@ -1,9 +1,9 @@
 {
-    "openapi": "3.0.0",
+    "openapi": "3.0.3",
     "info": {
         "title": "TenRusl Payment Webhook Simulator",
         "description": "Demo Laravel: idempotency, webhook dedup, signature verification, dan exponential backoff retry (simulasi).",
-        "version": "0.1.0"
+        "version": "0.2.0"
     },
     "servers": [
         {
@@ -18,7 +18,6 @@
                     "Payments"
                 ],
                 "summary": "Create payment (idempotent)",
-                "operationId": "75598af922362ec6eb8be4a66535aa30",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/IdempotencyKey"
@@ -40,7 +39,12 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Payment"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/Payment"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -74,7 +78,6 @@
                     "Payments"
                 ],
                 "summary": "Get payment status",
-                "operationId": "6b8ba2854102ab357d493fd946f7036e",
                 "parameters": [
                     {
                         "name": "id",
@@ -91,7 +94,12 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Payment"
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/Payment"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -116,7 +124,6 @@
                 ],
                 "summary": "Receive webhook event",
                 "description": "Provider: mock | xendit | midtrans.",
-                "operationId": "aea64af2c5bb9d74a74735514a228bd1",
                 "parameters": [
                     {
                         "name": "provider",
@@ -152,34 +159,61 @@
                     }
                 },
                 "responses": {
-                    "200": {
-                        "description": "Event processed (idempotent)",
+                    "202": {
+                        "description": "Accepted (idempotent & retry-aware)",
                         "content": {
                             "application/json": {
                                 "schema": {
+                                    "type": "object",
                                     "properties": {
-                                        "received": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
-                                        "provider": {
-                                            "type": "string",
-                                            "example": "mock"
-                                        },
-                                        "event_id": {
-                                            "type": "string",
-                                            "example": "evt_123"
-                                        },
-                                        "status": {
-                                            "type": "string",
-                                            "example": "processed"
-                                        },
-                                        "duplicated": {
-                                            "type": "boolean",
-                                            "example": false
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "event": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "provider": {
+                                                            "type": "string"
+                                                        },
+                                                        "event_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        }
+                                                    }
+                                                },
+                                                "result": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "duplicate": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "persisted": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "status": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "pending",
+                                                                "succeeded",
+                                                                "failed"
+                                                            ]
+                                                        },
+                                                        "payment_provider_ref": {
+                                                            "type": "string",
+                                                            "nullable": true
+                                                        },
+                                                        "next_retry_ms": {
+                                                            "type": "integer",
+                                                            "nullable": true
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
-                                    },
-                                    "type": "object"
+                                    }
                                 }
                             }
                         }
@@ -221,44 +255,45 @@
     "components": {
         "schemas": {
             "Payment": {
+                "type": "object",
+                "required": [
+                    "provider",
+                    "provider_ref",
+                    "status"
+                ],
                 "properties": {
                     "id": {
                         "type": "string",
-                        "example": "01JF3XQ9H0N7E7Q0ZR3R0B3K9R"
+                        "example": "01JCDZQ2F1G8W3X1R7SZM3KZ2S"
                     },
-                    "status": {
+                    "provider": {
                         "type": "string",
-                        "enum": [
-                            "pending",
-                            "paid",
-                            "failed",
-                            "refunded"
-                        ],
-                        "example": "pending"
+                        "example": "xendit"
+                    },
+                    "provider_ref": {
+                        "type": "string",
+                        "example": "sim_xendit_01JCDZQ2F1..."
                     },
                     "amount": {
                         "type": "integer",
-                        "minimum": 1000,
-                        "example": 25000
+                        "example": 100000,
+                        "description": "Satuan terkecil (minor unit)"
                     },
                     "currency": {
                         "type": "string",
                         "example": "IDR"
                     },
-                    "description": {
+                    "status": {
                         "type": "string",
-                        "example": "Topup"
+                        "enum": [
+                            "pending",
+                            "succeeded",
+                            "failed"
+                        ],
+                        "example": "pending"
                     },
-                    "metadata": {
-                        "type": "object",
-                        "example": {
-                            "customer_id": "cus_1"
-                        },
-                        "additionalProperties": true
-                    },
-                    "idempotency_key": {
-                        "type": "string",
-                        "example": "9f6b8a74-1b2c-4d3e-9f00-1234567890ab"
+                    "meta": {
+                        "type": "object"
                     },
                     "created_at": {
                         "type": "string",
@@ -268,39 +303,48 @@
                         "type": "string",
                         "format": "date-time"
                     }
-                },
-                "type": "object"
+                }
             },
             "CreatePaymentRequest": {
+                "type": "object",
                 "required": [
-                    "amount"
+                    "provider",
+                    "amount",
+                    "currency"
                 ],
                 "properties": {
+                    "provider": {
+                        "type": "string",
+                        "description": "Nama provider (harus sesuai allowlist)"
+                    },
                     "amount": {
                         "type": "integer",
-                        "minimum": 1000,
-                        "example": 25000
+                        "minimum": 1,
+                        "example": 100000,
+                        "description": "Satuan terkecil"
                     },
                     "currency": {
                         "type": "string",
-                        "example": "IDR"
+                        "example": "IDR",
+                        "pattern": "^[A-Z]{3}$"
                     },
                     "description": {
                         "type": "string",
-                        "maxLength": 140,
-                        "example": "Topup"
+                        "maxLength": 255,
+                        "example": "Top up"
+                    },
+                    "meta": {
+                        "type": "object",
+                        "description": "Direkomendasikan; metadata bebas"
                     },
                     "metadata": {
                         "type": "object",
-                        "example": {
-                            "customer_id": "cus_1"
-                        },
-                        "additionalProperties": true
+                        "description": "Alias dari klien; dipetakan ke 'meta'"
                     }
-                },
-                "type": "object"
+                }
             },
             "WebhookEvent": {
+                "type": "object",
                 "required": [
                     "event_id",
                     "type",
@@ -313,26 +357,26 @@
                     },
                     "type": {
                         "type": "string",
-                        "example": "payment.paid"
+                        "example": "payment.succeeded"
                     },
                     "data": {
                         "type": "object",
+                        "additionalProperties": true,
                         "example": {
-                            "payment_id": "01JF3XQ9H0N7E7Q0ZR3R0B3K9R",
-                            "amount": 25000,
+                            "payment_id": "sim_xendit_01J...",
+                            "amount": 100000,
                             "currency": "IDR"
-                        },
-                        "additionalProperties": true
+                        }
                     },
                     "sent_at": {
                         "type": "string",
                         "format": "date-time",
                         "example": "2025-11-08T12:01:00Z"
                     }
-                },
-                "type": "object"
+                }
             },
             "Error": {
+                "type": "object",
                 "properties": {
                     "error": {
                         "type": "string",
@@ -346,8 +390,7 @@
                         "type": "string",
                         "example": "400"
                     }
-                },
-                "type": "object"
+                }
             }
         },
         "parameters": {
@@ -364,29 +407,29 @@
             "MockSignature": {
                 "name": "X-Mock-Signature",
                 "in": "header",
-                "description": "HMAC-SHA256 dari raw body menggunakan MOCK_SECRET (untuk provider=mock).",
                 "required": false,
                 "schema": {
                     "type": "string"
-                }
+                },
+                "description": "HMAC-SHA256(raw body, MOCK_SECRET) — provider=mock."
             },
             "XenditCallbackToken": {
                 "name": "x-callback-token",
                 "in": "header",
-                "description": "Token callback yang cocok dengan XENDIT_CALLBACK_TOKEN (untuk provider=xendit).",
                 "required": false,
                 "schema": {
                     "type": "string"
-                }
+                },
+                "description": "Cocok dengan XENDIT_CALLBACK_TOKEN — provider=xendit."
             },
             "MidtransSignatureKey": {
                 "name": "Signature-Key",
                 "in": "header",
-                "description": "SHA512(order_id+status_code+gross_amount+server_key) (untuk provider=midtrans).",
                 "required": false,
                 "schema": {
                     "type": "string"
-                }
+                },
+                "description": "SHA512(order_id+status_code+gross_amount+server_key) — provider=midtrans."
             }
         }
     },
