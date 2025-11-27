@@ -1,2 +1,11 @@
+# public/robots.txt
+# Allow crawling; blok jalur sensitif; cantumkan sitemap (akan kita buat)
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /admin/
+Disallow: /storage/
+Disallow: /api/private/
+
+# Jangan pakai robots.txt untuk menyembunyikan konten dari indeks — gunakan noindex/auth.
+# (lihat docs Google)
+Sitemap: https://example.com/sitemap.xml

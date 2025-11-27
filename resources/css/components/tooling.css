@@ -1,0 +1,182 @@
+/* ========= Tooling section (OpenAPI / Postman / CI) ========= */
+
+.tooling-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 40rem;
+}
+
+.tooling-header .h2 {
+  display: flex;
+  align-items: center;
+}
+
+.tooling-lede {
+  color: var(--text-2);
+}
+
+/* Grid of tooling steps */
+.tooling-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .tooling-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .tooling-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Individual tooling card */
+.tooling-card {
+  position: relative;
+  height: 100%;
+  border-radius: var(--radius);
+  padding: 1rem 1rem 0.85rem;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+/* subtle gradient strip on the left for “timeline” feel */
+.tooling-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(
+    180deg,
+    var(--brand-400),
+    var(--brand-500),
+    var(--brand-600)
+  );
+  opacity: 0.8;
+}
+
+/* header: icon + title + step label */
+.tooling-card-head {
+  position: relative;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+/* ========== ICON ala SIGNATURE (orbit + circle) ========== */
+
+.tooling-card-icon {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+}
+
+.tooling-icon-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in oklab, var(--brand-500) 40%, transparent);
+  opacity: 0.6;
+}
+
+.tooling-icon-circle {
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 30% 20%,
+    color-mix(in oklab, var(--brand-400) 60%, transparent),
+    color-mix(in oklab, var(--brand-600) 40%, transparent)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-contrast);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+}
+
+.tooling-icon-circle .icon,
+.tooling-icon-circle i {
+  font-size: 1.1rem;
+}
+
+/* step label (Step 01 / 02 / 03…) */
+.tooling-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tooling-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin: 0 0 0.1rem;
+}
+
+.tooling-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--brand-500);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--brand-500) 25%, transparent);
+}
+
+.tooling-step-label {
+  white-space: nowrap;
+}
+
+.tooling-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* description */
+.tooling-desc {
+  position: relative;
+  margin: 0.25rem 0 0.25rem;
+  font-size: 0.9rem;
+  color: var(--text-2);
+}
+
+/* footer chip (small hint text) */
+.tooling-footer {
+  margin-top: auto;
+  padding-top: 0.4rem;
+}
+
+.tooling-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in oklab, var(--border) 65%, transparent);
+  font-size: 0.75rem;
+  color: var(--text-3);
+  background: color-mix(in oklab, var(--surface-1) 80%, transparent);
+}
+
+.tooling-chip .icon,
+.tooling-chip i {
+  font-size: 0.85rem;
+  width: 14px;
+  height: 14px;
+}

@@ -1,117 +1,62 @@
 <?php
 
 return [
-    /*
-    |--------------------------------------------------------------------------
-    | TenRusl Demo Secrets & Flags
-    |--------------------------------------------------------------------------
-    |
-    | Nilai diambil dari environment (.env). Jangan menaruh kredensial asli di
-    | file ini. Untuk demo:
-    | - MOCK_SECRET: dipakai HMAC-SHA256 pada provider "mock"
-    | - XENDIT_CALLBACK_TOKEN: token header x-callback-token (provider "xendit")
-    | - MIDTRANS_SERVER_KEY: server key untuk perhitungan signature-key (provider "midtrans")
-    |
-    */
+    // Demo secrets (read from .env)
+    'mock_secret'             => env('MOCK_SECRET', 'changeme'),
+    'xendit_callback_token'   => env('XENDIT_CALLBACK_TOKEN', 'changeme'),
+    'midtrans_server_key'     => env('MIDTRANS_SERVER_KEY', 'changeme'),
 
-    'mock_secret'           => env('MOCK_SECRET', 'changeme'),
-    'xendit_callback_token' => env('XENDIT_CALLBACK_TOKEN', 'changeme'),
-    'midtrans_server_key'   => env('MIDTRANS_SERVER_KEY', 'changeme'),
+    // Optional provider secrets
+    'stripe_webhook_secret'   => env('STRIPE_WEBHOOK_SECRET'),
+    'paypal_env'              => env('PAYPAL_ENV', 'sandbox'),
+    'paypal_webhook_id'       => env('PAYPAL_WEBHOOK_ID'),
+    'paypal_client_id'        => env('PAYPAL_CLIENT_ID'),
+    'paypal_client_secret'    => env('PAYPAL_CLIENT_SECRET'),
+    'paddle_signing_secret'   => env('PADDLE_SIGNING_SECRET'),
+    'paddle_public_key'       => env('PADDLE_PUBLIC_KEY'),
+    'ls_webhook_secret'       => env('LS_WEBHOOK_SECRET'),
+    'airwallex_webhook_secret'=> env('AIRWALLEX_WEBHOOK_SECRET'),
+    'tripay_private_key'      => env('TRIPAY_PRIVATE_KEY'),
+    'doku_client_id'          => env('DOKU_CLIENT_ID'),
+    'doku_secret_key'         => env('DOKU_SECRET_KEY'),
+    'doku_request_target'     => env('DOKU_REQUEST_TARGET', '/'),
+    'dana_public_key'         => env('DANA_PUBLIC_KEY'),
+    'oy_callback_secret'      => env('OY_CALLBACK_SECRET'),
+    'oy_ip_whitelist'         => env('OY_IP_WHITELIST'),
+    'payoneer_shared_secret'  => env('PAYONEER_SHARED_SECRET'),
+    'payoneer_merchant_id'    => env('PAYONEER_MERCHANT_ID'),
+    'skrill_merchant_id'      => env('SKRILL_MERCHANT_ID'),
+    'skrill_email'            => env('SKRILL_EMAIL'),
+    'skrill_md5_secret'       => env('SKRILL_MD5_SECRET'),
+    'amzn_bwp_public_key'     => env('AMZN_BWP_PUBLIC_KEY'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Provider Tambahan (opsional)
-    |--------------------------------------------------------------------------
-    | Isi variabel ENV-nya di .env sesuai kebutuhan. Simulator akan membaca
-    | konfigurasi ini via middleware / verifier kamu.
-    */
-
-    // Stripe — header: Stripe-Signature (HMAC SHA-256 atas "t.payload")
-    'stripe_webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
-
-    // PayPal — Verify Webhook Signature (gunakan kredensial API)
-    'paypal_env'            => env('PAYPAL_ENV', 'sandbox'), // sandbox|live
-    'paypal_webhook_id'     => env('PAYPAL_WEBHOOK_ID'),
-    'paypal_client_id'      => env('PAYPAL_CLIENT_ID'),
-    'paypal_client_secret'  => env('PAYPAL_CLIENT_SECRET'),
-
-    // Paddle — signing secret (atau public key untuk skema lama)
-    'paddle_signing_secret' => env('PADDLE_SIGNING_SECRET'),
-    'paddle_public_key'     => env('PADDLE_PUBLIC_KEY'),
-
-    // Lemon Squeezy — header: X-Signature (HMAC SHA-256 raw body)
-    'ls_webhook_secret'     => env('LS_WEBHOOK_SECRET'),
-
-    // Airwallex — header: x-timestamp + x-signature (base64 HMAC SHA-256 atas ts+body)
-    'airwallex_webhook_secret' => env('AIRWALLEX_WEBHOOK_SECRET'),
-
-    // Tripay — header: X-Callback-Signature (HMAC SHA-256 raw JSON body)
-    'tripay_private_key'    => env('TRIPAY_PRIVATE_KEY'),
-
-    // DOKU — header: Signature (HMACSHA256=base64(...))
-    'doku_client_id'        => env('DOKU_CLIENT_ID'),
-    'doku_secret_key'       => env('DOKU_SECRET_KEY'),
-    'doku_request_target'   => env('DOKU_REQUEST_TARGET', '/'),
-
-    // DANA — Asymmetric Signature (RSA public key)
-    'dana_public_key'       => env('DANA_PUBLIC_KEY'),
-
-    // OY! Indonesia — callback auth/whitelist (opsional)
-    'oy_callback_secret'    => env('OY_CALLBACK_SECRET'),
-    'oy_ip_whitelist'       => env('OY_IP_WHITELIST'),
-
-    // Payoneer — shared secret (tergantung produk Checkout/webhook)
-    'payoneer_shared_secret'=> env('PAYONEER_SHARED_SECRET'),
-    'payoneer_merchant_id'  => env('PAYONEER_MERCHANT_ID'),
-
-    // Skrill — IPN (MD5 signature)
-    'skrill_merchant_id'    => env('SKRILL_MERCHANT_ID'),
-    'skrill_email'          => env('SKRILL_EMAIL'),
-    'skrill_md5_secret'     => env('SKRILL_MD5_SECRET'),
-
-    // Amazon Buy with Prime — header: x-amzn-signature (RSA)
-    'amzn_bwp_public_key'   => env('AMZN_BWP_PUBLIC_KEY'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Allowlist Provider untuk Routing
-    |--------------------------------------------------------------------------
-    | Dipakai di routes/api.php -> whereIn('provider', [...]).
-    | Tambahkan/kurangi sesuai yang kamu dukung di middleware/verifier.
-    */
+    // Allowlist for providers
     'providers_allowlist' => [
-        // existing
-        'mock', 'xendit', 'midtrans',
-
-        // tambahan
-        'stripe',
-        'paypal',
-        'paddle',
-        'lemonsqueezy',
-        'airwallex',
-        'tripay',
-        'doku',
-        'dana',
-        'oy',
-        'payoneer',
-        'skrill',
-        'amazon_bwp',
+        'mock','xendit','midtrans',
+        'stripe','paypal','paddle','lemonsqueezy','airwallex','tripay',
+        'doku','dana','oy','payoneer','skrill','amazon_bwp',
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Opsi Lain (opsional)
-    |--------------------------------------------------------------------------
-    | Kamu bisa menambahkan flag/konfigurasi lain di sini jika diperlukan.
-    | Misal: maksimal percobaan retry, atau window idempotensi.
-    */
+    // Retry & idempotency demo knobs
     'max_retry_attempts' => env('TENRUSL_MAX_RETRY_ATTEMPTS', 5),
     'idempotency_ttl'    => env('TENRUSL_IDEMPOTENCY_TTL', 3600),
 
-
-    // Scheduler (untuk Kernel & workflow)
-    'scheduler_provider'      => env('TENRUSL_SCHEDULER_PROVIDER', ''),       // kosong = semua provider
-    'scheduler_backoff_mode'  => env('TENRUSL_SCHEDULER_BACKOFF_MODE', 'full'), // full|equal|decorrelated
-    'scheduler_limit'         => env('TENRUSL_SCHEDULER_LIMIT', 200),
-
+    // --- IMPORTANT: store plain relative asset paths only (no asset()/url()/route()) ---
+    'providers_meta' => [
+        'airwallex'    => ['display_name' => 'Airwallex',     'signature_type' => 'HMAC',   'logo' => 'providers/airwallex.png'],
+        'amazon_bwp'   => ['display_name' => 'Amazon BWP',    'signature_type' => 'RSA',    'logo' => 'providers/amazon_bwp.png'],
+        'dana'         => ['display_name' => 'DANA',          'signature_type' => 'RSA',    'logo' => 'providers/dana.png'],
+        'doku'         => ['display_name' => 'DOKU',          'signature_type' => 'HMAC',   'logo' => 'providers/doku.png'],
+        'lemonsqueezy' => ['display_name' => 'Lemon Squeezy', 'signature_type' => 'HMAC',   'logo' => 'providers/lemonsqueezy.png'],
+        'midtrans'     => ['display_name' => 'Midtrans',      'signature_type' => 'SHA512', 'logo' => 'providers/midtrans.png'],
+        'mock'         => ['display_name' => 'Mock',          'signature_type' => 'SIM',    'logo' => 'providers/mock.png'],
+        'oy'           => ['display_name' => 'OY! Indonesia', 'signature_type' => 'HMAC',   'logo' => 'providers/oy.png'],
+        'paddle'       => ['display_name' => 'Paddle',        'signature_type' => 'HMAC',   'logo' => 'providers/paddle.png'],
+        'payoneer'     => ['display_name' => 'Payoneer',      'signature_type' => 'Token',  'logo' => 'providers/payoneer.png'],
+        'paypal'       => ['display_name' => 'PayPal',        'signature_type' => 'API',    'logo' => 'providers/paypal.png'],
+        'skrill'       => ['display_name' => 'Skrill',        'signature_type' => 'MD5',    'logo' => 'providers/skrill.png'],
+        'stripe'       => ['display_name' => 'Stripe',        'signature_type' => 'HMAC',   'logo' => 'providers/stripe.png'],
+        'tripay'       => ['display_name' => 'TriPay',        'signature_type' => 'HMAC',   'logo' => 'providers/tripay.png'],
+        'xendit'       => ['display_name' => 'Xendit',        'signature_type' => 'Token',  'logo' => 'providers/xendit.png'],
+    ],
 ];

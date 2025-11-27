@@ -1,0 +1,257 @@
+/* ==========================================================================
+   Home / Landing Page
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Hero section
+   -------------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  padding-block: clamp(3rem, 5vw, 4.5rem);
+}
+
+.hero-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 2rem;
+  align-items: center;
+}
+
+/* Left column: text */
+.hero-copy {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero-copy-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.hero-copy-heading .kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+.hero-copy-heading .kicker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--brand-500);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--brand-500) 25%, transparent);
+}
+
+/* Main hero title (usually .h1) uses global typography */
+.hero-copy-heading .lede {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* Hero sublede row with small icon + text */
+.hero-sublede {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  max-width: 38rem;
+  color: var(--text-2);
+}
+
+.hero-sublede .icon {
+  margin-top: 0.12rem;
+}
+
+/* Hero badges (under sublede) */
+.hero-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+/* Small pill badge */
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  background: color-mix(in oklab, var(--surface-1) 96%, transparent);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* CTA row: docs + secondary */
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+/* Primary hero CTA (docs) – uses global .btn, we just tune text color */
+.hero-cta .cta-btn-hero-docs {
+  color: white;
+}
+
+/* Secondary hero CTA (GitHub) */
+.hero-cta .cta-btn-hero-github {
+  color: var(--color-blue-700);
+}
+
+/* Stats list (providers / tests / OpenAPI) */
+.hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 0;
+  margin: 1.8rem 0 0;
+  list-style: none;
+}
+
+.hero-stats li {
+  min-width: 120px;
+}
+
+.hero-stats .big {
+  display: flex;
+  align-items: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  margin-bottom: 0.15rem;
+}
+
+/* Right column: visual card / code / providers cloud */
+.hero-right {
+  display: grid;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+/* Hero card glass container */
+.hero-card .glass {
+  background: color-mix(in oklab, var(--bg-color) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: var(--card-shadow);
+}
+
+/* Optional code block preview in hero */
+.code-hero {
+  margin-top: 0.75rem;
+}
+
+.code-hero .code {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.code-hero-caption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+
+.code-hero-caption .icon {
+  margin-top: 0.1rem;
+}
+
+/* --------------------------------------------------------------------------
+   Generic section spacing (used by home sections)
+   -------------------------------------------------------------------------- */
+
+.section {
+  padding-block: 56px;
+}
+
+.section.alt {
+  background: color-mix(in oklab, var(--bg-color) 96%, transparent);
+  border-block: 1px solid var(--border);
+}
+
+.section .lede,
+.section .lead {
+  color: var(--text-3);
+  margin: 0 0 1.2rem;
+}
+
+/* --------------------------------------------------------------------------
+   Small live-pulse indicator (can be reused)
+   -------------------------------------------------------------------------- */
+
+.pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--success-600);
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(22, 163, 74, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive tweaks
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .hero-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-right {
+    order: -1; /* visual first on small screens if desired */
+  }
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding-block: 2.5rem;
+  }
+
+  .hero-cta {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Prefers-reduced-motion: keep animations subtle or off
+   (global reset may exist; this ensures hero bits don’t explode)
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation-duration: 16s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

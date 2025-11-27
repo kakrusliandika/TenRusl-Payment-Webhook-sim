@@ -1,0 +1,221 @@
+/* C:\laragon\www\TenRusl-Payment-Webhook-sim\resources\css\components\signature.css */
+/* ========= Signature Verification section ========= */
+
+.signature {
+  /* section sudah pakai .section .alt dari tema, jadi di sini fokus layout saja */
+}
+
+/* Header */
+
+.signature-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 40rem;
+}
+
+.signature-lede {
+  color: var(--text-2);
+  max-width: 36rem;
+}
+
+/* Layout utama: kiri (cards) + kanan (callout) */
+
+.signature-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr);
+  gap: 1.75rem;
+  margin-top: 1.75rem;
+  align-items: flex-start;
+}
+
+.signature-list {
+  display: grid;
+  gap: 1rem;
+}
+
+/* Kartu signature */
+
+.signature-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+/* Icon di kiri dengan efek orbit */
+
+.signature-card-icon {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+}
+
+.signature-icon-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in oklab, var(--brand-500) 40%, transparent);
+  opacity: 0.6;
+}
+
+.signature-icon-circle {
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 30% 20%,
+    color-mix(in oklab, var(--brand-400) 60%, transparent),
+    color-mix(in oklab, var(--brand-600) 40%, transparent)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-contrast);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+}
+
+.signature-icon-circle .icon,
+.signature-icon-circle i {
+  font-size: 1.1rem;
+}
+
+/* Body kartu */
+
+.signature-card-body {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.signature-card-title {
+  margin: 0;
+}
+
+.signature-card-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-2);
+}
+
+/* Meta badges kecil di bawah kartu */
+
+.signature-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signature-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface-1) 90%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
+  font-size: 0.75rem;
+  color: var(--text-3);
+}
+
+.signature-meta-chip .icon {
+  font-size: 0.8rem;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+/* Kolom kanan: callout + code contoh */
+
+.signature-aside {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface-1) 92%, transparent);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--card-shadow);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.signature-aside-head {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.badge-soft {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--brand-500) 35%, transparent);
+  background: color-mix(in oklab, var(--brand-500) 12%, transparent);
+  color: var(--text-1);
+}
+
+.badge-soft .icon {
+  font-size: 0.85rem;
+}
+
+.signature-aside-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-2);
+}
+
+.signature-aside-code {
+  margin: 0;
+  border-radius: 0.75rem;
+  border: 1px dashed var(--border);
+  background: color-mix(in oklab, var(--surface-2) 88%, transparent);
+  padding: 0.75rem 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.signature-aside-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.signature-aside-foot .icon {
+  margin-top: 0.1rem;
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .signature-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signature-aside {
+    order: -1; /* callout muncul di atas cards di mobile */
+  }
+}
+
+@media (max-width: 600px) {
+  .signature-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signature-card-icon {
+    margin-bottom: 0.3rem;
+  }
+}

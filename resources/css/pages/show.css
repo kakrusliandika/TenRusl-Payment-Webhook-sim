@@ -1,0 +1,120 @@
+/* ==========================================================================
+   Provider Detail Page (/providers/{slug})
+   ========================================================================== */
+
+/* Wrapper utama halaman detail provider */
+.provider-page {
+  /* .section sudah atur padding-block di main.css,
+     di sini fokus ke layout khusus halaman provider */
+}
+
+.provider-page-container {
+  /* Bisa tambahkan max-width khusus kalau ingin lebih sempit dari default */
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Breadcrumb / Back link
+   -------------------------------------------------------------------------- */
+
+.provider-breadcrumb {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.provider-breadcrumb .btn {
+  gap: 0.4rem;
+}
+
+/* --------------------------------------------------------------------------
+   Body layout (header + endpoints + detail sections)
+   -------------------------------------------------------------------------- */
+
+.provider-page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Grid endpoint cards sudah pakai .grid .grid-3 dari grids.css */
+.provider-endpoints {
+  align-items: stretch;
+}
+
+/* Signature + example JSON dibungkus agar rapi jaraknya */
+.provider-detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+/* --------------------------------------------------------------------------
+   Responsiveness
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .provider-page-body {
+    gap: 1.5rem;
+  }
+
+  .provider-breadcrumb {
+    margin-bottom: 0.75rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Pada layar besar, bisa dibuat dua kolom:
+     kiri: endpoints, kanan: signature + example */
+  .provider-page-body {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr);
+    row-gap: 2.25rem;
+  }
+
+  /* header tetap full width berada di atas grid */
+  .provider-page-body > header:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .provider-endpoints {
+    grid-column: 1 / -1;
+  }
+
+  .provider-detail-sections {
+    grid-column: 1 / -1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Small visual tweaks (opsional, sesuai gaya global)
+   -------------------------------------------------------------------------- */
+
+/* Sedikit jarak antara header provider dan breadcrumb di mobile */
+@media (max-width: 600px) {
+  .provider-breadcrumb .btn {
+    font-size: 0.9rem;
+    padding-inline: 0.7rem;
+    padding-block: 0.45rem;
+  }
+}
+
+/* Kalau ingin membedakan sedikit halaman detail dari halaman lain,
+   bisa tambahkan background halus atau border-top: */
+
+/*
+.provider-page-container {
+  border-top: 1px solid var(--border-soft, rgba(0,0,0,0.06));
+  padding-top: 1.5rem;
+}
+*/
+
+/* --------------------------------------------------------------------------
+   Justify text untuk summary provider
+   -------------------------------------------------------------------------- */
+
+.provider-page .lede {
+  text-align: justify;
+  text-justify: inter-word;
+}

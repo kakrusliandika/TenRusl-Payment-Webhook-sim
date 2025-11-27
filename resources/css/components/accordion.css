@@ -1,0 +1,18 @@
+/* ========= Accordion ========= */
+
+.accordion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  padding: 0.25rem 0.5rem;
+}
+
+.accordion summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+
+.accordion summary::-webkit-details-marker {
+  display: none;
+}

@@ -1,0 +1,107 @@
+/* ========= Providers section (landing) ========= */
+
+.providers-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.providers-header {
+  max-width: 38rem;
+}
+
+.providers-lede {
+  margin-top: 0.5rem;
+}
+
+/* Marquee / slider logo + nama */
+.providers-marquee {
+  position: relative;
+  overflow: hidden;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  background: color-mix(in oklab, var(--surface-1) 94%, transparent);
+  padding-block: 0.4rem;
+  padding-inline: 0.25rem;
+}
+
+.providers-marquee-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5rem;
+  min-width: max-content;
+  animation: providersMarquee 26s linear infinite;
+}
+
+.providers-marquee-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline: 0.6rem;
+}
+
+.providers-marquee-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.providers-marquee-avatar img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+
+.providers-marquee-initials {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-1);
+}
+
+.providers-marquee-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+/* Animasi marquee */
+@keyframes providersMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* CTA bawah section */
+.providers-cta {
+  margin-top: 0.25rem;
+}
+
+/* Responsif kecil */
+@media (max-width: 720px) {
+  .providers-section {
+    gap: 1.5rem;
+  }
+
+  .providers-marquee-track {
+    animation-duration: 32s; /* sedikit lebih pelan di mobile */
+  }
+}
+
+/* Override global prefers-reduced-motion untuk marquee, kalau kamu punya rule global yang mematikan animasi */
+@media (prefers-reduced-motion: reduce) {
+  .providers-marquee-track {
+    animation-duration: 26s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

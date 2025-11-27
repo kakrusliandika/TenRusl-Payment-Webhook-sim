@@ -1,0 +1,7 @@
+# public/.well-known/security.txt
+Contact: mailto:security@example.com
+Preferred-Languages: en, id
+Policy: https://example.com/security
+Hiring: https://example.com/careers#security
+Canonical: https://example.com/.well-known/security.txt
+Expires: 2026-12-31T23:59:59Z

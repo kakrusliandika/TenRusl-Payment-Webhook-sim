@@ -1,0 +1,543 @@
+/* ========= Hero layout (landing) ========= */
+
+a {
+  text-decoration: none;
+}
+
+/* CTA wrapper (container tombol) */
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Base style untuk semua tombol hero */
+.btn-hero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.16);
+  transition: background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+/* Konsistensi ukuran icon di dalam tombol */
+.btn-hero .icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+/* Primary CTA: docs (filled) */
+.cta-btn-hero-docs {
+  background: var(--color-blue-700);
+  color: #ffffff;
+  border-color: color-mix(in oklab, var(--color-blue-700) 80%, #000000);
+  text-decoration: none;
+}
+
+.cta-btn-hero-docs:hover {
+  background: color-mix(in oklab, var(--color-blue-700) 85%, #ffffff);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.22);
+  transform: translateY(-1px);
+}
+
+.cta-btn-hero-docs:active {
+  transform: translateY(0);
+  box-shadow: 0 8px 14px rgba(15, 23, 42, 0.2);
+}
+
+/* Secondary CTA: github (ghost / outline) */
+.cta-btn-hero-github {
+  background: color-mix(in oklab, var(--surface-1) 85%, transparent);
+  color: var(--color-blue-700);
+  border-color: color-mix(in oklab, var(--border) 60%, transparent);
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+  text-decoration: none;
+}
+
+.cta-btn-hero-github:hover {
+  background: color-mix(
+    in oklab,
+    var(--surface-1) 70%,
+    var(--color-blue-50) 30%
+  );
+  color: color-mix(in oklab, var(--color-blue-800) 90%, #000000);
+  border-color: color-mix(in oklab, var(--color-blue-400) 70%, var(--border));
+  transform: translateY(-1px);
+}
+
+.cta-btn-hero-github:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+
+/* Fokus keyboard (aksesibilitas) */
+.btn-hero:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--color-blue-400));
+  outline-offset: 2px;
+}
+
+/* Mobile: tombol full width biar enak di-tap */
+@media (max-width: 640px) {
+  .cta {
+    width: 100%;
+  }
+  .btn-hero {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ========= Hero layout (lanjutan) ========= */
+
+.hero {
+  padding-block: clamp(2.5rem, 4vw, 4rem);
+}
+
+.hero-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 2rem;
+  align-items: center;
+}
+
+/* Kolom kiri (teks) */
+.hero-copy {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero-sublede {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  max-width: 36rem;
+}
+
+.hero-sublede .icon {
+  margin-top: 0.15rem;
+}
+
+.hero-badges {
+  flex-wrap: wrap;
+}
+
+/* Stats list di hero */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 0;
+  margin: 2rem 0 0;
+  list-style: none;
+}
+
+.stats li {
+  min-width: 120px;
+}
+
+.stats .big {
+  display: flex;
+  align-items: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  margin-bottom: 0.15rem;
+}
+
+/* Kolom kanan (cloud + code card) */
+.hero-right {
+  display: grid;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+/* Kartu hero kanan: code card */
+.hero-card .glass {
+  background: color-mix(in oklab, var(--bg-color) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: var(--card-shadow);
+}
+
+/* ========= Providers avatar cloud (ala Astro) ========= */
+
+.hero-providers {
+  position: relative;
+  margin-bottom: 0.6rem;
+  padding: 0.5rem;
+  border-radius: 18px;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* grid background dots */
+.hero-providers::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in oklab, var(--border) 35%, transparent) 0,
+    transparent 55%
+  );
+  background-size: 26px 26px;
+  opacity: 0.4;
+}
+
+/* container untuk avatar yang posisinya absolute */
+.hero-providers-avatars {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 4 / 3;
+  margin-inline: auto;
+}
+
+/* bubble avatar dasar — besar, jelas, dan animasi "drift" */
+.hero-provider-avatar {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #ffffff; /* putih supaya logo kebaca di dark mode */
+  border: 2px solid var(--surface-1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  /* animasi default */
+  animation: heroAvatarDriftA 16s ease-in-out infinite;
+  animation-delay: calc(var(--avatar-index, 0) * -1.1s);
+}
+
+/* variasi animasi biar gerakannya beda-beda */
+.hero-provider-avatar:nth-child(2n) {
+  animation-name: heroAvatarDriftB;
+  animation-duration: 18s;
+}
+
+.hero-provider-avatar:nth-child(3n) {
+  animation-name: heroAvatarDriftC;
+  animation-duration: 20s;
+}
+
+/* bubble "+N" pakai animasi yang sama supaya ikut "hidup" */
+.hero-provider-avatar.hero-provider-more {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+/* white halo supaya logo tetap kebaca di dark mode */
+.hero-provider-avatar::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  background: #ffffff;
+  opacity: 0.96;
+  z-index: 0;
+}
+
+.hero-provider-avatar img {
+  position: relative;
+  z-index: 1;
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
+}
+
+/* "Random" scatter layout via nth-child (maksimal 15 slot) */
+
+.hero-provider-avatar:nth-child(1) {
+  --avatar-index: 0;
+  top: 14%;
+  left: 22%;
+}
+
+.hero-provider-avatar:nth-child(2) {
+  --avatar-index: 1;
+  top: 30%;
+  left: 48%;
+}
+
+.hero-provider-avatar:nth-child(3) {
+  --avatar-index: 2;
+  top: 46%;
+  left: 16%;
+}
+
+.hero-provider-avatar:nth-child(4) {
+  --avatar-index: 3;
+  top: 66%;
+  left: 32%;
+}
+
+.hero-provider-avatar:nth-child(5) {
+  --avatar-index: 4;
+  top: 82%;
+  left: 54%;
+}
+
+.hero-provider-avatar:nth-child(6) {
+  --avatar-index: 5;
+  top: 22%;
+  left: 70%;
+}
+
+.hero-provider-avatar:nth-child(7) {
+  --avatar-index: 6;
+  top: 40%;
+  left: 86%;
+}
+
+.hero-provider-avatar:nth-child(8) {
+  --avatar-index: 7;
+  top: 60%;
+  left: 66%;
+}
+
+.hero-provider-avatar:nth-child(9) {
+  --avatar-index: 8;
+  top: 78%;
+  left: 82%;
+}
+
+.hero-provider-avatar:nth-child(10) {
+  --avatar-index: 9;
+  top: 16%;
+  left: 86%;
+}
+
+.hero-provider-avatar:nth-child(11) {
+  --avatar-index: 10;
+  top: 36%;
+  left: 8%;
+}
+
+.hero-provider-avatar:nth-child(12) {
+  --avatar-index: 11;
+  top: 54%;
+  left: 26%;
+}
+
+.hero-provider-avatar:nth-child(13) {
+  --avatar-index: 12;
+  top: 70%;
+  left: 40%;
+}
+
+.hero-provider-avatar:nth-child(14) {
+  --avatar-index: 13;
+  top: 88%;
+  left: 24%;
+}
+
+.hero-provider-avatar:nth-child(15) {
+  --avatar-index: 14;
+  top: 90%;
+  left: 72%;
+}
+
+/* ========= Animasi "drift" multi-arah (tanpa keluar batas) ========= */
+
+/* Pola A: gerak agak vertikal + sedikit horizontal */
+@keyframes heroAvatarDriftA {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+  25% {
+    transform: translate(-50%, -50%) translate(6px, -6px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translate(-4px, -2px);
+  }
+  75% {
+    transform: translate(-50%, -50%) translate(3px, 5px);
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+}
+
+/* Pola B: lebih banyak drift horizontal */
+@keyframes heroAvatarDriftB {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+  20% {
+    transform: translate(-50%, -50%) translate(-5px, -3px);
+  }
+  45% {
+    transform: translate(-50%, -50%) translate(7px, 2px);
+  }
+  70% {
+    transform: translate(-50%, -50%) translate(3px, 6px);
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+}
+
+/* Pola C: sedikit lebih “gelombang” */
+@keyframes heroAvatarDriftC {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+  30% {
+    transform: translate(-50%, -50%) translate(-3px, 5px);
+  }
+  55% {
+    transform: translate(-50%, -50%) translate(6px, -4px);
+  }
+  80% {
+    transform: translate(-50%, -50%) translate(-2px, -6px);
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+}
+
+/* Chip di hero (kalau belum ada di file lain) */
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--success-600);
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(22, 163, 74, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
+}
+
+/* Code block di hero */
+
+.code-hero {
+  margin-top: 0.75rem;
+}
+
+.code-hero .code {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.code-hero-caption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.code-hero-caption .icon {
+  margin-top: 0.1rem;
+}
+
+/* Responsive hero */
+@media (max-width: 900px) {
+  .hero-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* urutan DOM sudah: hero-copy (atas), hero-right (bawah) */
+}
+
+/* Mobile: tetap cloud, hanya diperkecil sedikit */
+@media (max-width: 700px) {
+  .hero-providers-avatars {
+    max-width: 260px;
+  }
+
+  .hero-provider-avatar {
+    width: 46px;
+    height: 46px;
+    box-shadow: 0 3px 9px rgba(15, 23, 42, 0.22);
+  }
+
+  .hero-provider-avatar::before {
+    inset: 3px;
+  }
+}
+
+@media (max-width: 520px) {
+  .hero-provider-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .hero-provider-avatar::before {
+    inset: 2px;
+  }
+}
+
+/* ========= Override global prefers-reduced-motion supaya avatar tetap gerak ========= */
+/* Global kamu punya rule:
+   @media (prefers-reduced-motion: reduce) {
+     * { animation-duration: 0.001ms !important; animation-iteration-count:1 !important; }
+   }
+   Di bawah ini kita “ambil kembali” animasi khusus untuk hero-cloud.
+*/
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-providers-avatars .hero-provider-avatar,
+  .hero .pulse {
+    animation-duration: 16s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .hero-providers-avatars .hero-provider-avatar:nth-child(2n) {
+    animation-duration: 18s !important;
+  }
+
+  .hero-providers-avatars .hero-provider-avatar:nth-child(3n) {
+    animation-duration: 20s !important;
+  }
+}

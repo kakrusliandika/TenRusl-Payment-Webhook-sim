@@ -1,0 +1,170 @@
+/* ========= Features section (landing) ========= */
+
+.features {
+  position: relative;
+}
+
+/* Header */
+.features-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 40rem;
+}
+
+.features-lede {
+  color: var(--text-2);
+}
+
+/* Grid khusus features (biar tidak tumpang tindih dengan .grid-3 umum) */
+.features-grid {
+  display: grid;
+  gap: 1.2rem;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 720px) {
+  .features-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .features-grid {
+    gap: 1.4rem;
+  }
+}
+
+/* Kartu features */
+.feature-card {
+  position: relative;
+}
+
+.feature-card-inner {
+  position: relative;
+  height: 100%;
+  padding: 1rem 1rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  background: radial-gradient(
+      circle at 0 0,
+      color-mix(in oklab, var(--brand-500) 10%, transparent) 0,
+      transparent 55%
+    ),
+    color-mix(in oklab, var(--card) 92%, transparent);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* ========== ICON ala SIGNATURE (orbit + circle) ========== */
+
+.feature-card-icon {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.35rem;
+  flex: 0 0 auto;
+}
+
+/* orbit dashed di luar */
+.feature-icon-orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in oklab, var(--brand-500) 40%, transparent);
+  opacity: 0.6;
+}
+
+/* circle gradient di dalam */
+.feature-icon-circle {
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 30% 20%,
+    color-mix(in oklab, var(--brand-400) 60%, transparent),
+    color-mix(in oklab, var(--brand-600) 40%, transparent)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-contrast);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+}
+
+.feature-icon-circle .icon,
+.feature-icon-circle i {
+  font-size: 1.1rem;
+}
+
+/* Heading + badge kecil */
+.feature-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+}
+
+.feature-title {
+  margin: 0;
+}
+
+.feature-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface-1) 96%, transparent);
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  color: var(--text-3);
+}
+
+.feature-badge .fa-circle-small::before {
+  content: "•";
+  font-size: 0.8rem;
+}
+
+/* Deskripsi dan hint */
+.feature-desc {
+  margin: 0.1rem 0 0.2rem;
+  font-size: 0.92rem;
+  color: var(--text-2);
+}
+
+.feature-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+}
+
+.feature-hint .icon {
+  margin-top: 0.05rem;
+}
+
+/* Hover state */
+.feature-card-inner:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.24);
+  border-color: color-mix(in oklab, var(--brand-500) 40%, var(--border));
+}
+
+/* Responsif kecil */
+@media (max-width: 640px) {
+  .feature-card-inner {
+    padding: 0.9rem 0.9rem 1rem;
+  }
+
+  .feature-desc {
+    font-size: 0.9rem;
+  }
+
+  .feature-hint {
+    font-size: 0.76rem;
+  }
+}

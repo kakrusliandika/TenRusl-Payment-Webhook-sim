@@ -1,0 +1,19 @@
+/* ========= Tabs ========= */
+
+.tabs {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  padding: 0.45rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  box-shadow: 0 0 0 3px var(--ring);
+  border-color: color-mix(in oklab, var(--brand-500) 50%, transparent);
+}

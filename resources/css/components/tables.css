@@ -1,0 +1,21 @@
+/* ========= Tables ========= */
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.table th,
+.table td {
+  padding: 0.7rem 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+}
+
+.table th {
+  font-weight: 800;
+  text-align: left;
+  color: var(--text-3);
+  background: var(--surface-2-solid);
+}

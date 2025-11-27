@@ -1,0 +1,50 @@
+/* ========= Buttons ========= */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--btn-radius);
+  border: 1px solid transparent;
+  font-weight: var(--btn-font-weight);
+  text-decoration: none;
+  box-shadow: var(--btn-shadow);
+  transition: filter 0.15s ease, transform 0.04s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: linear-gradient(
+    90deg,
+    var(--brand-400),
+    var(--brand-500),
+    var(--brand-600)
+  );
+  color: var(--accent-contrast);
+  border-color: color-mix(in oklab, var(--brand-500) 60%, transparent);
+}
+
+.btn-ghost {
+  background: color-mix(in oklab, var(--bg-color) 94%, transparent);
+  border-color: var(--border);
+  color: var(--text-1);
+}
+
+.btn-outline {
+  background: transparent;
+  border-color: var(--border-1);
+  color: var(--text-1);
+}
+
+.btn[aria-busy="true"] {
+  cursor: progress;
+}
+
+/* Icon inside buttons */
+.btn .icon {
+  flex: 0 0 auto;
+}

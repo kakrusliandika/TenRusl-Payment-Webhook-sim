@@ -8,14 +8,15 @@ use App\Http\Controllers\Api\V1\WebhooksController;
 |--------------------------------------------------------------------------
 | API Routes (v1)
 |--------------------------------------------------------------------------
-| Prefix "api" ditambahkan otomatis oleh bootstrap/app.php (Laravel 11+).
-| Kita tambahkan "v1" untuk versioning endpoint.
+| - Prefix '/api' diterapkan otomatis oleh bootstrap/app.php.
+| - Di bawah ini kita tambahkan prefix 'v1' untuk versioning: '/api/v1/...'
+| - Middleware 'api' group juga diterapkan otomatis oleh bootstrap/app.php.
 */
 
 Route::prefix('v1')
     ->name('api.v1.')
     ->group(function () {
-        // Daftar provider diambil dari config (allowlist global)
+        // Provider allowlist untuk constraint
         $providers = (array) config('tenrusl.providers_allowlist', ['mock','xendit','midtrans']);
 
         // -------------------------
@@ -24,28 +25,27 @@ Route::prefix('v1')
         Route::post('/payments', [PaymentsController::class, 'store'])
             ->name('payments.store');
 
-        // Status pembayaran berdasarkan {provider}/{provider_ref}
         Route::get('/payments/{provider}/{provider_ref}/status', [PaymentsController::class, 'status'])
             ->whereIn('provider', $providers)
             ->where('provider_ref', '[A-Za-z0-9\-\._]+')
             ->name('payments.status');
 
         // -------------------------
-        // Webhooks — proteksi signature/token per provider
+        // Webhooks — throttled + signature verify
         // -------------------------
         Route::post('/webhooks/{provider}', [WebhooksController::class, 'receive'])
             ->whereIn('provider', $providers)
-            ->middleware(['verify.webhook.signature'])
+            ->middleware(['throttle:webhooks', 'verify.webhook.signature'])
             ->name('webhooks.receive');
 
-        // Preflight CORS (OPTIONS)
+        // Preflight CORS (OPTIONS) untuk klien yang strict
         Route::options('/webhooks/{provider}', fn () => response()->noContent(204))
             ->whereIn('provider', $providers);
     });
 
 /*
 |--------------------------------------------------------------------------
-| Fallback JSON 404 (API endpoint tak dikenal)
+| Fallback JSON 404 (untuk endpoint API tak dikenal)
 |--------------------------------------------------------------------------
 */
 Route::fallback(function () {

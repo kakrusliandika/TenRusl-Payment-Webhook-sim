@@ -86,7 +86,7 @@ return [
 
     // Tambahkan daftar yang dipakai UI (sinkron dengan flags di navbar)
     'available_locales' => [
-        'en','id','ar','de','hi','ja','ko','pt','ru','th','zh',
+        'en','id','ar','de','hi','ja','ko','pt','ru','th','zh', 'es',
     ],
     /*
     |--------------------------------------------------------------------------
