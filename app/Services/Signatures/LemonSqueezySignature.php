@@ -19,11 +19,12 @@ class LemonSqueezySignature
         }
 
         $signature = $request->header('X-Signature');
-        if (!$signature) {
+        if (! $signature) {
             return false;
         }
 
         $expected = hash_hmac('sha256', $rawBody, $secret);
+
         return hash_equals(strtolower($expected), strtolower($signature));
     }
 }

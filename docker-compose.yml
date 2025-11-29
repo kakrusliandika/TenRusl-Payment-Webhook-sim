@@ -1,0 +1,80 @@
+version: "3.8"
+
+services:
+  app:
+    image: php:8.3-fpm-alpine
+    container_name: tenrusl-app
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: tenrusl_webhook
+      DB_USERNAME: tenrusl
+      DB_PASSWORD: secret
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+      SESSION_DRIVER: file
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - tenrusl
+
+  nginx:
+    image: nginx:alpine
+    container_name: tenrusl-nginx
+    ports:
+      - "8000:80" # http://localhost:8000
+    volumes:
+      - ./:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - tenrusl
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: tenrusl-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: tenrusl_webhook
+      POSTGRES_USER: tenrusl
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - tenrusl-pg:/var/lib/postgresql/data
+    networks:
+      - tenrusl
+
+  redis:
+    image: redis:7-alpine
+    container_name: tenrusl-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - tenrusl
+
+  adminer:
+    image: adminer:latest
+    container_name: tenrusl-adminer
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    networks:
+      - tenrusl
+
+volumes:
+  tenrusl-pg:
+
+networks:
+  tenrusl:
+    driver: bridge

@@ -24,30 +24,30 @@ TEXT
     ],
 
     'example_payload' => [
-        'order_id'           => 'ORDER-001',
-        'status_code'        => '200',
-        'gross_amount'       => '25000.00',
+        'order_id' => 'ORDER-001',
+        'status_code' => '200',
+        'gross_amount' => '25000.00',
         'transaction_status' => 'settlement',
-        'signature_key'      => '<sha512>',
-        'provider'           => 'midtrans',
-        'sent_at'            => now()->toIso8601String(),
+        'signature_key' => '<sha512>',
+        'provider' => 'midtrans',
+        'sent_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/midtrans',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/midtrans',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

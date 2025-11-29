@@ -17,6 +17,7 @@ class WebhookRequest extends FormRequest
     public function rawBody(): string
     {
         $raw = @file_get_contents('php://input');
+
         return is_string($raw) ? $raw : '';
     }
 
@@ -32,7 +33,7 @@ class WebhookRequest extends FormRequest
     {
         return [
             'event_id' => ['sometimes', 'string', 'max:191'],
-            'type'     => ['sometimes', 'string', 'max:191'],
+            'type' => ['sometimes', 'string', 'max:191'],
         ];
     }
 }

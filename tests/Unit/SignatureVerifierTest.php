@@ -11,7 +11,7 @@ it('verifies mock provider signature using HMAC header', function () {
     /** @var SignatureVerifier $verifier */
     $verifier = app(SignatureVerifier::class);
 
-    $payload = ['id' => 'evt_' . now()->timestamp, 'type' => 'payment.paid'];
+    $payload = ['id' => 'evt_'.now()->timestamp, 'type' => 'payment.paid'];
     $raw = json_encode($payload, JSON_UNESCAPED_SLASHES);
 
     $req = Request::create('/api/v1/webhooks/mock', 'POST', [], [], [], [], $raw);

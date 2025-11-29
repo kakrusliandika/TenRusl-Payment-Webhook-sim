@@ -24,12 +24,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(PaymentsService::class, function (Application $app) {
             // Allowed providers dari config; adapters default akan diregistrasi di ctor
             $allowed = (array) config('tenrusl.providers_allowlist', []);
+
             return new PaymentsService(adapters: null, allowedProviders: $allowed);
         });
 
         // Repository bindings
-        $this->app->singleton(PaymentRepository::class, fn () => new PaymentRepository());
-        $this->app->singleton(WebhookEventRepository::class, fn () => new WebhookEventRepository());
+        $this->app->singleton(PaymentRepository::class, fn () => new PaymentRepository);
+        $this->app->singleton(WebhookEventRepository::class, fn () => new WebhookEventRepository);
     }
 
     /**

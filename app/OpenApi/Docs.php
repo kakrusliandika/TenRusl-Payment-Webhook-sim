@@ -22,7 +22,6 @@ use OpenApi\Annotations as OA;
  *   name="Payments",
  *   description="Buat dan cek status pembayaran simulasi"
  * )
- *
  * @OA\Tag(
  *   name="Webhooks",
  *   description="Terima webhook dari berbagai provider (simulasi verifikasi signature)"
@@ -32,6 +31,7 @@ use OpenApi\Annotations as OA;
  *   schema="CreatePaymentRequest",
  *   type="object",
  *   required={"provider","amount","currency"},
+ *
  *   @OA\Property(property="provider", type="string", example="xendit"),
  *   @OA\Property(property="amount", type="integer", example=100000, minimum=1, description="Satuan terkecil (mis. IDR)"),
  *   @OA\Property(property="currency", type="string", example="IDR", description="Kode ISO-4217 huruf besar (3)"),
@@ -44,6 +44,7 @@ use OpenApi\Annotations as OA;
  *   schema="Payment",
  *   type="object",
  *   required={"provider","provider_ref","status"},
+ *
  *   @OA\Property(property="id", type="string", example="01JCDZQ2F1G8W3X1R7SZM3KZ2S"),
  *   @OA\Property(property="provider", type="string", example="xendit"),
  *   @OA\Property(property="provider_ref", type="string", example="sim_xendit_01JCDZQ2F1..."),
@@ -59,6 +60,7 @@ use OpenApi\Annotations as OA;
  *   schema="WebhookEvent",
  *   type="object",
  *   required={"provider","event_id"},
+ *
  *   @OA\Property(property="id", type="string", example="01JCDZQ5M3..."),
  *   @OA\Property(property="provider", type="string", example="midtrans"),
  *   @OA\Property(property="event_id", type="string", example="evt_01JCDZQ5M3..."),
@@ -77,19 +79,26 @@ use OpenApi\Annotations as OA;
  *   path="/api/v1/payments",
  *   summary="Buat pembayaran simulasi",
  *   tags={"Payments"},
+ *
  *   @OA\RequestBody(
  *     required=true,
+ *
  *     @OA\JsonContent(ref="#/components/schemas/CreatePaymentRequest")
  *   ),
+ *
  *   @OA\Response(
  *     response=201,
  *     description="Created",
+ *
  *     @OA\Header(
  *       header="Idempotency-Key",
+ *
  *       @OA\Schema(type="string"),
  *       description="Idempotency-Key yang dipakai request"
  *     ),
+ *
  *     @OA\JsonContent(
+ *
  *       @OA\Property(property="data", ref="#/components/schemas/Payment")
  *     )
  *   )
@@ -99,12 +108,16 @@ use OpenApi\Annotations as OA;
  *   path="/api/v1/payments/{provider}/{provider_ref}/status",
  *   summary="Cek status pembayaran",
  *   tags={"Payments"},
+ *
  *   @OA\Parameter(name="provider", in="path", required=true, @OA\Schema(type="string")),
  *   @OA\Parameter(name="provider_ref", in="path", required=true, @OA\Schema(type="string")),
+ *
  *   @OA\Response(
  *     response=200,
  *     description="OK",
+ *
  *     @OA\JsonContent(
+ *
  *       @OA\Property(property="data", ref="#/components/schemas/Payment")
  *     )
  *   )
@@ -114,12 +127,17 @@ use OpenApi\Annotations as OA;
  *   path="/api/v1/webhooks/{provider}",
  *   summary="Terima webhook dari provider",
  *   tags={"Webhooks"},
+ *
  *   @OA\Parameter(name="provider", in="path", required=true, @OA\Schema(type="string")),
+ *
  *   @OA\RequestBody(required=true, description="Payload dari provider (JSON atau form)"),
+ *
  *   @OA\Response(
  *     response=202,
  *     description="Accepted (diproses idempotent & retry-aware)",
+ *
  *     @OA\JsonContent(
+ *
  *       @OA\Property(property="data", type="object",
  *         @OA\Property(property="event", type="object",
  *           @OA\Property(property="provider", type="string"),

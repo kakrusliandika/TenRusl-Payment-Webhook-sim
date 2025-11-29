@@ -23,6 +23,7 @@ final class Clock
         if (self::$testNow instanceof CarbonImmutable) {
             return $tz ? self::$testNow->setTimezone($tz) : self::$testNow;
         }
+
         return $tz ? CarbonImmutable::now($tz) : CarbonImmutable::now();
     }
 
@@ -74,6 +75,7 @@ final class Clock
         if ($time instanceof DateTimeInterface) {
             return CarbonImmutable::instance($time);
         }
+
         return $tz ? CarbonImmutable::parse($time, $tz) : CarbonImmutable::parse($time);
     }
 }

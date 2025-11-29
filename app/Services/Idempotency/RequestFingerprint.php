@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Idempotency;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 /**
@@ -20,6 +19,7 @@ final class RequestFingerprint
     public function hash(Request $request): string
     {
         $canonical = $this->canonical($request);
+
         return hash('sha256', $canonical);
     }
 
@@ -30,9 +30,9 @@ final class RequestFingerprint
     public function canonical(Request $request): string
     {
         $method = strtoupper($request->getMethod());
-        $path   = '/' . ltrim($request->getRequestUri() ?: '/', '/');
+        $path = '/'.ltrim($request->getRequestUri() ?: '/', '/');
 
-        $ct     = strtolower((string) $request->header('content-type', ''));
+        $ct = strtolower((string) $request->header('content-type', ''));
         $accept = strtolower((string) $request->header('accept', ''));
 
         $raw = (string) $request->getContent();
@@ -48,16 +48,17 @@ final class RequestFingerprint
      */
     private function canonicalizeJson(string $rawBody, string $ct): string
     {
-        if (!Str::contains($ct, 'application/json')) {
+        if (! Str::contains($ct, 'application/json')) {
             return $rawBody;
         }
 
         $decoded = json_decode($rawBody, true);
-        if ($decoded === null || !is_array($decoded)) {
+        if ($decoded === null || ! is_array($decoded)) {
             return $rawBody; // bukan JSON valid, pakai raw
         }
 
         $sorted = $this->ksortRecursive($decoded);
+
         return json_encode($sorted, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
@@ -69,6 +70,7 @@ final class RequestFingerprint
                 $arr[$k] = $this->ksortRecursive($v);
             }
         }
+
         return $arr;
     }
 }

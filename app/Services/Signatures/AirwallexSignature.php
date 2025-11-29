@@ -28,7 +28,7 @@ class AirwallexSignature
         }
 
         // Build message per docs: timestamp + raw JSON body
-        $message  = (string) $timestamp . $rawBody;
+        $message = (string) $timestamp.$rawBody;
         $expected = hash_hmac('sha256', $message, $secret);
 
         // Airwallex docs show hex digest in header; compare case-insensitively

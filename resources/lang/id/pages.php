@@ -3,8 +3,8 @@
 return [
 
     'back_to_providers' => 'Kembali ke penyedia',
-    'view_details'      => 'Lihat detail',
-    'breadcrumb'        => 'Breadcrumb',
+    'view_details' => 'Lihat detail',
+    'breadcrumb' => 'Breadcrumb',
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'search_providers' => 'Cari penyedia...',
-    'no_results'       => 'Tidak ada penyedia yang cocok dengan pencarian Anda.',
+    'no_results' => 'Tidak ada penyedia yang cocok dengan pencarian Anda.',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,31 +20,31 @@ return [
     |--------------------------------------------------------------------------
     */
     'provider_default_name' => 'Penyedia',
-    'provider_label'        => 'Penyedia',
-    'provider_endpoints'    => 'Endpoint',
+    'provider_label' => 'Penyedia',
+    'provider_endpoints' => 'Endpoint',
     'signature_notes_title' => 'Catatan tanda tangan',
     'example_payload_title' => 'Contoh payload',
-    'view_docs'             => 'Lihat dokumentasi',
+    'view_docs' => 'Lihat dokumentasi',
 
-    'create_payment'  => 'Buat pembayaran (idempotent)',
-    'get_payment'     => 'Ambil status pembayaran',
+    'create_payment' => 'Buat pembayaran (idempotent)',
+    'get_payment' => 'Ambil status pembayaran',
     'receive_webhook' => 'Terima webhook',
 
     'endpoint_list' => [
         'create_payment' => [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'note'   => 'Wajib Idempotency-Key',
+            'path' => '/api/payments',
+            'note' => 'Wajib Idempotency-Key',
         ],
         'get_payment' => [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'note'   => 'Ambil status pembayaran',
+            'path' => '/api/payments/{id}',
+            'note' => 'Ambil status pembayaran',
         ],
         'receive_webhook' => [
             'method' => 'POST',
-            'path'   => '/api/webhooks/{provider}',
-            'note'   => 'mock/xendit/midtrans/…',
+            'path' => '/api/webhooks/{provider}',
+            'note' => 'mock/xendit/midtrans/…',
         ],
     ],
 
@@ -53,7 +53,7 @@ return [
     | Errors / Empty states
     |--------------------------------------------------------------------------
     */
-    'not_found'    => 'Halaman yang Anda cari tidak ditemukan.',
+    'not_found' => 'Halaman yang Anda cari tidak ditemukan.',
     'server_error' => 'Terjadi kesalahan server yang tidak terduga. Silakan coba lagi.',
 
     /*

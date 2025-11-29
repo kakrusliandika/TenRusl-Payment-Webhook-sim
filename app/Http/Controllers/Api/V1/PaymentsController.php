@@ -40,7 +40,7 @@ class PaymentsController extends Controller
         }
 
         // Cegah eksekusi ganda paralel
-        if (!$this->idemp->acquireLock($key)) {
+        if (! $this->idemp->acquireLock($key)) {
             // Klien melakukan retry paralel; beri sinyal 409 agar retry kemudian
             return response()
                 ->json(['message' => 'Idempotency conflict'], Response::HTTP_CONFLICT)
@@ -52,33 +52,33 @@ class PaymentsController extends Controller
 
             // 1) Buat "intent" di adapter simulator
             $created = $this->payments->create($data['provider'], [
-                'amount'      => $data['amount'],
-                'currency'    => $data['currency'] ?? 'IDR',
+                'amount' => $data['amount'],
+                'currency' => $data['currency'] ?? 'IDR',
                 'description' => $data['description'] ?? null,
-                'metadata'    => $data['metadata'] ?? [],
+                'metadata' => $data['metadata'] ?? [],
             ]);
 
             // 2) Persist ke DB
             $payment = $this->paymentsRepo->create([
-                'provider'     => $created['provider'],
+                'provider' => $created['provider'],
                 'provider_ref' => $created['provider_ref'],
-                'amount'       => (string) $created['snapshot']['amount'],
-                'currency'     => (string) $created['snapshot']['currency'],
-                'status'       => (string) $created['status'],
-                'meta'         => $created['snapshot'] ?? [],
+                'amount' => (string) $created['snapshot']['amount'],
+                'currency' => (string) $created['snapshot']['currency'],
+                'status' => (string) $created['status'],
+                'meta' => $created['snapshot'] ?? [],
             ]);
 
             // 3) Bentuk response API resource
             $resource = new PaymentResource($payment);
-            $body     = [
+            $body = [
                 'data' => $resource->toArray($request),
             ];
 
             // 4) Simpan hasil untuk idempotent replay
             $resp = [
-                'status'  => Response::HTTP_CREATED,
+                'status' => Response::HTTP_CREATED,
                 'headers' => ['Idempotency-Key' => $key],
-                'body'    => $body,
+                'body' => $body,
             ];
             $this->idemp->storeResponse($key, $resp);
 
@@ -108,9 +108,9 @@ class PaymentsController extends Controller
 
         return response()->json([
             'data' => [
-                'provider'     => $status['provider'],
+                'provider' => $status['provider'],
                 'provider_ref' => $status['provider_ref'],
-                'status'       => $status['status'],
+                'status' => $status['status'],
             ],
         ]);
     }

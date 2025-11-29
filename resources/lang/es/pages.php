@@ -3,8 +3,8 @@
 return [
 
     'back_to_providers' => 'Volver a proveedores',
-    'view_details'      => 'Ver detalles',
-    'breadcrumb'        => 'Miga de pan',
+    'view_details' => 'Ver detalles',
+    'breadcrumb' => 'Miga de pan',
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'search_providers' => 'Buscar proveedores...',
-    'no_results'       => 'Ningún proveedor coincide con tu búsqueda.',
+    'no_results' => 'Ningún proveedor coincide con tu búsqueda.',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,31 +20,31 @@ return [
     |--------------------------------------------------------------------------
     */
     'provider_default_name' => 'Proveedor',
-    'provider_label'        => 'Proveedor',
-    'provider_endpoints'    => 'Endpoints',
+    'provider_label' => 'Proveedor',
+    'provider_endpoints' => 'Endpoints',
     'signature_notes_title' => 'Notas de firma',
     'example_payload_title' => 'Payload de ejemplo',
-    'view_docs'             => 'Ver documentación',
+    'view_docs' => 'Ver documentación',
 
-    'create_payment'  => 'Crear pago (idempotente)',
-    'get_payment'     => 'Obtener estado del pago',
+    'create_payment' => 'Crear pago (idempotente)',
+    'get_payment' => 'Obtener estado del pago',
     'receive_webhook' => 'Recibir webhook',
 
     'endpoint_list' => [
         'create_payment' => [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'note'   => 'Requiere Idempotency-Key',
+            'path' => '/api/payments',
+            'note' => 'Requiere Idempotency-Key',
         ],
         'get_payment' => [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'note'   => 'Obtener estado del pago',
+            'path' => '/api/payments/{id}',
+            'note' => 'Obtener estado del pago',
         ],
         'receive_webhook' => [
             'method' => 'POST',
-            'path'   => '/api/webhooks/{provider}',
-            'note'   => 'mock/xendit/midtrans/…',
+            'path' => '/api/webhooks/{provider}',
+            'note' => 'mock/xendit/midtrans/…',
         ],
     ],
 
@@ -53,7 +53,7 @@ return [
     | Errors / Empty states
     |--------------------------------------------------------------------------
     */
-    'not_found'    => 'No se pudo encontrar la página que estás buscando.',
+    'not_found' => 'No se pudo encontrar la página que estás buscando.',
     'server_error' => 'Ocurrió un error inesperado en el servidor. Inténtalo de nuevo.',
 
     /*

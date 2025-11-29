@@ -24,7 +24,7 @@ final class WebhookEventRepository
     /**
      * Simpan event baru (dedup berada di layer pemanggil).
      *
-     * @param array $payload Parsed payload (array)
+     * @param  array  $payload  Parsed payload (array)
      */
     public function storeNew(
         string $provider,
@@ -36,14 +36,14 @@ final class WebhookEventRepository
     ): WebhookEvent {
         $now = $receivedAt ?: CarbonImmutable::now();
 
-        $event = new WebhookEvent();
-        $event->provider        = $provider;
-        $event->event_id        = $eventId;
-        $event->event_type      = $eventType;
-        $event->payload_raw     = $rawBody;
-        $event->payload         = $payload;
-        $event->attempts        = 1;
-        $event->received_at     = $now;
+        $event = new WebhookEvent;
+        $event->provider = $provider;
+        $event->event_id = $eventId;
+        $event->event_type = $eventType;
+        $event->payload_raw = $rawBody;
+        $event->payload = $payload;
+        $event->attempts = 1;
+        $event->received_at = $now;
         $event->last_attempt_at = $now;
         $event->save();
 
@@ -55,8 +55,9 @@ final class WebhookEventRepository
      */
     public function touchAttempt(WebhookEvent $event, ?CarbonImmutable $at = null): bool
     {
-        $event->attempts        = ($event->attempts ?? 0) + 1;
+        $event->attempts = ($event->attempts ?? 0) + 1;
         $event->last_attempt_at = $at ?: CarbonImmutable::now();
+
         return $event->save();
     }
 
@@ -76,6 +77,7 @@ final class WebhookEventRepository
         }
 
         $event->processed_at = $processedAt ?: CarbonImmutable::now();
+
         return $event->save();
     }
 
@@ -85,6 +87,7 @@ final class WebhookEventRepository
     public function scheduleNextRetry(WebhookEvent $event, CarbonImmutable $nextAt): bool
     {
         $event->next_retry_at = $nextAt;
+
         return $event->save();
     }
 }

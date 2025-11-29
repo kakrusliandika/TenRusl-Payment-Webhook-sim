@@ -4,73 +4,149 @@ declare(strict_types=1);
 
 namespace App\Services\Idempotency;
 
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Manajemen Idempotency-Key ala Stripe:
- * - Pakai header "Idempotency-Key" jika ada; kalau tidak, buat dari fingerprint request.
- * - Simpan lock & optional cached response agar permintaan duplikat mengembalikan hasil yang sama.
+ * Manajemen Idempotency ala Stripe:
+ * - Gunakan header "Idempotency-Key" jika ada; jika tidak, buat dari fingerprint request.
+ * - Atomic check-then-set untuk mencegah race condition (pakai Cache::lock jika driver mendukung; fallback ke Cache::add).
+ * - Simpan response pertama (status, headers terpilih, body) + fingerprint; repeat request balikan hasil identik.
  *
- * Rujukan pola: idempotent request menyimpan status code & body pertama untuk key tsb. (Stripe).
- * TTL dikontrol via env TENRUSL_IDEMPOTENCY_TTL.
+ * Konfigurasi TTL:
+ *   config('tenrusl.idempotency.ttl_seconds') ATAU config('tenrusl.idempotency_ttl')
+ *   config('tenrusl.idempotency.lock_seconds') (opsional, default 30s)
  */
 final class IdempotencyKeyService
 {
+    /** @var array<string, Lock> */
+    private array $locks = [];
+
     public function __construct(
-        private readonly RequestFingerprint $fingerprint
-    ) {
-    }
+        private readonly RequestFingerprint $fingerprint,
+    ) {}
 
     /**
      * Ambil/generate Idempotency-Key untuk request.
      */
     public function resolveKey(Request $request): string
     {
-        $hdr = (string) ($request->header('Idempotency-Key') ?? '');
-        if ($hdr !== '') {
-            return trim($hdr);
-        }
+        $hdr = trim((string) $request->header('Idempotency-Key', ''));
 
-        return $this->fingerprint->hash($request);
+        return $hdr !== '' ? $hdr : $this->fingerprint->hash($request);
     }
 
     /**
-     * Coba akuisisi "lock" untuk key (true jika lock baru, false jika sudah ada -> duplikat).
-     * Implementasi generik via Cache::add agar kompatibel dengan driver file/array.
+     * Coba akuisisi "lock" untuk key.
+     * - Menggunakan atomic lock (Cache::lock) bila store mendukung.
+     * - Fallback ke Cache::add (set-if-not-exists) jika tidak mendukung lock.
+     *
+     * @return bool true jika lock berhasil diakuisisi (request pertama), False jika duplikat/sudah terkunci
      */
     public function acquireLock(string $key): bool
     {
-        $ttl = (int) config('tenrusl.idempotency_ttl', 3600);
-        return Cache::add($this->lockKey($key), 1, $ttl);
+        $lockSeconds = (int) (config('tenrusl.idempotency.lock_seconds') ?? 30);
+
+        // Prefer atomic distributed lock jika store mendukung
+        $store = Cache::getStore();
+        if ($store instanceof LockProvider) {
+            $lock = Cache::lock($this->lockKey($key), $lockSeconds);
+            $acquired = (bool) $lock->get(); // non-blocking
+            if ($acquired) {
+                $this->locks[$key] = $lock;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        // Fallback: set-if-not-exists via Cache::add
+        // NB: ini tidak sekuat distributed lock, namun kompatibel untuk file/array driver.
+        return Cache::add($this->lockKey($key), 1, now()->addSeconds($lockSeconds));
     }
 
+    /**
+     * Lepas lock bila ada.
+     */
     public function releaseLock(string $key): void
     {
+        if (isset($this->locks[$key])) {
+            // Atomic lock case
+            try {
+                $this->locks[$key]->release();
+            } finally {
+                unset($this->locks[$key]);
+            }
+
+            return;
+        }
+
+        // Fallback (Cache::add) case
         Cache::forget($this->lockKey($key));
     }
 
     /**
-     * Simpan response pertama untuk key ini.
+     * Simpan response pertama untuk key ini (sesuai pola Stripe: simpan status+body+headers terpilih).
      *
-     * @param array{status:int, headers:array<string,string>, body:mixed} $response
+     * @param array{
+     *   status:int,
+     *   headers:array<string,string|string[]>,
+     *   body:mixed
+     * } $response
      */
     public function storeResponse(string $key, array $response): void
     {
-        $ttl = (int) config('tenrusl.idempotency_ttl', 3600);
-        Cache::put($this->respKey($key), $response, $ttl);
+        $ttl = $this->ttlSeconds();
+
+        $normalized = [
+            'status' => (int) $response['status'],
+            // Simpan subset headers yang relevan untuk determinisme (hindari Set-Cookie/Date yang fluktuatif)
+            'headers' => $this->normalizeHeaders($response['headers'] ?? []),
+            'body' => $response['body'] ?? null,
+        ];
+
+        $payload = [
+            'stored_at' => now()->toIso8601String(),
+            'fingerprint' => $this->responseFingerprint($normalized),
+            'response' => $normalized,
+        ];
+
+        Cache::put($this->respKey($key), $payload, now()->addSeconds($ttl));
     }
 
     /**
      * Ambil response yang pernah disimpan (jika ada).
      *
-     * @return array{status:int, headers:array<string,string>, body:mixed}|null
+     * @return array{
+     *   status:int,
+     *   headers:array<string,string|string[]>,
+     *   body:mixed
+     * }|null
      */
     public function getStoredResponse(string $key): ?array
     {
-        /** @var array|null $val */
-        $val = Cache::get($this->respKey($key));
-        return $val ?: null;
+        /** @var array|null $cached */
+        $cached = Cache::get($this->respKey($key));
+        if (! $cached || ! isset($cached['response'])) {
+            return null;
+        }
+
+        // (Opsional) bisa verifikasi ulang fingerprint di sini jika dibutuhkan.
+        return $cached['response'];
+    }
+
+    private function ttlSeconds(): int
+    {
+        $ttl = config('tenrusl.idempotency.ttl_seconds');
+        if ($ttl === null) {
+            $ttl = config('tenrusl.idempotency_ttl', 3600);
+        }
+
+        return (int) $ttl;
     }
 
     private function lockKey(string $key): string
@@ -81,5 +157,65 @@ final class IdempotencyKeyService
     private function respKey(string $key): string
     {
         return "idemp:resp:{$key}";
+    }
+
+    /**
+     * Normalisasi headers: lower-case key, ambil subset yang stabil.
+     *
+     * @param  array<string,string|string[]>  $headers
+     * @return array<string,string|string[]>
+     */
+    private function normalizeHeaders(array $headers): array
+    {
+        // Header yang disimpan (boleh disesuaikan)
+        $whitelist = [
+            'content-type',
+            'content-language',
+            'cache-control',
+            'etag',
+        ];
+
+        $norm = [];
+        foreach ($headers as $k => $v) {
+            $lk = strtolower((string) $k);
+            if (in_array($lk, $whitelist, true)) {
+                $norm[$lk] = $v;
+            }
+        }
+
+        ksort($norm);
+
+        return $norm;
+    }
+
+    /**
+     * Hitung fingerprint stabil untuk response (status + headers norm + body canonical JSON).
+     *
+     * @param array{
+     *   status:int,
+     *   headers:array<string,string|string[]>,
+     *   body:mixed
+     * } $response
+     */
+    private function responseFingerprint(array $response): string
+    {
+        $headers = $response['headers'] ?? [];
+        // Urutkan nilai header array agar stabil
+        $headers = array_map(
+            fn ($v) => is_array($v) ? Arr::sort($v) : $v,
+            $headers
+        );
+        ksort($headers);
+
+        $payload = [
+            'status' => (int) $response['status'],
+            'headers' => $headers,
+            // JSON canonical (tanpa escaping ekstra) agar stabil
+            'body' => $response['body'],
+        ];
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION);
+
+        return hash('sha256', $json ?: '');
     }
 }

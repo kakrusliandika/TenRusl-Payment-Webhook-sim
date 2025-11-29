@@ -16,7 +16,7 @@ trait CreatesApplication
     public function createApplication()
     {
         // Path default skeleton Laravel: ../bootstrap/app.php
-        $app = require __DIR__ . '/../bootstrap/app.php';
+        $app = require __DIR__.'/../bootstrap/app.php';
 
         // Jalankan bootstrap kernel agar konfigurasi, provider, dll. siap dipakai test
         $app->make(Kernel::class)->bootstrap();

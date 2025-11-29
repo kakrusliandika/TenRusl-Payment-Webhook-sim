@@ -38,6 +38,42 @@
                   "}"
                 ]
               }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Idempotency test:",
+                  "//  - Run this request dua kali dengan Idempotency-Key yang sama.",
+                  "//  - First run: simpan baseline status+body.",
+                  "//  - Second run: pastikan status/body identik ATAU server merespon 409.",
+                  "",
+                  "const baselineBody = pm.environment.get('idemp_baseline_body');",
+                  "const baselineStatus = pm.environment.get('idemp_baseline_status');",
+                  "",
+                  "if (!baselineBody) {",
+                  "  // First run: capture baseline",
+                  "  pm.environment.set('idemp_baseline_body', pm.response.text());",
+                  "  pm.environment.set('idemp_baseline_status', pm.response.code.toString());",
+                  "",
+                  "  pm.test('Baseline captured for idempotency test', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "  });",
+                  "} else {",
+                  "  // Second (and subsequent) runs: compare with baseline",
+                  "  const currentBody = pm.response.text();",
+                  "  const currentStatus = pm.response.code;",
+                  "  const baselineStatusNum = parseInt(baselineStatus, 10);",
+                  "",
+                  "  pm.test('Idempotent behavior: same key returns same response or 409', function () {",
+                  "    const sameAsBaseline = (currentStatus === baselineStatusNum && currentBody === baselineBody);",
+                  "    const isConflict = currentStatus === 409;",
+                  "    pm.expect(sameAsBaseline || isConflict).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
             }
           ]
         },
@@ -91,6 +127,49 @@
                   "const body = pm.request.body.raw || '';",
                   "const sig = CryptoJS.HmacSHA256(body, pm.environment.get('MOCK_SECRET'));",
                   "pm.environment.set('MOCK_SIGNATURE', CryptoJS.enc.Hex.stringify(sig));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('mock webhook accepted (202)', function () {",
+                  "  pm.expect(pm.response.code).to.eql(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "mock – invalid signature (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Mock-Signature", "value": "invalid-signature" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_invalid_{{$timestamp}}\",\n  \"type\": \"payment.paid\",\n  \"provider_ref\": \"sim_mock_invalid_{{$timestamp}}\",\n  \"amount\": 100000,\n  \"currency\": \"IDR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/webhooks/mock",
+              "host": ["{{base_url}}"],
+              "path": ["webhooks", "mock"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('mock webhook rejected when signature invalid (401)', function () {",
+                  "  pm.expect(pm.response.code).to.eql(401);",
+                  "});"
                 ]
               }
             }

@@ -20,8 +20,8 @@ class DokuSignature
      */
     public static function verify(string $rawBody, Request $request): bool
     {
-        $clientId  = (string) $request->header('Client-Id');
-        $reqId     = (string) $request->header('Request-Id');
+        $clientId = (string) $request->header('Client-Id');
+        $reqId = (string) $request->header('Request-Id');
         $timestamp = (string) $request->header('Request-Timestamp');
         $headerSig = (string) $request->header('Signature');
 
@@ -34,7 +34,7 @@ class DokuSignature
         $target = (string) config('tenrusl.doku_request_target', '/');
         if ($target === '/' || $target === '') {
             $uri = $request->getRequestUri();
-            $target = ($uri && str_starts_with($uri, '/')) ? $uri : '/' . ltrim((string) $uri, '/');
+            $target = ($uri && str_starts_with($uri, '/')) ? $uri : '/'.ltrim((string) $uri, '/');
         }
 
         if ($clientId === '' || $reqId === '' || $timestamp === '' || $headerSig === '') {
@@ -43,19 +43,19 @@ class DokuSignature
 
         // Digest hanya diperlukan bila ada body & method bukan GET/DELETE
         $method = strtoupper($request->getMethod());
-        $includeDigest = !in_array($method, ['GET','DELETE'], true);
+        $includeDigest = ! in_array($method, ['GET', 'DELETE'], true);
 
         $components = "Client-Id:{$clientId}\n"
-            . "Request-Id:{$reqId}\n"
-            . "Request-Timestamp:{$timestamp}\n"
-            . "Request-Target:{$target}";
+            ."Request-Id:{$reqId}\n"
+            ."Request-Timestamp:{$timestamp}\n"
+            ."Request-Target:{$target}";
 
         if ($includeDigest) {
             $digestB64 = base64_encode(hash('sha256', $rawBody, true));
             $components .= "\nDigest:{$digestB64}";
         }
 
-        $calc = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', $components, $secretKey, true));
+        $calc = 'HMACSHA256='.base64_encode(hash_hmac('sha256', $components, $secretKey, true));
 
         return hash_equals((string) $headerSig, (string) $calc);
     }

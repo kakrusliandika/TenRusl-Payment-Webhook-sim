@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+
 use function Pest\Laravel\postJson;
 
 it('accepts Lemon Squeezy webhook with (bypassed) signature verification and returns 202', function () {
@@ -10,7 +11,7 @@ it('accepts Lemon Squeezy webhook with (bypassed) signature verification and ret
 
     $payload = [
         'meta' => ['event_name' => 'order_paid'],
-        'data' => ['id' => 'ls_' . now()->timestamp, 'attributes' => ['total' => 1000]],
+        'data' => ['id' => 'ls_'.now()->timestamp, 'attributes' => ['total' => 1000]],
     ];
 
     $resp = postJson('/api/v1/webhooks/lemonsqueezy', $payload, [
@@ -20,7 +21,7 @@ it('accepts Lemon Squeezy webhook with (bypassed) signature verification and ret
     $resp->assertStatus(202)
         ->assertJsonStructure([
             'data' => [
-                'event'  => ['provider', 'event_id', 'type'],
+                'event' => ['provider', 'event_id', 'type'],
                 'result' => ['duplicate', 'persisted', 'status'],
             ],
         ])

@@ -19,7 +19,7 @@ class TripaySignature
         }
 
         $headerSig = $request->header('X-Callback-Signature');
-        if (!$headerSig) {
+        if (! $headerSig) {
             return false;
         }
 

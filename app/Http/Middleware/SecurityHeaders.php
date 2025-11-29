@@ -17,7 +17,7 @@ class SecurityHeaders
         // HSTS melindungi dari downgrade attack. Terapkan di prod setelah site full HTTPS.
         // preload opsional; includeSubDomains disarankan jika semua subdomain sudah HTTPS.
         $isHttps = $request->isSecure() || $request->headers->get('X-Forwarded-Proto') === 'https';
-        if ($isHttps && !app()->environment('local')) {
+        if ($isHttps && ! app()->environment('local')) {
             $response->headers->set(
                 'Strict-Transport-Security',
                 'max-age=31536000; includeSubDomains; preload'

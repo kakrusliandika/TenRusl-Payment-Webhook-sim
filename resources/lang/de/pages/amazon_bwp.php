@@ -24,31 +24,31 @@ TEXT
 
     'example_payload' => [
         'eventType' => 'ORDER_COMPLETED',
-        'data'      => [
-            'orderId'  => 'BWP-001',
-            'status'   => 'COMPLETED',
-            'amount'   => 25000,
+        'data' => [
+            'orderId' => 'BWP-001',
+            'status' => 'COMPLETED',
+            'amount' => 25000,
             'currency' => 'IDR',
         ],
         'provider' => 'amazon_bwp',
-        'sent_at'  => now()->toIso8601String(),
+        'sent_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/amazon_bwp',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/amazon_bwp',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

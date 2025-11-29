@@ -11,6 +11,7 @@ use Illuminate\Validation\Rule;
  * Add method mixins so static analyzers (e.g., Intelephense) know these exist on FormRequest.
  *
  * @mixin \Illuminate\Http\Request
+ *
  * @method bool has(string|array $key)
  * @method mixed input(string $key = null, mixed $default = null)
  * @method void merge(array $input)
@@ -33,7 +34,7 @@ class CreatePaymentRequest extends FormRequest
         $merge = [];
 
         // Map metadata -> meta to align with model/DB
-        if ($this->has('metadata') && !$this->has('meta')) {
+        if ($this->has('metadata') && ! $this->has('meta')) {
             /** @var array|null $metadata */
             $metadata = $this->input('metadata');
             $merge['meta'] = $metadata;
@@ -46,7 +47,7 @@ class CreatePaymentRequest extends FormRequest
         }
 
         // Default currency when missing/empty
-        if (!$this->has('currency') || $this->input('currency') === null || $this->input('currency') === '') {
+        if (! $this->has('currency') || $this->input('currency') === null || $this->input('currency') === '') {
             $merge['currency'] = 'IDR';
         }
 
@@ -59,19 +60,19 @@ class CreatePaymentRequest extends FormRequest
         $allowlist = (array) config('tenrusl.providers_allowlist', []);
 
         return [
-            'provider'    => ['required', 'string', Rule::in($allowlist)],
+            'provider' => ['required', 'string', Rule::in($allowlist)],
 
             // amount as integer (minor unit) to align with DB & casts
-            'amount'      => ['required', 'integer', 'min:1'],
+            'amount' => ['required', 'integer', 'min:1'],
 
             // strict 3-letter ISO code, uppercase
-            'currency'    => ['required', 'string', 'size:3', 'regex:/^[A-Z]{3}$/'],
+            'currency' => ['required', 'string', 'size:3', 'regex:/^[A-Z]{3}$/'],
 
             'description' => ['nullable', 'string', 'max:255'],
 
             // accept either "metadata" or "meta" from client
-            'metadata'    => ['nullable', 'array'],
-            'meta'        => ['nullable', 'array'],
+            'metadata' => ['nullable', 'array'],
+            'meta' => ['nullable', 'array'],
         ];
     }
 
@@ -85,7 +86,7 @@ class CreatePaymentRequest extends FormRequest
         /** @var array<string,mixed> $data */
         $data = parent::validated($key, $default);
 
-        if (!array_key_exists('meta', $data) && array_key_exists('metadata', $data)) {
+        if (! array_key_exists('meta', $data) && array_key_exists('metadata', $data)) {
             $data['meta'] = $data['metadata'];
         }
 
@@ -103,9 +104,9 @@ class CreatePaymentRequest extends FormRequest
     {
         return [
             'provider' => 'payment provider',
-            'amount'   => 'amount',
+            'amount' => 'amount',
             'currency' => 'currency (ISO-4217)',
-            'meta'     => 'metadata',
+            'meta' => 'metadata',
         ];
     }
 }

@@ -9,16 +9,16 @@ it('accepts Mock webhook with valid HMAC header and returns 202', function () {
     config(['tenrusl.mock_secret' => 'secret-demo']);
 
     $payload = [
-        'id'        => 'evt_' . now()->timestamp,
-        'type'      => 'payment.paid',
-        'reference' => 'sim_mock_' . now()->timestamp,
-        'amount'    => 100000,
-        'currency'  => 'IDR',
+        'id' => 'evt_'.now()->timestamp,
+        'type' => 'payment.paid',
+        'reference' => 'sim_mock_'.now()->timestamp,
+        'amount' => 100000,
+        'currency' => 'IDR',
     ];
 
     // hitung signature berdasarkan JSON yang akan dikirim
     $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
-    $sig  = hash_hmac('sha256', $json, 'secret-demo');
+    $sig = hash_hmac('sha256', $json, 'secret-demo');
 
     $resp = postJson('/api/v1/webhooks/mock', $payload, [
         'X-Mock-Signature' => $sig,
@@ -27,7 +27,7 @@ it('accepts Mock webhook with valid HMAC header and returns 202', function () {
     $resp->assertStatus(202)
         ->assertJsonStructure([
             'data' => [
-                'event'  => ['provider', 'event_id', 'type'],
+                'event' => ['provider', 'event_id', 'type'],
                 'result' => ['duplicate', 'persisted', 'status'],
             ],
         ])
@@ -38,7 +38,7 @@ it('rejects Mock webhook with wrong signature and returns 401', function () {
     config(['tenrusl.mock_secret' => 'secret-demo']);
 
     $payload = [
-        'id'   => 'evt_invalid',
+        'id' => 'evt_invalid',
         'type' => 'payment.paid',
     ];
 

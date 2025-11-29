@@ -18,22 +18,22 @@ final class XenditAdapter implements PaymentAdapter
      * Simulator "create payment" untuk Xendit.
      * Tidak memanggil API Xendit; status final menunggu webhook (x-callback-token).
      *
-     * @param  array{amount:int|string, currency?:string, description?:string, metadata?:array} $input
+     * @param  array{amount:int|string, currency?:string, description?:string, metadata?:array}  $input
      * @return array{provider:string, provider_ref:string, status:string, snapshot:array}
      */
     public function create(array $input): array
     {
-        $ref = 'sim_xendit_' . Str::ulid()->toBase32();
+        $ref = 'sim_xendit_'.Str::ulid()->toBase32();
 
         return [
-            'provider'     => $this->provider(),
+            'provider' => $this->provider(),
             'provider_ref' => $ref,
-            'status'       => 'pending',
-            'snapshot'     => [
-                'amount'       => (string) ($input['amount'] ?? '0'),
-                'currency'     => strtoupper((string) ($input['currency'] ?? 'IDR')),
-                'description'  => (string) ($input['description'] ?? ''),
-                'metadata'     => (array)  ($input['metadata'] ?? []),
+            'status' => 'pending',
+            'snapshot' => [
+                'amount' => (string) ($input['amount'] ?? '0'),
+                'currency' => strtoupper((string) ($input['currency'] ?? 'IDR')),
+                'description' => (string) ($input['description'] ?? ''),
+                'metadata' => (array) ($input['metadata'] ?? []),
                 'checkout_url' => "/simulate/redirect/{$this->provider()}/{$ref}",
             ],
         ];
@@ -45,9 +45,9 @@ final class XenditAdapter implements PaymentAdapter
     public function status(string $providerRef): array
     {
         return [
-            'provider'     => $this->provider(),
+            'provider' => $this->provider(),
             'provider_ref' => $providerRef,
-            'status'       => 'pending',
+            'status' => 'pending',
         ];
     }
 }

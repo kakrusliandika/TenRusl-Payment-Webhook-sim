@@ -31,6 +31,7 @@ final class PaymentRepository
     {
         /** @var Payment|null $p */
         $p = Payment::query()->find($id);
+
         return $p;
     }
 
@@ -57,7 +58,7 @@ final class PaymentRepository
             ->where('provider', $provider)
             ->where('provider_ref', $providerRef)
             ->update([
-                'status'     => $status,
+                'status' => $status,
                 'updated_at' => now(),
             ]);
     }

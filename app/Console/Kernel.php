@@ -26,9 +26,9 @@ class Kernel extends ConsoleKernel
     {
         // Jalankan tiap menit; batasi overlap agar aman di beban tinggi.
         $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
-        $provider    = (string) config('tenrusl.scheduler_provider', '');      // opsional filter
-        $mode        = (string) config('tenrusl.scheduler_backoff_mode', 'full'); // full|equal|decorrelated
-        $limit       = (int) config('tenrusl.scheduler_limit', 200);
+        $provider = (string) config('tenrusl.scheduler_provider', '');      // opsional filter
+        $mode = (string) config('tenrusl.scheduler_backoff_mode', 'full'); // full|equal|decorrelated
+        $limit = (int) config('tenrusl.scheduler_limit', 200);
 
         $cmd = sprintf(
             'tenrusl:webhooks:retry --limit=%d --max-attempts=%d --mode=%s',
@@ -38,7 +38,7 @@ class Kernel extends ConsoleKernel
         );
 
         if ($provider !== '') {
-            $cmd .= ' --provider=' . $provider;
+            $cmd .= ' --provider='.$provider;
         }
 
         $schedule
@@ -52,7 +52,7 @@ class Kernel extends ConsoleKernel
      */
     protected function commands(): void
     {
-        $this->load(__DIR__ . '/Commands');
+        $this->load(__DIR__.'/Commands');
         require base_path('routes/console.php');
     }
 }

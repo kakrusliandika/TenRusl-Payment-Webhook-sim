@@ -11,16 +11,16 @@ return new class extends Migration
     {
         // Tambah kolom-kolom yang dipakai kode (tanpa mengubah kolom lama yang sudah ada)
         Schema::table('payments', function (Blueprint $table) {
-            if (!Schema::hasColumn('payments', 'provider')) {
+            if (! Schema::hasColumn('payments', 'provider')) {
                 $table->string('provider', 20)->after('id');
             }
 
-            if (!Schema::hasColumn('payments', 'provider_ref')) {
+            if (! Schema::hasColumn('payments', 'provider_ref')) {
                 $table->string('provider_ref', 150)->nullable()->after('provider');
             }
 
             // Kode menggunakan "meta" (JSON). Kita tambahkan "meta" tanpa menghapus "metadata".
-            if (!Schema::hasColumn('payments', 'meta')) {
+            if (! Schema::hasColumn('payments', 'meta')) {
                 // Letakkan setelah "status" agar rapi (tidak wajib)
                 $table->json('meta')->nullable()->after('status');
             }
@@ -29,21 +29,21 @@ return new class extends Migration
         // Migrasi data: jika ada kolom "metadata" dan kolom "meta" masih kosong → salin nilainya
         if (Schema::hasColumn('payments', 'metadata') && Schema::hasColumn('payments', 'meta')) {
             // Portabel untuk SQLite/MySQL/PostgreSQL (JSON ke JSON)
-            DB::statement("UPDATE payments SET meta = metadata WHERE meta IS NULL");
+            DB::statement('UPDATE payments SET meta = metadata WHERE meta IS NULL');
         }
 
         // Indeks & unik gabungan untuk akses cepat status/lookup
         Schema::table('payments', function (Blueprint $table) {
             // Index per kolom (opsional, tetap berguna)
-            if (!self::indexExists('payments', 'payments_provider_index')) {
+            if (! self::indexExists('payments', 'payments_provider_index')) {
                 $table->index('provider');
             }
-            if (!self::indexExists('payments', 'payments_provider_ref_index')) {
+            if (! self::indexExists('payments', 'payments_provider_ref_index')) {
                 $table->index('provider_ref');
             }
 
             // Unik pasangan provider+provider_ref (jika keduanya ada)
-            if (!self::indexExists('payments', 'payments_provider_provider_ref_unique')) {
+            if (! self::indexExists('payments', 'payments_provider_provider_ref_unique')) {
                 $table->unique(['provider', 'provider_ref'], 'payments_provider_provider_ref_unique');
             }
         });
@@ -53,7 +53,7 @@ return new class extends Migration
     {
         // Kembalikan data meta -> metadata bila metadata ada
         if (Schema::hasColumn('payments', 'metadata') && Schema::hasColumn('payments', 'meta')) {
-            DB::statement("UPDATE payments SET metadata = meta WHERE metadata IS NULL");
+            DB::statement('UPDATE payments SET metadata = meta WHERE metadata IS NULL');
         }
 
         Schema::table('payments', function (Blueprint $table) {
@@ -91,6 +91,7 @@ return new class extends Migration
             $connection = Schema::getConnection();
             $schema = $connection->getDoctrineSchemaManager();
             $indexes = $schema->listTableIndexes($table);
+
             return array_key_exists($indexName, $indexes);
         } catch (\Throwable $e) {
             // Jika Doctrine tak tersedia, fallback "assume not exists"

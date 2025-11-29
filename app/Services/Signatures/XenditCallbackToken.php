@@ -23,7 +23,7 @@ class XenditCallbackToken
               ?? $request->header('X-CALLBACK-TOKEN')
               ?? $request->header('X-Callback-Token');
 
-        if (!is_string($token) || $token === '') {
+        if (! is_string($token) || $token === '') {
             return false;
         }
 

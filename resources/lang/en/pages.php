@@ -3,8 +3,8 @@
 return [
 
     'back_to_providers' => 'Back to providers',
-    'view_details'      => 'View details',
-    'breadcrumb'        => 'Breadcrumb',
+    'view_details' => 'View details',
+    'breadcrumb' => 'Breadcrumb',
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'search_providers' => 'Search providers...',
-    'no_results'       => 'No providers match your search.',
+    'no_results' => 'No providers match your search.',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,31 +20,31 @@ return [
     |--------------------------------------------------------------------------
     */
     'provider_default_name' => 'Provider',
-    'provider_label'        => 'Provider',
-    'provider_endpoints'    => 'Endpoints',
+    'provider_label' => 'Provider',
+    'provider_endpoints' => 'Endpoints',
     'signature_notes_title' => 'Signature Notes',
     'example_payload_title' => 'Example Payload',
-    'view_docs'             => 'View docs',
+    'view_docs' => 'View docs',
 
-    'create_payment'  => 'Create payment (idempotent)',
-    'get_payment'     => 'Get payment status',
+    'create_payment' => 'Create payment (idempotent)',
+    'get_payment' => 'Get payment status',
     'receive_webhook' => 'Receive webhook',
 
     'endpoint_list' => [
         'create_payment' => [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'note'   => 'Idempotency-Key required',
+            'path' => '/api/payments',
+            'note' => 'Idempotency-Key required',
         ],
         'get_payment' => [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'note'   => 'Fetch payment status',
+            'path' => '/api/payments/{id}',
+            'note' => 'Fetch payment status',
         ],
         'receive_webhook' => [
             'method' => 'POST',
-            'path'   => '/api/webhooks/{provider}',
-            'note'   => 'mock/xendit/midtrans/…',
+            'path' => '/api/webhooks/{provider}',
+            'note' => 'mock/xendit/midtrans/…',
         ],
     ],
 
@@ -53,7 +53,7 @@ return [
     | Errors / Empty states
     |--------------------------------------------------------------------------
     */
-    'not_found'    => 'The page you are looking for could not be found.',
+    'not_found' => 'The page you are looking for could not be found.',
     'server_error' => 'An unexpected server error occurred. Please try again.',
 
     /*

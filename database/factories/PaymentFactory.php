@@ -16,23 +16,23 @@ class PaymentFactory extends Factory
 
         return [
             // Set id ULID agar konsisten dengan HasUlid
-            'id'              => (string) Str::ulid(),
+            'id' => (string) Str::ulid(),
 
             // Kolom yang dipakai kode/model
-            'provider'        => $provider,
-            'provider_ref'    => 'sim_' . $provider . '_' . Str::ulid()->toBase32(),
+            'provider' => $provider,
+            'provider_ref' => 'sim_'.$provider.'_'.Str::ulid()->toBase32(),
 
-            'amount'          => $this->faker->numberBetween(1_000, 250_000),
-            'currency'        => 'IDR',
-            'description'     => $this->faker->sentence(3),
+            'amount' => $this->faker->numberBetween(1_000, 250_000),
+            'currency' => 'IDR',
+            'description' => $this->faker->sentence(3),
 
             // Gunakan "meta" (bukan "metadata") agar konsisten dengan model & resource
-            'meta'            => [
-                'customer_id' => 'cus_' . $this->faker->numberBetween(1000, 9999),
+            'meta' => [
+                'customer_id' => 'cus_'.$this->faker->numberBetween(1000, 9999),
             ],
 
             // Konsisten dengan enum PaymentStatus
-            'status'          => $this->faker->randomElement(['pending', 'succeeded', 'failed']),
+            'status' => $this->faker->randomElement(['pending', 'succeeded', 'failed']),
 
             // Tabel memiliki kolom unik idempotency_key → isi untuk kemudahan test/seed
             'idempotency_key' => (string) Str::uuid(),

@@ -3,8 +3,8 @@
 return [
 
     'back_to_providers' => 'กลับไปที่ผู้ให้บริการ',
-    'view_details'      => 'ดูรายละเอียด',
-    'breadcrumb'        => 'เบรดครัมบ์',
+    'view_details' => 'ดูรายละเอียด',
+    'breadcrumb' => 'เบรดครัมบ์',
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'search_providers' => 'ค้นหาผู้ให้บริการ...',
-    'no_results'       => 'ไม่พบผู้ให้บริการที่ตรงกับการค้นหาของคุณ.',
+    'no_results' => 'ไม่พบผู้ให้บริการที่ตรงกับการค้นหาของคุณ.',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,31 +20,31 @@ return [
     |--------------------------------------------------------------------------
     */
     'provider_default_name' => 'ผู้ให้บริการ',
-    'provider_label'        => 'ผู้ให้บริการ',
-    'provider_endpoints'    => 'เอนด์พอยต์',
+    'provider_label' => 'ผู้ให้บริการ',
+    'provider_endpoints' => 'เอนด์พอยต์',
     'signature_notes_title' => 'บันทึกเกี่ยวกับลายเซ็น',
     'example_payload_title' => 'ตัวอย่างเพย์โหลด',
-    'view_docs'             => 'ดูเอกสาร',
+    'view_docs' => 'ดูเอกสาร',
 
-    'create_payment'  => 'สร้างการชำระเงิน (idempotent)',
-    'get_payment'     => 'ดูสถานะการชำระเงิน',
+    'create_payment' => 'สร้างการชำระเงิน (idempotent)',
+    'get_payment' => 'ดูสถานะการชำระเงิน',
     'receive_webhook' => 'รับ Webhook',
 
     'endpoint_list' => [
         'create_payment' => [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'note'   => 'ต้องมี Idempotency-Key',
+            'path' => '/api/payments',
+            'note' => 'ต้องมี Idempotency-Key',
         ],
         'get_payment' => [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'note'   => 'ดึงสถานะการชำระเงิน',
+            'path' => '/api/payments/{id}',
+            'note' => 'ดึงสถานะการชำระเงิน',
         ],
         'receive_webhook' => [
             'method' => 'POST',
-            'path'   => '/api/webhooks/{provider}',
-            'note'   => 'mock/xendit/midtrans/…',
+            'path' => '/api/webhooks/{provider}',
+            'note' => 'mock/xendit/midtrans/…',
         ],
     ],
 
@@ -53,7 +53,7 @@ return [
     | Errors / Empty states
     |--------------------------------------------------------------------------
     */
-    'not_found'    => 'ไม่พบหน้าที่คุณต้องการ.',
+    'not_found' => 'ไม่พบหน้าที่คุณต้องการ.',
     'server_error' => 'เกิดข้อผิดพลาดของเซิร์ฟเวอร์โดยไม่คาดคิด กรุณาลองใหม่อีกครั้ง.',
 
     /*

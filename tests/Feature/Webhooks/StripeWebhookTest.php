@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+
 use function Pest\Laravel\postJson;
 
 it('accepts Stripe webhook with (bypassed) signature verification and returns 202', function () {
@@ -11,9 +12,9 @@ it('accepts Stripe webhook with (bypassed) signature verification and returns 20
 
     // Payload mirip Stripe (minimal)
     $payload = [
-        'id'   => 'evt_' . now()->timestamp,
+        'id' => 'evt_'.now()->timestamp,
         'type' => 'charge.succeeded',
-        'data' => ['object' => ['id' => 'pi_' . now()->timestamp]],
+        'data' => ['object' => ['id' => 'pi_'.now()->timestamp]],
     ];
 
     $resp = postJson('/api/v1/webhooks/stripe', $payload, [
@@ -23,7 +24,7 @@ it('accepts Stripe webhook with (bypassed) signature verification and returns 20
     $resp->assertStatus(202)
         ->assertJsonStructure([
             'data' => [
-                'event'  => ['provider', 'event_id', 'type'],
+                'event' => ['provider', 'event_id', 'type'],
                 'result' => ['duplicate', 'persisted', 'status'],
             ],
         ])
@@ -34,7 +35,7 @@ it('rejects Stripe webhook with invalid signature and returns 401', function () 
     // Middleware aktif → signature wajib valid
     // Kirim header salah / kosong
     $resp = postJson('/api/v1/webhooks/stripe', [
-        'id'   => 'evt_invalid',
+        'id' => 'evt_invalid',
         'type' => 'charge.succeeded',
     ], [
         'Stripe-Signature' => 't=123,v1=invalidsig',

@@ -10,9 +10,9 @@ it('accepts Xendit webhook with correct x-callback-token and returns 202', funct
     config(['tenrusl.xendit_callback_token' => 'test-token']);
 
     $payload = [
-        'id'   => 'evt_' . now()->timestamp,
+        'id' => 'evt_'.now()->timestamp,
         'type' => 'invoice.paid',
-        'data' => ['id' => 'inv_' . now()->timestamp],
+        'data' => ['id' => 'inv_'.now()->timestamp],
     ];
 
     $resp = postJson('/api/v1/webhooks/xendit', $payload, [
@@ -22,7 +22,7 @@ it('accepts Xendit webhook with correct x-callback-token and returns 202', funct
     $resp->assertStatus(202)
         ->assertJsonStructure([
             'data' => [
-                'event'  => ['provider', 'event_id', 'type'],
+                'event' => ['provider', 'event_id', 'type'],
                 'result' => ['duplicate', 'persisted', 'status'],
             ],
         ])
@@ -33,7 +33,7 @@ it('rejects Xendit webhook with invalid token and returns 401', function () {
     config(['tenrusl.xendit_callback_token' => 'test-token']);
 
     $payload = [
-        'id'   => 'evt_invalid',
+        'id' => 'evt_invalid',
         'type' => 'invoice.paid',
     ];
 

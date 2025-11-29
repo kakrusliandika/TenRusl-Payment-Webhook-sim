@@ -29,7 +29,7 @@ class OySignature
         $ipWhitelist = trim((string) config('tenrusl.oy_ip_whitelist', ''));
         if ($ipWhitelist !== '') {
             $allowed = array_filter(array_map('trim', explode(',', $ipWhitelist)));
-            if (!empty($allowed) && !in_array($request->ip(), $allowed, true)) {
+            if (! empty($allowed) && ! in_array($request->ip(), $allowed, true)) {
                 return false;
             }
         }

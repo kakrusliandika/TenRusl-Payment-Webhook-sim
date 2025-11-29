@@ -26,7 +26,7 @@ class ScaffoldViewsCommand extends Command
 
     public function handle(Filesystem $fs): int
     {
-        $dry   = (bool) $this->option('dry-run');
+        $dry = (bool) $this->option('dry-run');
         $force = (bool) $this->option('force');
 
         $base = resource_path('views');
@@ -46,6 +46,7 @@ class ScaffoldViewsCommand extends Command
         foreach ($dirs as $dir) {
             if ($dry) {
                 $this->line("DIR  - $dir");
+
                 continue;
             }
             $fs->ensureDirectoryExists($dir, 0755, true);
@@ -58,28 +59,28 @@ class ScaffoldViewsCommand extends Command
         // File static (kosongan / stub ringan)
         $files = [
             // Layout
-            $base.'/layout/meta.blade.php'   => "@php /* meta SEO/OG/Twitter */ @endphp\n",
-            $base.'/layout/nav.blade.php'    => "@php /* nav */ @endphp\n",
+            $base.'/layout/meta.blade.php' => "@php /* meta SEO/OG/Twitter */ @endphp\n",
+            $base.'/layout/nav.blade.php' => "@php /* nav */ @endphp\n",
             $base.'/layout/header.blade.php' => "{{-- layout header --}}\n@yield('head')\n",
             $base.'/layout/footer.blade.php' => "{{-- layout footer --}}\n@stack('body')\n",
 
             // Wrapper & halaman utama
-            $base.'/main.blade.php'          => "{{-- main wrapper --}}\n@extends('layout.header')\n@section('content') @include('main.index') @endsection\n@include('layout.footer')\n",
-            $base.'/main/index.blade.php'    => "{{-- halaman utama (merangkai partials) --}}\n@include('main.partials._hero')\n@include('main.partials._features')\n@include('main.partials._endpoints')\n@include('main.partials._providers')\n@include('main.partials._signature')\n@include('main.partials._tooling')\n",
+            $base.'/main.blade.php' => "{{-- main wrapper --}}\n@extends('layout.header')\n@section('content') @include('main.index') @endsection\n@include('layout.footer')\n",
+            $base.'/main/index.blade.php' => "{{-- halaman utama (merangkai partials) --}}\n@include('main.partials._hero')\n@include('main.partials._features')\n@include('main.partials._endpoints')\n@include('main.partials._providers')\n@include('main.partials._signature')\n@include('main.partials._tooling')\n",
 
             // Partials utama
-            $base.'/main/partials/_hero.blade.php'      => "{{-- hero --}}\n",
-            $base.'/main/partials/_features.blade.php'  => "{{-- features --}}\n",
+            $base.'/main/partials/_hero.blade.php' => "{{-- hero --}}\n",
+            $base.'/main/partials/_features.blade.php' => "{{-- features --}}\n",
             $base.'/main/partials/_endpoints.blade.php' => "{{-- endpoints table --}}\n",
             $base.'/main/partials/_providers.blade.php' => "{{-- providers grid --}}\n",
             $base.'/main/partials/_signature.blade.php' => "{{-- signature matrix --}}\n",
-            $base.'/main/partials/_tooling.blade.php'   => "{{-- swagger & postman --}}\n",
+            $base.'/main/partials/_tooling.blade.php' => "{{-- swagger & postman --}}\n",
 
             // Payments partials umum
-            $base.'/main/payments/_partials/header.blade.php'        => "{{-- payments header --}}\n",
-            $base.'/main/payments/_partials/signature-note.blade.php'=> "{{-- signature note --}}\n",
-            $base.'/main/payments/_partials/example-json.blade.php'  => "{{-- example json --}}\n",
-            $base.'/main/payments/_card.blade.php'                   => "{{-- reusable card for provider --}}\n",
+            $base.'/main/payments/_partials/header.blade.php' => "{{-- payments header --}}\n",
+            $base.'/main/payments/_partials/signature-note.blade.php' => "{{-- signature note --}}\n",
+            $base.'/main/payments/_partials/example-json.blade.php' => "{{-- example json --}}\n",
+            $base.'/main/payments/_card.blade.php' => "{{-- reusable card for provider --}}\n",
         ];
 
         // File per provider (mengikuti slug di allowlist)
@@ -93,12 +94,14 @@ class ScaffoldViewsCommand extends Command
         foreach ($files as $path => $content) {
             if ($dry) {
                 $this->line("FILE - $path");
+
                 continue;
             }
 
-            if ($fs->exists($path) && !$force) {
+            if ($fs->exists($path) && ! $force) {
                 $this->warn("skip: $path (exists)");
                 $skipped++;
+
                 continue;
             }
 
@@ -107,7 +110,7 @@ class ScaffoldViewsCommand extends Command
             $created++;
         }
 
-        if (!$dry) {
+        if (! $dry) {
             $this->line("Done. created={$created}, skipped={$skipped}");
         }
 

@@ -22,29 +22,29 @@ TEXT
 
     'example_payload' => [
         'transaction_id' => 'SKR-001',
-        'mb_amount'      => '10.00',
-        'mb_currency'    => 'EUR',
-        'status'         => '2',
-        'md5sig'         => '<UPPERCASE_MD5>',
-        'provider'       => 'skrill',
-        'sent_at'        => now()->toIso8601String(),
+        'mb_amount' => '10.00',
+        'mb_currency' => 'EUR',
+        'status' => '2',
+        'md5sig' => '<UPPERCASE_MD5>',
+        'provider' => 'skrill',
+        'sent_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/skrill',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/skrill',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

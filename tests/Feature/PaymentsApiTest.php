@@ -1,29 +1,30 @@
-﻿<?php
+<?php
 
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use function Pest\Laravel\postJson;
+
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\postJson;
 
 uses(RefreshDatabase::class);
 
 it('create → get status roundtrip works and fields are consistent', function () {
-    $orderId = 'ORD-' . now()->timestamp;
+    $orderId = 'ORD-'.now()->timestamp;
 
     $create = postJson('/api/v1/payments', [
-        'provider'    => 'mock',
-        'amount'      => 123456,
-        'currency'    => 'IDR',
+        'provider' => 'mock',
+        'amount' => 123456,
+        'currency' => 'IDR',
         'description' => 'Roundtrip',
-        'metadata'    => ['order_id' => $orderId],
+        'metadata' => ['order_id' => $orderId],
     ], [
-        'Idempotency-Key' => 'roundtrip-' . now()->timestamp,
+        'Idempotency-Key' => 'roundtrip-'.now()->timestamp,
     ]);
 
     expect($create->status())->toBeIn([201, 200]);
 
-    $provider    = (string) $create->json('data.provider');
+    $provider = (string) $create->json('data.provider');
     $providerRef = (string) ($create->json('data.provider_ref') ?? $create->json('data.reference'));
 
     expect($provider)->toBe('mock');

@@ -26,16 +26,16 @@ class WebhookEvent extends Model
      * Casting atribut untuk kemudahan pemrosesan & serialisasi.
      */
     protected $casts = [
-        'payload'          => 'array',
-        'payload_raw'      => 'string',
-        'attempts'         => 'int',
-        'received_at'      => 'datetime',
-        'last_attempt_at'  => 'datetime',
-        'processed_at'     => 'datetime',
-        'next_retry_at'    => 'datetime',
-        'payment_status'   => PaymentStatus::class,
-        'created_at'       => 'datetime',
-        'updated_at'       => 'datetime',
+        'payload' => 'array',
+        'payload_raw' => 'string',
+        'attempts' => 'int',
+        'received_at' => 'datetime',
+        'last_attempt_at' => 'datetime',
+        'processed_at' => 'datetime',
+        'next_retry_at' => 'datetime',
+        'payment_status' => PaymentStatus::class,
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     /**
@@ -44,6 +44,6 @@ class WebhookEvent extends Model
     public function scopeByProviderEvent($query, string $provider, string $eventId)
     {
         return $query->where('provider', $provider)
-                     ->where('event_id', $eventId);
+            ->where('event_id', $eventId);
     }
 }

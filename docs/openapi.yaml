@@ -43,6 +43,10 @@ paths:
               schema:
                 type: string
               description: Idempotency-Key yang digunakan dalam permintaan
+            X-Request-ID:
+              schema:
+                type: string
+              description: Correlation/request ID untuk tracing server-side
           content:
             application/json:
               schema:
@@ -51,9 +55,39 @@ paths:
                   data:
                     $ref: "#/components/schemas/Payment"
         "400":
-          description: Bad Request
+          description: Bad Request (validasi gagal / payload tidak sesuai)
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: Idempotency conflict (parallel call)
+          description: Idempotency conflict (parallel call dengan state berbeda)
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Terlalu banyak request ke endpoint payments
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+            Retry-After:
+              schema:
+                type: integer
+              description: Detik sampai klien boleh mencoba kembali
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/v1/payments/{provider}/{provider_ref}/status:
     get:
       tags: [Payments]
@@ -68,6 +102,10 @@ paths:
       responses:
         "200":
           description: OK
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -75,6 +113,29 @@ paths:
                 properties:
                   data:
                     $ref: "#/components/schemas/Payment"
+        "404":
+          description: Payment tidak ditemukan
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Terlalu banyak request ke endpoint status
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/v1/webhooks/{provider}:
     post:
       tags: [Webhooks]
@@ -100,6 +161,10 @@ paths:
       responses:
         "202":
           description: Accepted (diproses idempotent & retry-aware)
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -122,6 +187,39 @@ paths:
                           status: { type: string, enum: [pending, succeeded, failed] }
                           payment_provider_ref: { type: string, nullable: true }
                           next_retry_ms: { type: integer, nullable: true }
+        "400":
+          description: Payload webhook tidak valid
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Signature webhook tidak valid
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Terlalu banyak webhook ke endpoint ini (rate limited)
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   parameters:
     Provider:
@@ -146,7 +244,37 @@ components:
           - payoneer
           - skrill
           - amazon_bwp
+  securitySchemes:
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: |
+        Skema generic untuk signature webhook. Di implementasi nyata, tiap provider
+        menggunakan header yang berbeda (Stripe-Signature, X-CALLBACK-TOKEN, dsb).
   schemas:
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Kode error singkat (mis. validation_error, not_found, rate_limited)
+          example: validation_error
+        message:
+          type: string
+          description: Pesan error yang dapat dibaca manusia
+          example: Invalid payload
+        trace_id:
+          type: string
+          description: ID tracing internal (X-Request-ID) untuk debugging/log
+          example: 01JCDZQ2F1G8W3X1R7SZM3KZ2S
+        details:
+          type: object
+          additionalProperties: true
+          description: Informasi tambahan (mis. field error)
     CreatePaymentRequest:
       type: object
       required: [provider, amount, currency]

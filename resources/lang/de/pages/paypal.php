@@ -22,31 +22,31 @@ TEXT
     ],
 
     'example_payload' => [
-        'id'          => 'WH-' . now()->timestamp,
-        'event_type'  => 'PAYMENT.CAPTURE.COMPLETED',
-        'resource'    => [
-            'id'     => 'CAP-001',
+        'id' => 'WH-'.now()->timestamp,
+        'event_type' => 'PAYMENT.CAPTURE.COMPLETED',
+        'resource' => [
+            'id' => 'CAP-001',
             'status' => 'COMPLETED',
         ],
-        'provider'    => 'paypal',
+        'provider' => 'paypal',
         'create_time' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/paypal',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/paypal',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

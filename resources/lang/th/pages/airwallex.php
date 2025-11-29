@@ -23,33 +23,33 @@ TEXT
     ],
 
     'example_payload' => [
-        'id'       => 'evt_' . now()->timestamp,
-        'type'     => 'payment_intent.succeeded',
-        'data'     => [
+        'id' => 'evt_'.now()->timestamp,
+        'type' => 'payment_intent.succeeded',
+        'data' => [
             'payment_intent_id' => 'pi_awx_001',
-            'amount'            => 25000,
-            'currency'          => 'IDR',
-            'status'            => 'succeeded',
+            'amount' => 25000,
+            'currency' => 'IDR',
+            'status' => 'succeeded',
         ],
-        'provider'   => 'airwallex',
+        'provider' => 'airwallex',
         'created_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/airwallex',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/airwallex',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

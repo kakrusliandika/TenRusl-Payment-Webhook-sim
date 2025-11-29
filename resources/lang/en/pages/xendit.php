@@ -21,31 +21,31 @@ TEXT
     ],
 
     'example_payload' => [
-        'id'       => 'evt_xnd_' . now()->timestamp,
-        'event'    => 'invoice.paid',
-        'data'     => [
-            'id'     => 'inv_001',
+        'id' => 'evt_xnd_'.now()->timestamp,
+        'event' => 'invoice.paid',
+        'data' => [
+            'id' => 'inv_001',
             'status' => 'PAID',
         ],
         'provider' => 'xendit',
-        'sent_at'  => now()->toIso8601String(),
+        'sent_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/xendit',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/xendit',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

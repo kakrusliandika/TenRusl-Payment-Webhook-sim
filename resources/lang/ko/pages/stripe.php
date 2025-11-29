@@ -22,33 +22,33 @@ TEXT
     ],
 
     'example_payload' => [
-        'id'   => 'evt_' . now()->timestamp,
+        'id' => 'evt_'.now()->timestamp,
         'type' => 'payment_intent.succeeded',
         'data' => [
             'object' => [
-                'id'     => 'pi_01H',
+                'id' => 'pi_01H',
                 'status' => 'succeeded',
             ],
         ],
-        'provider'   => 'stripe',
+        'provider' => 'stripe',
         'created_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/stripe',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/stripe',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

@@ -24,20 +24,20 @@ class MidtransSignature
         }
 
         $data = json_decode($rawBody, true);
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             return false;
         }
 
-        $orderId     = (string) ($data['order_id']     ?? '');
-        $statusCode  = (string) ($data['status_code']  ?? '');
+        $orderId = (string) ($data['order_id'] ?? '');
+        $statusCode = (string) ($data['status_code'] ?? '');
         $grossAmount = (string) ($data['gross_amount'] ?? '');
-        $postedSig   = (string) ($data['signature_key'] ?? '');
+        $postedSig = (string) ($data['signature_key'] ?? '');
 
         if ($orderId === '' || $statusCode === '' || $grossAmount === '' || $postedSig === '') {
             return false;
         }
 
-        $calc = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        $calc = hash('sha512', $orderId.$statusCode.$grossAmount.$serverKey);
 
         // Compare case-insensitively (hex)
         return hash_equals(strtolower($calc), strtolower($postedSig));

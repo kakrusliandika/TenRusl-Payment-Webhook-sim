@@ -36,9 +36,9 @@ class Payment extends Model
      * - timestamps → datetime Carbon
      */
     protected $casts = [
-        'status'     => PaymentStatus::class,
-        'meta'       => 'array',
-        'amount'     => 'integer',
+        'status' => PaymentStatus::class,
+        'meta' => 'array',
+        'amount' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -49,6 +49,6 @@ class Payment extends Model
     public function scopeByProviderRef($query, string $provider, string $providerRef)
     {
         return $query->where('provider', $provider)
-                     ->where('provider_ref', $providerRef);
+            ->where('provider_ref', $providerRef);
     }
 }

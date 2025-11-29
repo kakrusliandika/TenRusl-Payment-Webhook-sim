@@ -47,8 +47,8 @@ class ProviderController extends Controller
         // - baca konten dari lang: pages/{slug}.php
         // - build $providerData dan kirim ke partials
         return view('pages.show', [
-            'slug'          => $slug,
-            'back_url'      => route('providers.index'),
+            'slug' => $slug,
+            'back_url' => route('providers.index'),
             'provider_meta' => $meta,
             // 'provider' boleh null; pages.show pakai slug + lang files
         ]);
@@ -59,7 +59,7 @@ class ProviderController extends Controller
      */
     protected function buildProvidersList(): array
     {
-        $allow   = (array) config('tenrusl.providers_allowlist', []);
+        $allow = (array) config('tenrusl.providers_allowlist', []);
         $metaMap = (array) config('tenrusl.providers_meta', []);
 
         $list = [];
@@ -80,12 +80,12 @@ class ProviderController extends Controller
             }
 
             $list[] = [
-                'slug'      => $slug,
-                'name'      => $meta['display_name'] ?? ucfirst($slug),
-                'logo'      => asset($logo),
+                'slug' => $slug,
+                'name' => $meta['display_name'] ?? ucfirst($slug),
+                'logo' => asset($logo),
                 'signature' => $meta['signature_type'] ?? null,
                 // PARAM HARUS "provider" (sesuai nama di route)
-                'url'       => route('providers.show', ['provider' => $slug]),
+                'url' => route('providers.show', ['provider' => $slug]),
             ];
         }
 
@@ -98,7 +98,7 @@ class ProviderController extends Controller
     protected function providerMeta(string $slug): array
     {
         $metaMap = (array) config('tenrusl.providers_meta', []);
-        $meta    = (array) ($metaMap[$slug] ?? []);
+        $meta = (array) ($metaMap[$slug] ?? []);
 
         // LOGO: sama logika dengan buildProvidersList
         $logo = $meta['logo'] ?? null;
@@ -108,9 +108,9 @@ class ProviderController extends Controller
         }
 
         return [
-            'slug'      => $slug,
-            'name'      => $meta['display_name'] ?? ucfirst($slug),
-            'logo'      => asset($logo),
+            'slug' => $slug,
+            'name' => $meta['display_name'] ?? ucfirst($slug),
+            'logo' => asset($logo),
             'signature' => $meta['signature_type'] ?? null,
         ];
     }

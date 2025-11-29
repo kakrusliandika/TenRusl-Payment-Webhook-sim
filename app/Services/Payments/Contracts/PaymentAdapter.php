@@ -22,7 +22,7 @@ interface PaymentAdapter
     /**
      * Buat pembayaran simulasi.
      *
-     * @param  array $input bebas (amount/currency/description/metadata, dsb.)
+     * @param  array  $input  bebas (amount/currency/description/metadata, dsb.)
      * @return array{provider:string, provider_ref:string, status:string, snapshot:array}
      */
     public function create(array $input): array;

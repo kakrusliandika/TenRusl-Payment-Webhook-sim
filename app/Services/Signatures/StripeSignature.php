@@ -20,16 +20,16 @@ class StripeSignature
         }
 
         $sigHeader = $request->header('Stripe-Signature');
-        if (!$sigHeader) {
+        if (! $sigHeader) {
             return false;
         }
 
         [$timestamp, $signatures] = self::parseStripeHeader($sigHeader);
-        if (!$timestamp || empty($signatures)) {
+        if (! $timestamp || empty($signatures)) {
             return false;
         }
 
-        $signedPayload = $timestamp . '.' . $rawBody;
+        $signedPayload = $timestamp.'.'.$rawBody;
         $expected = hash_hmac('sha256', $signedPayload, $secret);
 
         foreach ($signatures as $candidate) {

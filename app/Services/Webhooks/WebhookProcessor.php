@@ -24,11 +24,11 @@ final class WebhookProcessor
     /**
      * Proses sebuah event webhook.
      *
-     * @param  string $provider  contoh: 'stripe','xendit','midtrans',dst.
-     * @param  string $eventId   ID unik event dari provider (atau buatkan hash jika tidak ada).
-     * @param  string $type      tipe/subject event (optional, untuk log)
-     * @param  string $rawBody   payload mentah (string JSON/form) untuk arsip/signature audit
-     * @param  array  $payload   payload terurai (array)
+     * @param  string  $provider  contoh: 'stripe','xendit','midtrans',dst.
+     * @param  string  $eventId  ID unik event dari provider (atau buatkan hash jika tidak ada).
+     * @param  string  $type  tipe/subject event (optional, untuk log)
+     * @param  string  $rawBody  payload mentah (string JSON/form) untuk arsip/signature audit
+     * @param  array  $payload  payload terurai (array)
      * @return array{
      *   duplicate:bool,
      *   persisted:bool,
@@ -50,20 +50,20 @@ final class WebhookProcessor
 
         if ($event) {
             // Tambah hit counter / attempts
-            $event->attempts        = ($event->attempts ?? 0) + 1;
+            $event->attempts = ($event->attempts ?? 0) + 1;
             $event->last_attempt_at = $now;
             $event->save();
             $duplicate = true;
         } else {
             // simpan baru
-            $event = new WebhookEvent();
-            $event->provider        = $provider;
-            $event->event_id        = $eventId;
-            $event->event_type      = $type;
-            $event->payload_raw     = $rawBody;
-            $event->payload         = $payload;
-            $event->attempts        = 1;
-            $event->received_at     = $now;
+            $event = new WebhookEvent;
+            $event->provider = $provider;
+            $event->event_id = $eventId;
+            $event->event_type = $type;
+            $event->payload_raw = $rawBody;
+            $event->payload = $payload;
+            $event->attempts = 1;
+            $event->received_at = $now;
             $event->last_attempt_at = $now;
             $event->save();
         }
@@ -73,13 +73,13 @@ final class WebhookProcessor
 
         // 3) Coba update Payment jika bisa menemukan provider_ref
         $providerRef = $this->extractProviderRef($provider, $payload);
-        $persisted   = false;
+        $persisted = false;
 
         if ($providerRef !== null) {
             $persisted = $this->applyPaymentStatus($provider, $providerRef, $status);
             $event->payment_provider_ref = $providerRef;
-            $event->payment_status       = $status;
-            $event->processed_at         = $now;
+            $event->payment_status = $status;
+            $event->processed_at = $now;
             $event->save();
         }
 
@@ -92,11 +92,11 @@ final class WebhookProcessor
         }
 
         return [
-            'duplicate'            => $duplicate,
-            'persisted'            => $persisted,
-            'status'               => $status,
+            'duplicate' => $duplicate,
+            'persisted' => $persisted,
+            'status' => $status,
             'payment_provider_ref' => $providerRef,
-            'next_retry_ms'        => $nextRetryMs,
+            'next_retry_ms' => $nextRetryMs,
         ];
     }
 
@@ -116,7 +116,7 @@ final class WebhookProcessor
             'paid', 'succeeded', 'success', 'completed', 'captured',
             'charge.succeeded', 'payment_intent.succeeded', 'paid_out', 'settled',
         ];
-        $falsy  = [
+        $falsy = [
             'failed', 'canceled', 'cancelled', 'void', 'expired', 'denied', 'rejected',
             'charge.failed', 'payment_intent.canceled',
         ];
@@ -132,6 +132,7 @@ final class WebhookProcessor
         if ($provider === 'midtrans') {
             // midtrans: capture/settlement = success, pending, deny/expire/cancel = failed
             $vt = strtolower((string) ($p['transaction_status'] ?? ''));
+
             return match ($vt) {
                 'capture', 'settlement' => 'succeeded',
                 'deny', 'expire', 'cancel' => 'failed',
@@ -167,7 +168,7 @@ final class WebhookProcessor
         ];
 
         // Provider-spesifik tambahan
-        if ($provider === 'midtrans' && !empty($p['order_id'])) {
+        if ($provider === 'midtrans' && ! empty($p['order_id'])) {
             $candidates[] = (string) $p['order_id'];
         }
 
@@ -176,6 +177,7 @@ final class WebhookProcessor
                 return $val;
             }
         }
+
         return null;
     }
 
@@ -189,7 +191,7 @@ final class WebhookProcessor
             ->where('provider', $provider)
             ->where('provider_ref', $providerRef)
             ->update([
-                'status'     => $status,
+                'status' => $status,
                 'updated_at' => now(),
             ]);
     }

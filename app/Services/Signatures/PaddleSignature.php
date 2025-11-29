@@ -45,7 +45,7 @@ class PaddleSignature
         }
 
         $ts = $parts['ts'] ?? null;
-        if (!$ts) {
+        if (! $ts) {
             return false;
         }
 
@@ -63,7 +63,7 @@ class PaddleSignature
             return false;
         }
 
-        $signedPayload = $ts . ':' . $rawBody;
+        $signedPayload = $ts.':'.$rawBody;
         $expected = hash_hmac('sha256', $signedPayload, $secret);
 
         foreach ($provided as $sig) {
@@ -90,12 +90,12 @@ class PaddleSignature
         $fields = [];
         parse_str($rawBody, $fields);
 
-        if (!is_array($fields)) {
+        if (! is_array($fields)) {
             return false;
         }
 
         $pSignature = $fields['p_signature'] ?? null;
-        if (!$pSignature) {
+        if (! $pSignature) {
             return false;
         }
 

@@ -24,7 +24,7 @@ class XenditSignature
         $token = $request->header('x-callback-token')
               ?? $request->header('X-CALLBACK-TOKEN');
 
-        if (!is_string($token) || $token === '') {
+        if (! is_string($token) || $token === '') {
             return false;
         }
 

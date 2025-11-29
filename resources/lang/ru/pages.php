@@ -3,8 +3,8 @@
 return [
 
     'back_to_providers' => 'Назад к провайдерам',
-    'view_details'      => 'Показать детали',
-    'breadcrumb'        => 'Хлебные крошки',
+    'view_details' => 'Показать детали',
+    'breadcrumb' => 'Хлебные крошки',
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'search_providers' => 'Поиск провайдеров...',
-    'no_results'       => 'Ни один провайдер не соответствует вашему запросу.',
+    'no_results' => 'Ни один провайдер не соответствует вашему запросу.',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,31 +20,31 @@ return [
     |--------------------------------------------------------------------------
     */
     'provider_default_name' => 'Провайдер',
-    'provider_label'        => 'Провайдер',
-    'provider_endpoints'    => 'Эндпоинты',
+    'provider_label' => 'Провайдер',
+    'provider_endpoints' => 'Эндпоинты',
     'signature_notes_title' => 'Примечания по подписи',
     'example_payload_title' => 'Пример payload',
-    'view_docs'             => 'Открыть документацию',
+    'view_docs' => 'Открыть документацию',
 
-    'create_payment'  => 'Создать платёж (idempotent)',
-    'get_payment'     => 'Получить статус платежа',
+    'create_payment' => 'Создать платёж (idempotent)',
+    'get_payment' => 'Получить статус платежа',
     'receive_webhook' => 'Получить Webhook',
 
     'endpoint_list' => [
         'create_payment' => [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'note'   => 'Требуется Idempotency-Key',
+            'path' => '/api/payments',
+            'note' => 'Требуется Idempotency-Key',
         ],
         'get_payment' => [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'note'   => 'Получить статус платежа',
+            'path' => '/api/payments/{id}',
+            'note' => 'Получить статус платежа',
         ],
         'receive_webhook' => [
             'method' => 'POST',
-            'path'   => '/api/webhooks/{provider}',
-            'note'   => 'mock/xendit/midtrans/…',
+            'path' => '/api/webhooks/{provider}',
+            'note' => 'mock/xendit/midtrans/…',
         ],
     ],
 
@@ -53,7 +53,7 @@ return [
     | Errors / Empty states
     |--------------------------------------------------------------------------
     */
-    'not_found'    => 'Страница, которую вы ищете, не найдена.',
+    'not_found' => 'Страница, которую вы ищете, не найдена.',
     'server_error' => 'Произошла непредвиденная ошибка сервера. Пожалуйста, попробуйте ещё раз.',
 
     /*

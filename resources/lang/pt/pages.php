@@ -3,8 +3,8 @@
 return [
 
     'back_to_providers' => 'Voltar para provedores',
-    'view_details'      => 'Ver detalhes',
-    'breadcrumb'        => 'Trilha de navegação',
+    'view_details' => 'Ver detalhes',
+    'breadcrumb' => 'Trilha de navegação',
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'search_providers' => 'Buscar provedores...',
-    'no_results'       => 'Nenhum provedor corresponde à sua pesquisa.',
+    'no_results' => 'Nenhum provedor corresponde à sua pesquisa.',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,31 +20,31 @@ return [
     |--------------------------------------------------------------------------
     */
     'provider_default_name' => 'Provedor',
-    'provider_label'        => 'Provedor',
-    'provider_endpoints'    => 'Endpoints',
+    'provider_label' => 'Provedor',
+    'provider_endpoints' => 'Endpoints',
     'signature_notes_title' => 'Notas de assinatura',
     'example_payload_title' => 'Payload de exemplo',
-    'view_docs'             => 'Ver documentação',
+    'view_docs' => 'Ver documentação',
 
-    'create_payment'  => 'Criar pagamento (idempotente)',
-    'get_payment'     => 'Obter status do pagamento',
+    'create_payment' => 'Criar pagamento (idempotente)',
+    'get_payment' => 'Obter status do pagamento',
     'receive_webhook' => 'Receber webhook',
 
     'endpoint_list' => [
         'create_payment' => [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'note'   => 'Idempotency-Key obrigatório',
+            'path' => '/api/payments',
+            'note' => 'Idempotency-Key obrigatório',
         ],
         'get_payment' => [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'note'   => 'Buscar status do pagamento',
+            'path' => '/api/payments/{id}',
+            'note' => 'Buscar status do pagamento',
         ],
         'receive_webhook' => [
             'method' => 'POST',
-            'path'   => '/api/webhooks/{provider}',
-            'note'   => 'mock/xendit/midtrans/…',
+            'path' => '/api/webhooks/{provider}',
+            'note' => 'mock/xendit/midtrans/…',
         ],
     ],
 
@@ -53,7 +53,7 @@ return [
     | Errors / Empty states
     |--------------------------------------------------------------------------
     */
-    'not_found'    => 'A página que você está procurando não foi encontrada.',
+    'not_found' => 'A página que você está procurando não foi encontrada.',
     'server_error' => 'Ocorreu um erro inesperado no servidor. Tente novamente.',
 
     /*

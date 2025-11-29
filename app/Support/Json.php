@@ -20,11 +20,11 @@ final class Json
     public static function encode(mixed $value, int $flags = 0, int $depth = 512): string
     {
         $flags |= JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR;
+
         return json_encode($value, $flags, $depth);
     }
 
     /**
-     * @return mixed
      * @throws JsonException
      */
     public static function decode(string $json, bool $assoc = true, int $depth = 512): mixed
@@ -33,7 +33,7 @@ final class Json
     }
 
     /**
-     * @return mixed|null  null jika gagal decode
+     * @return mixed|null null jika gagal decode
      */
     public static function tryDecode(string $json, bool $assoc = true, int $depth = 512): mixed
     {
@@ -51,6 +51,7 @@ final class Json
     {
         try {
             self::decode($value, true);
+
             return true;
         } catch (JsonException) {
             return false;

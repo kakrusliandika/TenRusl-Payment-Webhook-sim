@@ -3,15 +3,16 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+
 use function Pest\Laravel\postJson;
 
 it('accepts PayPal webhook with (bypassed) signature verification and returns 202', function () {
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
     $payload = [
-        'id'         => 'WH-' . now()->timestamp,
+        'id' => 'WH-'.now()->timestamp,
         'event_type' => 'PAYMENT.SALE.COMPLETED',
-        'resource'   => ['id' => 'sale_' . now()->timestamp],
+        'resource' => ['id' => 'sale_'.now()->timestamp],
     ];
 
     $resp = postJson('/api/v1/webhooks/paypal', $payload);
@@ -19,7 +20,7 @@ it('accepts PayPal webhook with (bypassed) signature verification and returns 20
     $resp->assertStatus(202)
         ->assertJsonStructure([
             'data' => [
-                'event'  => ['provider', 'event_id', 'type'],
+                'event' => ['provider', 'event_id', 'type'],
                 'result' => ['duplicate', 'persisted', 'status'],
             ],
         ])
@@ -29,7 +30,7 @@ it('accepts PayPal webhook with (bypassed) signature verification and returns 20
 it('rejects PayPal webhook with missing signature headers and returns 401', function () {
     // Middleware aktif; kirim tanpa header yang diharapkan → 401
     $resp = postJson('/api/v1/webhooks/paypal', [
-        'id'         => 'WH-invalid',
+        'id' => 'WH-invalid',
         'event_type' => 'PAYMENT.SALE.COMPLETED',
     ]);
 

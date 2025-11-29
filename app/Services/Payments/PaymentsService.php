@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace App\Services\Payments;
 
-use App\Services\Payments\Contracts\PaymentAdapter;
-use App\Services\Payments\Adapters\MockAdapter;
-use App\Services\Payments\Adapters\XenditAdapter;
-use App\Services\Payments\Adapters\MidtransAdapter;
-use App\Services\Payments\Adapters\StripeAdapter;
-use App\Services\Payments\Adapters\PaypalAdapter;
-use App\Services\Payments\Adapters\PaddleAdapter;
-use App\Services\Payments\Adapters\LemonSqueezyAdapter;
 use App\Services\Payments\Adapters\AirwallexAdapter;
-use App\Services\Payments\Adapters\TripayAdapter;
-use App\Services\Payments\Adapters\DokuAdapter;
-use App\Services\Payments\Adapters\DanaAdapter;
-use App\Services\Payments\Adapters\OyAdapter;
-use App\Services\Payments\Adapters\PayoneerAdapter;
-use App\Services\Payments\Adapters\SkrillAdapter;
 use App\Services\Payments\Adapters\AmazonBwpAdapter;
+use App\Services\Payments\Adapters\DanaAdapter;
+use App\Services\Payments\Adapters\DokuAdapter;
+use App\Services\Payments\Adapters\LemonSqueezyAdapter;
+use App\Services\Payments\Adapters\MidtransAdapter;
+use App\Services\Payments\Adapters\MockAdapter;
+use App\Services\Payments\Adapters\OyAdapter;
+use App\Services\Payments\Adapters\PaddleAdapter;
+use App\Services\Payments\Adapters\PayoneerAdapter;
+use App\Services\Payments\Adapters\PaypalAdapter;
+use App\Services\Payments\Adapters\SkrillAdapter;
+use App\Services\Payments\Adapters\StripeAdapter;
+use App\Services\Payments\Adapters\TripayAdapter;
+use App\Services\Payments\Adapters\XenditAdapter;
+use App\Services\Payments\Contracts\PaymentAdapter;
 use InvalidArgumentException;
 
 /**
@@ -36,29 +36,29 @@ final class PaymentsService
     private array $adapters = [];
 
     /**
-     * @param iterable<PaymentAdapter>|null $adapters
-     * @param array<string>|null            $allowedProviders
+     * @param  iterable<PaymentAdapter>|null  $adapters
+     * @param  array<string>|null  $allowedProviders
      */
-    public function __construct(iterable $adapters = null, ?array $allowedProviders = null)
+    public function __construct(?iterable $adapters = null, ?array $allowedProviders = null)
     {
         // Daftar default bila tidak di-inject
         if ($adapters === null) {
             $adapters = [
-                new MockAdapter(),
-                new XenditAdapter(),
-                new MidtransAdapter(),
-                new StripeAdapter(),
-                new PaypalAdapter(),
-                new PaddleAdapter(),
-                new LemonSqueezyAdapter(),
-                new AirwallexAdapter(),
-                new TripayAdapter(),
-                new DokuAdapter(),
-                new DanaAdapter(),
-                new OyAdapter(),
-                new PayoneerAdapter(),
-                new SkrillAdapter(),
-                new AmazonBwpAdapter(),
+                new MockAdapter,
+                new XenditAdapter,
+                new MidtransAdapter,
+                new StripeAdapter,
+                new PaypalAdapter,
+                new PaddleAdapter,
+                new LemonSqueezyAdapter,
+                new AirwallexAdapter,
+                new TripayAdapter,
+                new DokuAdapter,
+                new DanaAdapter,
+                new OyAdapter,
+                new PayoneerAdapter,
+                new SkrillAdapter,
+                new AmazonBwpAdapter,
             ];
         }
 
@@ -71,7 +71,7 @@ final class PaymentsService
 
         foreach ($adapters as $adapter) {
             $name = $adapter->provider();
-            if (!empty($allowedProviders) && !in_array($name, $allowedProviders, true)) {
+            if (! empty($allowedProviders) && ! in_array($name, $allowedProviders, true)) {
                 continue; // skip yang tidak di-allow
             }
             $this->adapters[$name] = $adapter;
@@ -94,6 +94,7 @@ final class PaymentsService
     public function providers(): array
     {
         ksort($this->adapters);
+
         return array_keys($this->adapters);
     }
 
@@ -102,16 +103,16 @@ final class PaymentsService
      */
     public function getAdapter(string $provider): PaymentAdapter
     {
-        if (!isset($this->adapters[$provider])) {
+        if (! isset($this->adapters[$provider])) {
             throw new InvalidArgumentException("Unknown or disabled provider: {$provider}");
         }
+
         return $this->adapters[$provider];
     }
 
     /**
      * Buat pembayaran simulasi via adapter terkait.
      *
-     * @param  array $input
      * @return array{provider:string, provider_ref:string, status:string, snapshot:array}
      */
     public function create(string $provider, array $input): array

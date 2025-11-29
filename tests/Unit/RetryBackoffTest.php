@@ -10,7 +10,10 @@ it('gives increasing delays with sane bounds', function () {
 
     $method = null;
     foreach (['nextDelaySeconds', 'delaySeconds', 'forAttempt', 'delayForAttempt'] as $m) {
-        if (method_exists($rb, $m)) { $method = $m; break; }
+        if (method_exists($rb, $m)) {
+            $method = $m;
+            break;
+        }
     }
     expect($method)->not->toBeNull();
 

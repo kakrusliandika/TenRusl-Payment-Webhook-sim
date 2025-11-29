@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\PaymentsController;
 use App\Http\Controllers\Api\V1\WebhooksController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,7 +17,7 @@ Route::prefix('v1')
     ->name('api.v1.')
     ->group(function () {
         // Provider allowlist untuk constraint
-        $providers = (array) config('tenrusl.providers_allowlist', ['mock','xendit','midtrans']);
+        $providers = (array) config('tenrusl.providers_allowlist', ['mock', 'xendit', 'midtrans']);
 
         // -------------------------
         // Payments
@@ -33,14 +33,18 @@ Route::prefix('v1')
         // -------------------------
         // Webhooks — throttled + signature verify
         // -------------------------
-        Route::post('/webhooks/{provider}', [WebhooksController::class, 'receive'])
-            ->whereIn('provider', $providers)
-            ->middleware(['throttle:webhooks', 'verify.webhook.signature'])
-            ->name('webhooks.receive');
+        Route::middleware(['throttle:webhooks'])
+            ->group(function () use ($providers) {
+                Route::post('/webhooks/{provider}', [WebhooksController::class, 'receive'])
+                    ->whereIn('provider', $providers)
+                    ->middleware('verify.webhook.signature')
+                    ->name('webhooks.receive');
 
-        // Preflight CORS (OPTIONS) untuk klien yang strict
-        Route::options('/webhooks/{provider}', fn () => response()->noContent(204))
-            ->whereIn('provider', $providers);
+                // Preflight CORS (OPTIONS) untuk klien yang strict
+                Route::options('/webhooks/{provider}', fn () => response()->noContent(204))
+                    ->whereIn('provider', $providers)
+                    ->name('webhooks.options');
+            });
     });
 
 /*
@@ -50,8 +54,8 @@ Route::prefix('v1')
 */
 Route::fallback(function () {
     return response()->json([
-        'error'   => 'not_found',
+        'error' => 'not_found',
         'message' => 'Endpoint not found',
-        'code'    => '404',
+        'code' => '404',
     ], 404);
 });

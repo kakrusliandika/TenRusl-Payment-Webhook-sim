@@ -22,27 +22,27 @@ TEXT
     ],
 
     'example_payload' => [
-        'meta'     => ['event_name' => 'order_created'],
-        'data'     => ['id' => 'ord_001', 'status' => 'paid'],
+        'meta' => ['event_name' => 'order_created'],
+        'data' => ['id' => 'ord_001', 'status' => 'paid'],
         'provider' => 'lemonsqueezy',
-        'sent_at'  => now()->toIso8601String(),
+        'sent_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/lemonsqueezy',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/lemonsqueezy',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

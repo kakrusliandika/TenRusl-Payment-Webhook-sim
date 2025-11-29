@@ -22,32 +22,32 @@ TEXT
     ],
 
     'example_payload' => [
-        'event'     => 'checkout.transaction.completed',
-        'provider'  => 'payoneer',
-        'data'      => [
-            'orderId'  => 'PO-001',
-            'amount'   => 25000,
+        'event' => 'checkout.transaction.completed',
+        'provider' => 'payoneer',
+        'data' => [
+            'orderId' => 'PO-001',
+            'amount' => 25000,
             'currency' => 'IDR',
-            'status'   => 'COMPLETED',
+            'status' => 'COMPLETED',
         ],
-        'sent_at'   => now()->toIso8601String(),
+        'sent_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/payoneer',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/payoneer',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

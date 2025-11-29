@@ -24,14 +24,14 @@ TEXT
     ],
 
     'example_payload' => [
-        'event_id'   => 'evt_' . now()->timestamp,
+        'event_id' => 'evt_'.now()->timestamp,
         'event_type' => 'transaction.completed',
-        'provider'   => 'paddle',
-        'data'       => [
+        'provider' => 'paddle',
+        'data' => [
             'transaction_id' => 'txn_001',
-            'amount'         => 25000,
-            'currency_code'  => 'IDR',
-            'status'         => 'completed',
+            'amount' => 25000,
+            'currency_code' => 'IDR',
+            'status' => 'completed',
         ],
         'occurred_at' => now()->toIso8601String(),
     ],
@@ -39,18 +39,18 @@ TEXT
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/paddle',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/paddle',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

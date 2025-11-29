@@ -26,7 +26,7 @@ class PayoneerSignature
         // Optional merchant id check
         $cfgMerchantId = (string) config('tenrusl.payoneer_merchant_id', '');
         $hdrMerchantId = (string) $request->header('X-Payoneer-Merchant-Id', '');
-        if ($cfgMerchantId !== '' && $hdrMerchantId !== '' && !hash_equals($cfgMerchantId, $hdrMerchantId)) {
+        if ($cfgMerchantId !== '' && $hdrMerchantId !== '' && ! hash_equals($cfgMerchantId, $hdrMerchantId)) {
             return false;
         }
 

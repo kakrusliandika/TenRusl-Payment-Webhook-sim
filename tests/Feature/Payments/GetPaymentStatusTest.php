@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+
 use function Pest\Laravel\getJson;
 
 uses(RefreshDatabase::class);
@@ -11,11 +12,11 @@ uses(RefreshDatabase::class);
 it('returns payment status by provider and provider_ref', function () {
     /** @var \App\Models\Payment $payment */
     $payment = Payment::factory()->create([
-        'provider'     => 'mock',
-        'provider_ref' => 'sim_mock_' . now()->timestamp,
-        'amount'       => 100000,
-        'currency'     => 'IDR',
-        'status'       => 'pending',
+        'provider' => 'mock',
+        'provider_ref' => 'sim_mock_'.now()->timestamp,
+        'amount' => 100000,
+        'currency' => 'IDR',
+        'status' => 'pending',
     ]);
 
     $resp = getJson(sprintf(

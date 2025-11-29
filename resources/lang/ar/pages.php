@@ -3,8 +3,8 @@
 return [
 
     'back_to_providers' => 'الرجوع إلى المزودين',
-    'view_details'      => 'عرض التفاصيل',
-    'breadcrumb'        => 'مسار التنقل',
+    'view_details' => 'عرض التفاصيل',
+    'breadcrumb' => 'مسار التنقل',
 
     /*
     |--------------------------------------------------------------------------
@@ -12,7 +12,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'search_providers' => 'ابحث عن المزودين...',
-    'no_results'       => 'لا يوجد أي مزود يطابق عملية البحث.',
+    'no_results' => 'لا يوجد أي مزود يطابق عملية البحث.',
 
     /*
     |--------------------------------------------------------------------------
@@ -20,31 +20,31 @@ return [
     |--------------------------------------------------------------------------
     */
     'provider_default_name' => 'المزود',
-    'provider_label'        => 'المزود',
-    'provider_endpoints'    => 'نقاط النهاية',
+    'provider_label' => 'المزود',
+    'provider_endpoints' => 'نقاط النهاية',
     'signature_notes_title' => 'ملاحظات التوقيع',
     'example_payload_title' => 'مثال على الحمولة',
-    'view_docs'             => 'عرض المستندات',
+    'view_docs' => 'عرض المستندات',
 
-    'create_payment'  => 'إنشاء دفعة (idempotent)',
-    'get_payment'     => 'جلب حالة الدفعة',
+    'create_payment' => 'إنشاء دفعة (idempotent)',
+    'get_payment' => 'جلب حالة الدفعة',
     'receive_webhook' => 'استقبال Webhook',
 
     'endpoint_list' => [
         'create_payment' => [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'note'   => 'يتطلب Idempotency-Key',
+            'path' => '/api/payments',
+            'note' => 'يتطلب Idempotency-Key',
         ],
         'get_payment' => [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'note'   => 'جلب حالة الدفعة',
+            'path' => '/api/payments/{id}',
+            'note' => 'جلب حالة الدفعة',
         ],
         'receive_webhook' => [
             'method' => 'POST',
-            'path'   => '/api/webhooks/{provider}',
-            'note'   => 'mock/xendit/midtrans/…',
+            'path' => '/api/webhooks/{provider}',
+            'note' => 'mock/xendit/midtrans/…',
         ],
     ],
 
@@ -53,7 +53,7 @@ return [
     | Errors / Empty states
     |--------------------------------------------------------------------------
     */
-    'not_found'    => 'الصفحة التي تبحث عنها غير موجودة.',
+    'not_found' => 'الصفحة التي تبحث عنها غير موجودة.',
     'server_error' => 'حدث خطأ غير متوقع في الخادم. يرجى المحاولة مرة أخرى.',
 
     /*

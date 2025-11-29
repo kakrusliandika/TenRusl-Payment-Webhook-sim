@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+
 use function Pest\Laravel\postJson;
 
 it('accepts Payoneer webhook with (bypassed) signature verification and returns 202', function () {
@@ -10,8 +11,8 @@ it('accepts Payoneer webhook with (bypassed) signature verification and returns 
 
     $payload = [
         'event' => 'payment.approved',
-        'id'    => 'py_' . now()->timestamp,
-        'data'  => ['payoutId' => 'PO-' . now()->timestamp],
+        'id' => 'py_'.now()->timestamp,
+        'data' => ['payoutId' => 'PO-'.now()->timestamp],
     ];
 
     $resp = postJson('/api/v1/webhooks/payoneer', $payload, [
@@ -22,7 +23,7 @@ it('accepts Payoneer webhook with (bypassed) signature verification and returns 
     $resp->assertStatus(202)
         ->assertJsonStructure([
             'data' => [
-                'event'  => ['provider', 'event_id', 'type'],
+                'event' => ['provider', 'event_id', 'type'],
                 'result' => ['duplicate', 'persisted', 'status'],
             ],
         ])
@@ -32,7 +33,7 @@ it('accepts Payoneer webhook with (bypassed) signature verification and returns 
 it('rejects Payoneer webhook with invalid/missing signature and returns 401', function () {
     $payload = [
         'event' => 'payment.approved',
-        'id'    => 'py_invalid',
+        'id' => 'py_invalid',
     ];
 
     $resp = postJson('/api/v1/webhooks/payoneer', $payload /* no signature header */);

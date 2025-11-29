@@ -33,10 +33,11 @@ jobs:
           path: |
             ~/.composer/cache/files
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
+        run: composer install --no-interaction --prefer-dist --no-progress --ansi
 
       - name: Prepare app (.env, key)
         run: |
@@ -56,23 +57,32 @@ jobs:
           DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
         run: php artisan migrate --force --no-interaction -v
 
-      # Opsional: generate Swagger (kalau belum siap, boleh dihapus/skip error)
-      - name: Generate OpenAPI (l5-swagger)
-        run: php artisan l5-swagger:generate
-        continue-on-error: true
+      - name: Run Pint (lint)
+        run: composer format:check
 
-      - name: Run tests (Pest/Laravel)
+      - name: Run static analysis (PHPStan / Larastan)
+        run: composer analyse:larastan
+
+      - name: Run tests (Pest)
         env:
           APP_ENV: testing
           DB_CONNECTION: sqlite
           DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-        run: php artisan test --colors=always
+        run: composer test
 
-      # Opsional: Pint check (jangan fail build kalau belum pasang)
-      - name: Run Pint (optional)
-        run: |
-          if [ -f vendor/bin/pint ]; then
-            vendor/bin/pint --test
-          else
-            echo "Laravel Pint not installed; skipping."
-          fi
+      - name: Composer security audit
+        run: composer audit --locked
+
+      - name: Generate OpenAPI (l5-swagger)
+        run: php artisan l5-swagger:generate
+        continue-on-error: true
+
+      - name: Upload OpenAPI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-docs
+          path: |
+            docs/openapi.yaml
+            storage/api-docs/**
+          if-no-files-found: ignore

@@ -23,7 +23,7 @@ class AmazonBwpSignature
     public static function verify(string $rawBody, Request $request): bool
     {
         $signatureB64 = $request->header('x-amzn-signature');
-        if (!$signatureB64) {
+        if (! $signatureB64) {
             return false;
         }
 
@@ -53,6 +53,7 @@ class AmazonBwpSignature
             return $trim;
         }
         $wrapped = chunk_split(str_replace(["\r", "\n", ' '], '', $trim), 64, "\n");
+
         return "-----BEGIN PUBLIC KEY-----\n{$wrapped}-----END PUBLIC KEY-----\n";
     }
 }

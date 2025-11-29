@@ -4,14 +4,15 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('webhook_events', function (Blueprint $table) {
             // ULID primary key (string)
             $table->ulid('id')->primary();
 
-            $table->string('provider', 20);      // mock | xendit | midtrans
+            $table->string('provider', 20);      // mock | xendit | midtrans | dst.
             $table->string('event_id', 150);     // id event dari provider
 
             // Simpan jejak verifikasi (HMAC/token/hash) untuk audit
@@ -28,8 +29,8 @@ return new class extends Migration {
 
             $table->timestamps();
 
-            // Dedup: provider+event_id harus unik
-            $table->unique(['provider', 'event_id']);
+            // Dedup kuat: kombinasi provider + event_id harus unik
+            $table->unique(['provider', 'event_id'], 'webhook_events_provider_event_unique');
         });
     }
 

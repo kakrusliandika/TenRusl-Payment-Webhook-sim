@@ -21,7 +21,7 @@ it('treats duplicate event_id as idempotent (only one row saved)', function () {
     ];
 
     $json = json_encode($payload);
-    $sig  = hash_hmac('sha256', $json, config('tenrusl.mock_secret'));
+    $sig = hash_hmac('sha256', $json, config('tenrusl.mock_secret'));
 
     // First delivery
     $r1 = $this->withHeaders(['X-Mock-Signature' => $sig])

@@ -3,34 +3,63 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\HandleCors;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__ . '/../routes/web.php',
-        api: __DIR__ . '/../routes/api.php',
-        commands: __DIR__ . '/../routes/console.php',
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // === Aliases (dipertahankan + ditambah security.headers) ===
+        // ============================================================
+        // Alias middleware
+        // ============================================================
         $middleware->alias([
-            'correlation.id'           => \App\Http\Middleware\CorrelationIdMiddleware::class,
+            // Menyematkan / membuat / mewariskan X-Request-ID ke tiap request.
+            'correlation.id' => \App\Http\Middleware\CorrelationIdMiddleware::class,
+
+            // Verifikasi signature webhook per provider (/webhooks/{provider}).
             'verify.webhook.signature' => \App\Http\Middleware\VerifyWebhookSignature::class,
-            'setlocale'                => \App\Http\Middleware\SetLocale::class,
-            'security.headers'         => \App\Http\Middleware\SecurityHeaders::class,
+
+            // Set locale (mis. berdasarkan header, user, atau query).
+            'setlocale' => \App\Http\Middleware\SetLocale::class,
+
+            // Header keamanan umum (X-Frame-Options, X-Content-Type-Options, dsb).
+            'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
         ]);
 
-        // === Sematkan ke grup bawaan ===
-        // Web: atur locale + header keamanan untuk semua respons web
+        // ============================================================
+        // Grup "web"
+        // ============================================================
+
+        // Untuk semua route web: set locale + header security.
         $middleware->appendToGroup('web', \App\Http\Middleware\SetLocale::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
 
-        // API: correlation id + header keamanan untuk semua respons API
+        // ============================================================
+        // Grup "api"
+        // ============================================================
+
+        // CORS untuk API.
+        // Secara default Laravel sudah punya HandleCors di global stack,
+        // tapi baris ini memastikan untuk grup 'api' tetap ter-apply
+        // meskipun suatu saat kamu override stack.
+        $middleware->appendToGroup('api', HandleCors::class);
+
+        // Correlation ID untuk semua request API (logging, tracing).
         $middleware->appendToGroup('api', \App\Http\Middleware\CorrelationIdMiddleware::class);
+
+        // Header keamanan tambahan untuk API.
         $middleware->appendToGroup('api', \App\Http\Middleware\SecurityHeaders::class);
 
-        // Catatan: 'verify.webhook.signature' dipakai per-route di routes/api.php sesuai kebutuhan.
-        // Jika butuh di awal chain grup, gunakan ->prependToGroup(...). :contentReference[oaicite:1]{index=1}
+        // Catatan:
+        // - 'verify.webhook.signature' dipakai per-route di routes/api.php
+        //   pada endpoint webhook saja, bukan seluruh API.
+        //   Contoh:
+        //   Route::post('/webhooks/{provider}', ...)
+        //       ->middleware('verify.webhook.signature');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

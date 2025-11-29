@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Jobs\ProcessWebhookEvent;
 use App\Models\WebhookEvent;
 use App\Services\Webhooks\WebhookProcessor;
 use Carbon\CarbonImmutable;
@@ -16,25 +17,29 @@ class RetryWebhookCommand extends Command
         {--limit=100 : Maksimal event yang diproses dalam satu run}
         {--max-attempts=5 : Batas percobaan sebelum berhenti retry}
         {--mode=full : Mode backoff (full|equal|decorrelated)}
+        {--queue : Enqueue job ke queue (bukannya proses inline)}
     ';
 
     protected $description = 'Proses ulang event webhook yang masih pending (berdasar next_retry_at & attempts).';
 
     public function handle(WebhookProcessor $processor): int
     {
-        $provider     = (string) $this->option('provider');
-        $limit        = (int) $this->option('limit');
-        $maxAttempts  = (int) $this->option('max-attempts');
-        $now          = CarbonImmutable::now();
+        $provider = (string) $this->option('provider');
+        $limit = (int) $this->option('limit');
+        $maxAttempts = (int) $this->option('max-attempts');
+        $mode = (string) $this->option('mode');
+        $useQueue = (bool) $this->option('queue');
+
+        $now = CarbonImmutable::now();
 
         $query = WebhookEvent::query()
             ->where(function ($q) {
                 $q->whereNull('payment_status')
-                  ->orWhere('payment_status', 'pending');
+                    ->orWhere('payment_status', 'pending');
             })
             ->where(function ($q) use ($now) {
                 $q->whereNull('next_retry_at')
-                  ->orWhere('next_retry_at', '<=', $now);
+                    ->orWhere('next_retry_at', '<=', $now);
             })
             ->where('attempts', '<', $maxAttempts)
             ->orderBy('next_retry_at')
@@ -49,22 +54,35 @@ class RetryWebhookCommand extends Command
 
         if ($events->isEmpty()) {
             $this->info('Tidak ada event yang perlu di-retry.');
+
             return self::SUCCESS;
         }
 
-        $this->info(sprintf('Memproses %d event...', $events->count()));
+        $this->info(sprintf(
+            'Memproses %d event (mode=%s, max_attempts=%d%s)...',
+            $events->count(),
+            $mode,
+            $maxAttempts,
+            $useQueue ? ', via queue' : ', inline'
+        ));
+
         $bar = $this->output->createProgressBar($events->count());
         $bar->start();
 
         foreach ($events as $event) {
-            // Kirim ulang ke processor (idempotent & dedup aman)
-            $processor->process(
-                $event->provider,
-                $event->event_id,
-                $event->event_type ?? 'retry',
-                $event->payload_raw ?? '',
-                (array) $event->payload
-            );
+            if ($useQueue) {
+                // Enqueue ke queue (driver database untuk demo).
+                ProcessWebhookEvent::dispatch($event->id);
+            } else {
+                // Proses inline (sinkron).
+                $processor->process(
+                    $event->provider,
+                    $event->event_id,
+                    $event->event_type ?? 'retry',
+                    $event->payload_raw ?? '',
+                    (array) $event->payload
+                );
+            }
 
             $bar->advance();
         }

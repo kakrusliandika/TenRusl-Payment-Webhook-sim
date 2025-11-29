@@ -13,14 +13,14 @@ return [
     | Global Navigation
     |--------------------------------------------------------------------------
     */
-    'home_title'      => '홈',
+    'home_title' => '홈',
     'providers_title' => '프로바이더',
-    'features'        => '기능',
-    'endpoints'       => '엔드포인트',
-    'signature'       => '서명',
-    'tooling'         => '툴링',
-    'openapi'         => 'OpenAPI',
-    'github'          => 'GitHub',
+    'features' => '기능',
+    'endpoints' => '엔드포인트',
+    'signature' => '서명',
+    'tooling' => '툴링',
+    'openapi' => 'OpenAPI',
+    'github' => 'GitHub',
 
     /*
     |--------------------------------------------------------------------------
@@ -28,12 +28,12 @@ return [
     |--------------------------------------------------------------------------
     */
     'aria' => [
-        'primary_nav'  => '기본 내비게이션',
-        'utility_nav'  => '유틸리티 내비게이션',
-        'toggle_menu'  => '메인 내비게이션 메뉴 토글',
+        'primary_nav' => '기본 내비게이션',
+        'utility_nav' => '유틸리티 내비게이션',
+        'toggle_menu' => '메인 내비게이션 메뉴 토글',
         'toggle_theme' => '라이트/다크 테마 전환',
         'skip_to_main' => '메인 콘텐츠로 바로 이동',
-        'language'     => '인터페이스 언어 변경',
+        'language' => '인터페이스 언어 변경',
     ],
 
     /*
@@ -41,11 +41,11 @@ return [
     | Footer / Legal
     |--------------------------------------------------------------------------
     */
-    'terms'       => '이용약관',
-    'privacy'     => '개인정보 처리방침',
-    'cookies'     => '쿠키',
+    'terms' => '이용약관',
+    'privacy' => '개인정보 처리방침',
+    'cookies' => '쿠키',
     'footer_demo' => '현대적인 webhook-first 플로우를 학습·테스트·설명하기 위한 결제 아키텍처 데모 환경입니다.',
-    'build'       => '빌드',
+    'build' => '빌드',
 
     /*
     |--------------------------------------------------------------------------
@@ -53,9 +53,9 @@ return [
     |--------------------------------------------------------------------------
     */
     'meta' => [
-        'default_title'       => '결제 Webhook 시뮬레이터',
+        'default_title' => '결제 Webhook 시뮬레이터',
         'default_description' => 'Idempotent 연산, 검증된 Webhook 서명, 이벤트 중복 제거, 현실적인 재시도/백오프 동작으로 실제 결제 플로우를 시뮬레이션합니다. 라이브 결제 게이트웨이 자격 증명에 의존하거나 이를 노출할 필요가 없습니다.',
-        'default_image_alt'   => '결제 Webhook 시뮬레이터 아키텍처 다이어그램. 결제 프로바이더, Webhook 콜백, 재시도, 상태 업데이트가 표시됩니다.',
+        'default_image_alt' => '결제 Webhook 시뮬레이터 아키텍처 다이어그램. 결제 프로바이더, Webhook 콜백, 재시도, 상태 업데이트가 표시됩니다.',
     ],
 
     /*
@@ -64,126 +64,126 @@ return [
     |--------------------------------------------------------------------------
     */
     'home' => [
-        'title'       => '결제 Webhook 시뮬레이터',
+        'title' => '결제 Webhook 시뮬레이터',
         'description' => '프로덕션과 유사한 안전한 샌드박스에서 결제 연동을 안정화하세요. 실제 결제 게이트웨이에 요청을 보내기 전에 Idempotency-Key 처리, 서명 검증, 이벤트 중복 제거, 백오프가 적용된 재시도를 충분히 연습할 수 있습니다.',
         'hero' => [
             'heading_prefix' => 'PWS',
-            'heading_emph'   => 'Idempotent',
-            'lede'           => '여러 프로바이더에서 들어오는 결제 이벤트를 시뮬레이션하고, 원본 요청 본문 서명을 검증하며, 소란스러운 재시도를 중복 제거하고, 엔드 투 엔드로 현실적인 백오프 전략을 관찰합니다. 라이브 자격 증명이나 프로덕션 Webhook 을 건드릴 필요가 없습니다.',
-            'cta_docs'       => 'OpenAPI 레퍼런스',
-            'cta_features'   => '기능 둘러보기',
-            'cta_github'     => 'GitHub 에서 소스 보기',
+            'heading_emph' => 'Idempotent',
+            'lede' => '여러 프로바이더에서 들어오는 결제 이벤트를 시뮬레이션하고, 원본 요청 본문 서명을 검증하며, 소란스러운 재시도를 중복 제거하고, 엔드 투 엔드로 현실적인 백오프 전략을 관찰합니다. 라이브 자격 증명이나 프로덕션 Webhook 을 건드릴 필요가 없습니다.',
+            'cta_docs' => 'OpenAPI 레퍼런스',
+            'cta_features' => '기능 둘러보기',
+            'cta_github' => 'GitHub 에서 소스 보기',
             'stats' => [
                 'providers' => ['label' => '시뮬레이션된 프로바이더'],
-                'tests'     => ['label' => '자동화 테스트'],
-                'openapi'   => ['label' => '문서화된 엔드포인트'],
+                'tests' => ['label' => '자동화 테스트'],
+                'openapi' => ['label' => '문서화된 엔드포인트'],
             ],
-            'chip'           => 'POST : /api/webhooks/mock 서명된 JSON 페이로드',
-            'simulate'       => 'Idempotency, 서명 검사, 재시도 로직을 갖춘 실제 결제 Webhook 을 프로덕션에 연결하기 전에 시뮬레이션하세요.',
+            'chip' => 'POST : /api/webhooks/mock 서명된 JSON 페이로드',
+            'simulate' => 'Idempotency, 서명 검사, 재시도 로직을 갖춘 실제 결제 Webhook 을 프로덕션에 연결하기 전에 시뮬레이션하세요.',
         ],
         'sections' => [
             'features' => [
                 'title' => '기능',
-                'lede'  => '현실적이고 반복 가능한 시뮬레이션을 통해, 현대 게이트웨이가 프로덕션에서 Webhook 이벤트를 전송·서명·재전송하는 방식을 그대로 재현하여 결제 연동을 강화하고 안정화합니다.',
+                'lede' => '현실적이고 반복 가능한 시뮬레이션을 통해, 현대 게이트웨이가 프로덕션에서 Webhook 이벤트를 전송·서명·재전송하는 방식을 그대로 재현하여 결제 연동을 강화하고 안정화합니다.',
                 'ship' => '실제 게이트웨이 자격 증명 없이 더 안전한 결제 플로우를 배포하세요.',
                 'items' => [
                     [
                         'title' => 'Idempotency',
-                        'desc'  => 'Idempotency-Key 처리를 올바르게 연습하여, 중복 요청·재전송·클라이언트 재시도가 상태를 망치지 않고 하나의 일관된 결제 레코드로 귀결되도록 합니다.',
+                        'desc' => 'Idempotency-Key 처리를 올바르게 연습하여, 중복 요청·재전송·클라이언트 재시도가 상태를 망치지 않고 하나의 일관된 결제 레코드로 귀결되도록 합니다.',
                     ],
                     [
                         'title' => '서명 검증',
-                        'desc'  => 'HMAC, 타임스탬프, 시크릿을 사용해 원본 요청 본문과 프로바이더 헤더를 검증하고, 라이브 전에 서명 검증 로직을 완성할 수 있는 안전한 환경을 제공합니다.',
+                        'desc' => 'HMAC, 타임스탬프, 시크릿을 사용해 원본 요청 본문과 프로바이더 헤더를 검증하고, 라이브 전에 서명 검증 로직을 완성할 수 있는 안전한 환경을 제공합니다.',
                     ],
                     [
                         'title' => '중복 제거 & 재시도',
-                        'desc'  => '중복 Webhook 전송과 지수 백오프를 시뮬레이션해, 여러 번 실행해도 부작용이 없는 idempotent 하고 견고한 핸들러를 설계할 수 있습니다.',
+                        'desc' => '중복 Webhook 전송과 지수 백오프를 시뮬레이션해, 여러 번 실행해도 부작용이 없는 idempotent 하고 견고한 핸들러를 설계할 수 있습니다.',
                     ],
                     [
                         'title' => 'OpenAPI',
-                        'desc'  => '모든 결제 및 Webhook 엔드포인트를 설명하는 인터랙티브 OpenAPI 문서를 탐색하세요. 스키마, 예제, 바로 실행 가능한 curl 스니펫이 포함되어 있습니다.',
+                        'desc' => '모든 결제 및 Webhook 엔드포인트를 설명하는 인터랙티브 OpenAPI 문서를 탐색하세요. 스키마, 예제, 바로 실행 가능한 curl 스니펫이 포함되어 있습니다.',
                     ],
                     [
                         'title' => 'Postman',
-                        'desc'  => '큐레이션된 Postman 컬렉션을 가져와 엔드포인트를 호출하고, 페이로드를 조정하며, 선호하는 API 클라이언트에서 오류 시나리오를 리허설할 수 있습니다.',
+                        'desc' => '큐레이션된 Postman 컬렉션을 가져와 엔드포인트를 호출하고, 페이로드를 조정하며, 선호하는 API 클라이언트에서 오류 시나리오를 리허설할 수 있습니다.',
                     ],
                     [
                         'title' => 'CI 통합',
-                        'desc'  => '시뮬레이터를 CI 파이프라인에 연결해, 모든 push 시 테스트·린터·계약 검증을 수행하고, 프로덕션에 도달하기 오래 전에 연동 회귀를 발견합니다.',
+                        'desc' => '시뮬레이터를 CI 파이프라인에 연결해, 모든 push 시 테스트·린터·계약 검증을 수행하고, 프로덕션에 도달하기 오래 전에 연동 회귀를 발견합니다.',
                     ],
                 ],
             ],
             'endpoints' => [
                 'title' => '엔드포인트',
-                'lede'  => '작지만 현실적인 표면 영역을 정의합니다. 결제를 생성하고, 상태를 폴링하며, idempotent 의미론을 가진 프로바이더 스타일 Webhook 을 수신합니다.',
+                'lede' => '작지만 현실적인 표면 영역을 정의합니다. 결제를 생성하고, 상태를 폴링하며, idempotent 의미론을 가진 프로바이더 스타일 Webhook 을 수신합니다.',
                 'cards' => [
                     [
                         'title' => 'POST /api/payments',
-                        'desc'  => '새로운 시뮬레이션 결제 레코드를 생성합니다. 이 엔드포인트는 Idempotency-Key 헤더가 필수이며, 애플리케이션이 반복되는 결제 시도를 어떻게 중복 제거하는지 검증할 수 있습니다.',
+                        'desc' => '새로운 시뮬레이션 결제 레코드를 생성합니다. 이 엔드포인트는 Idempotency-Key 헤더가 필수이며, 애플리케이션이 반복되는 결제 시도를 어떻게 중복 제거하는지 검증할 수 있습니다.',
                     ],
                     [
                         'title' => 'GET /api/payments/{id}',
-                        'desc'  => '특정 결제에 대한 최신 상태를 조회합니다. 상태 전이와 시뮬레이터가 처리한 관련 Webhook 이벤트가 포함됩니다.',
+                        'desc' => '특정 결제에 대한 최신 상태를 조회합니다. 상태 전이와 시뮬레이터가 처리한 관련 Webhook 이벤트가 포함됩니다.',
                     ],
                     [
                         'title' => 'POST /api/webhooks/{provider}',
-                        'desc'  => '지정된 프로바이더(mock, xendit, midtrans 등)에 대한 Webhook 콜백을 수신합니다. 각 통합에 맞게 설계된 현실적인 페이로드, 헤더, 서명 스킴을 사용합니다.',
+                        'desc' => '지정된 프로바이더(mock, xendit, midtrans 등)에 대한 Webhook 콜백을 수신합니다. 각 통합에 맞게 설계된 현실적인 페이로드, 헤더, 서명 스킴을 사용합니다.',
                     ],
                 ],
             ],
             'providers' => [
                 'title' => '프로바이더',
-                'lede'  => '여러 결제 게이트웨이의 현실적인 Webhook 플로우를 단일 샌드박스에서 테스트할 수 있으며, 라이브 자격 증명이 필요 없습니다.',
+                'lede' => '여러 결제 게이트웨이의 현실적인 Webhook 플로우를 단일 샌드박스에서 테스트할 수 있으며, 라이브 자격 증명이 필요 없습니다.',
                 'cta_all' => '모든 프로바이더 보기',
-                'map'   => [
-                    'mock'         => 'Mock',
-                    'xendit'       => 'Xendit',
-                    'midtrans'     => 'Midtrans',
-                    'stripe'       => 'Stripe',
-                    'paypal'       => 'PayPal',
-                    'paddle'       => 'Paddle',
+                'map' => [
+                    'mock' => 'Mock',
+                    'xendit' => 'Xendit',
+                    'midtrans' => 'Midtrans',
+                    'stripe' => 'Stripe',
+                    'paypal' => 'PayPal',
+                    'paddle' => 'Paddle',
                     'lemonsqueezy' => 'Lemon Squeezy',
-                    'airwallex'    => 'Airwallex',
-                    'tripay'       => 'Tripay',
-                    'doku'         => 'DOKU',
-                    'dana'         => 'DANA',
-                    'oy'           => 'OY!',
-                    'payoneer'     => 'Payoneer',
-                    'skrill'       => 'Skrill',
-                    'amazon_bwp'   => 'Amazon BWP',
+                    'airwallex' => 'Airwallex',
+                    'tripay' => 'Tripay',
+                    'doku' => 'DOKU',
+                    'dana' => 'DANA',
+                    'oy' => 'OY!',
+                    'payoneer' => 'Payoneer',
+                    'skrill' => 'Skrill',
+                    'amazon_bwp' => 'Amazon BWP',
                 ],
             ],
             'signature' => [
                 'title' => '서명 검증',
-                'lede'  => 'HMAC 서명, 타임스탬프, 엄격한 헤더 검사를 통해 Webhook 원본 페이로드를 검증합니다.',
-                'compare'  => '프로바이더가 보낸 서명과, 원본 요청 본문·공유 시크릿·타임스탬프에서 계산한 서명을 타이밍 공격에 강한 방식으로 비교합니다.',
-                'reject'    => '일치하지 않는 서명과 오래된 타임스탬프를 자동으로 거부합니다.',
+                'lede' => 'HMAC 서명, 타임스탬프, 엄격한 헤더 검사를 통해 Webhook 원본 페이로드를 검증합니다.',
+                'compare' => '프로바이더가 보낸 서명과, 원본 요청 본문·공유 시크릿·타임스탬프에서 계산한 서명을 타이밍 공격에 강한 방식으로 비교합니다.',
+                'reject' => '일치하지 않는 서명과 오래된 타임스탬프를 자동으로 거부합니다.',
                 'cards' => [
                     [
                         'title' => 'HMAC / 타임스탬프',
-                        'desc'  => '재전송 공격을 방어하는 타임스탬프 기반 HMAC 서명을 실험하고, 원본 바디 해시·공유 시크릿·서명된 헤더가 어떻게 결합되어 각 Webhook 이벤트에 대한 검증 가능한 감사 추적을 형성하는지 확인합니다.',
+                        'desc' => '재전송 공격을 방어하는 타임스탬프 기반 HMAC 서명을 실험하고, 원본 바디 해시·공유 시크릿·서명된 헤더가 어떻게 결합되어 각 Webhook 이벤트에 대한 검증 가능한 감사 추적을 형성하는지 확인합니다.',
                     ],
                     [
                         'title' => '헤더 기반',
-                        'desc'  => '단순한 bearer 시크릿부터 구조화된 서명 래퍼까지 프로바이더별 헤더와 토큰을 사용하여, 위조된 페이로드는 차단하면서도 정상 이벤트는 흐르게 유지합니다.',
+                        'desc' => '단순한 bearer 시크릿부터 구조화된 서명 래퍼까지 프로바이더별 헤더와 토큰을 사용하여, 위조된 페이로드는 차단하면서도 정상 이벤트는 흐르게 유지합니다.',
                     ],
                 ],
             ],
             'tooling' => [
                 'title' => '툴링',
-                'work'  => '로컬 개발 스택과 함께 사용',
+                'work' => '로컬 개발 스택과 함께 사용',
                 'cards' => [
                     [
                         'title' => 'OpenAPI',
-                        'desc'  => '내장 OpenAPI 탐색기를 사용해 스키마를 확인하고, 요청 예제를 생성하며, 브라우저에서 엔드포인트를 직접 호출할 수 있습니다. 팀과 결제 플로우를 공유·문서화하기에 좋습니다.',
+                        'desc' => '내장 OpenAPI 탐색기를 사용해 스키마를 확인하고, 요청 예제를 생성하며, 브라우저에서 엔드포인트를 직접 호출할 수 있습니다. 팀과 결제 플로우를 공유·문서화하기에 좋습니다.',
                     ],
                     [
                         'title' => 'Postman',
-                        'desc'  => 'Postman 컬렉션을 클론해 스크립트 플로우를 실행하고, 환경을 파라미터화하며, 동일한 요청 시퀀스에서 서로 다른 프로바이더의 동작을 빠르게 비교합니다.',
+                        'desc' => 'Postman 컬렉션을 클론해 스크립트 플로우를 실행하고, 환경을 파라미터화하며, 동일한 요청 시퀀스에서 서로 다른 프로바이더의 동작을 빠르게 비교합니다.',
                     ],
                     [
                         'title' => 'CI',
-                        'desc'  => '시뮬레이터를 CI 작업에 통합하여, 모든 브랜치와 Pull Request 를 프로덕션에서 기대하는 것과 동일한 결제·Webhook 시나리오로 검증합니다.',
+                        'desc' => '시뮬레이터를 CI 작업에 통합하여, 모든 브랜치와 Pull Request 를 프로덕션에서 기대하는 것과 동일한 결제·Webhook 시나리오로 검증합니다.',
                     ],
                 ],
             ],
@@ -196,24 +196,24 @@ return [
     |--------------------------------------------------------------------------
     */
     'providers' => [
-        'title'       => '프로바이더',
+        'title' => '프로바이더',
         'description' => '지원되는 결제 프로바이더를 살펴보고, Webhook 페이로드 형식을 확인하며, 서명 스킴을 나란히 비교하여 프로바이더에 종속되지 않는 일관된 통합 레이어를 설계합니다.',
         'map' => [
-            'mock'         => 'Mock',
-            'xendit'       => 'Xendit',
-            'midtrans'     => 'Midtrans',
-            'stripe'       => 'Stripe',
-            'paypal'       => 'PayPal',
-            'paddle'       => 'Paddle',
+            'mock' => 'Mock',
+            'xendit' => 'Xendit',
+            'midtrans' => 'Midtrans',
+            'stripe' => 'Stripe',
+            'paypal' => 'PayPal',
+            'paddle' => 'Paddle',
             'lemonsqueezy' => 'Lemon Squeezy',
-            'airwallex'    => 'Airwallex',
-            'tripay'       => 'Tripay',
-            'doku'         => 'DOKU',
-            'dana'         => 'DANA',
-            'oy'           => 'OY!',
-            'payoneer'     => 'Payoneer',
-            'skrill'       => 'Skrill',
-            'amazon_bwp'   => 'Amazon BWP',
+            'airwallex' => 'Airwallex',
+            'tripay' => 'Tripay',
+            'doku' => 'DOKU',
+            'dana' => 'DANA',
+            'oy' => 'OY!',
+            'payoneer' => 'Payoneer',
+            'skrill' => 'Skrill',
+            'amazon_bwp' => 'Amazon BWP',
         ],
     ],
 

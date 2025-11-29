@@ -12,9 +12,9 @@ namespace App\ValueObjects;
  */
 enum PaymentStatus: string
 {
-    case Pending   = 'pending';
+    case Pending = 'pending';
     case Succeeded = 'succeeded';
-    case Failed    = 'failed';
+    case Failed = 'failed';
 
     /**
      * Normalisasi dari status provider apa pun ke 3 status inti.
@@ -36,10 +36,28 @@ enum PaymentStatus: string
         };
     }
 
-    public function isPending(): bool   { return $this === self::Pending; }
-    public function isSucceeded(): bool { return $this === self::Succeeded; }
-    public function isFailed(): bool    { return $this === self::Failed; }
-    public function isFinal(): bool     { return $this !== self::Pending; }
+    public function isPending(): bool
+    {
+        return $this === self::Pending;
+    }
 
-    public function toString(): string  { return $this->value; }
+    public function isSucceeded(): bool
+    {
+        return $this === self::Succeeded;
+    }
+
+    public function isFailed(): bool
+    {
+        return $this === self::Failed;
+    }
+
+    public function isFinal(): bool
+    {
+        return $this !== self::Pending;
+    }
+
+    public function toString(): string
+    {
+        return $this->value;
+    }
 }

@@ -23,7 +23,7 @@ class DanaSignature
         }
 
         $signatureB64 = $request->header('X-SIGNATURE');
-        if (!$signatureB64) {
+        if (! $signatureB64) {
             return false;
         }
 
@@ -55,6 +55,7 @@ class DanaSignature
 
         // If key provided without header/footer, wrap it
         $wrapped = chunk_split(str_replace(["\r", "\n", ' '], '', $trim), 64, "\n");
+
         return "-----BEGIN PUBLIC KEY-----\n{$wrapped}-----END PUBLIC KEY-----\n";
     }
 }

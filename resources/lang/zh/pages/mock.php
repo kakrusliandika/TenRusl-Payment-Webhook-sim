@@ -23,33 +23,33 @@ TEXT
     ],
 
     'example_payload' => [
-        'id'       => 'evt_' . now()->timestamp,
-        'type'     => 'payment.succeeded',
+        'id' => 'evt_'.now()->timestamp,
+        'type' => 'payment.succeeded',
         'provider' => 'mock',
-        'data'     => [
+        'data' => [
             'payment_id' => 'pay_mock_001',
-            'amount'     => 25000,
-            'currency'   => 'IDR',
-            'status'     => 'succeeded',
+            'amount' => 25000,
+            'currency' => 'IDR',
+            'status' => 'succeeded',
         ],
-        'sent_at'  => now()->toIso8601String(),
+        'sent_at' => now()->toIso8601String(),
     ],
 
     'endpoints' => [
         [
             'method' => 'POST',
-            'path'   => '/api/payments',
-            'desc'   => __('pages.create_payment'),
+            'path' => '/api/payments',
+            'desc' => __('pages.create_payment'),
         ],
         [
             'method' => 'GET',
-            'path'   => '/api/payments/{id}',
-            'desc'   => __('pages.get_payment'),
+            'path' => '/api/payments/{id}',
+            'desc' => __('pages.get_payment'),
         ],
         [
             'method' => 'POST',
-            'path'   => '/api/webhooks/mock',
-            'desc'   => __('pages.receive_webhook'),
+            'path' => '/api/webhooks/mock',
+            'desc' => __('pages.receive_webhook'),
         ],
     ],
 ];

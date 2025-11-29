@@ -20,13 +20,13 @@ class WebhooksController extends Controller
     /** POST /api/v1/webhooks/{provider} */
     public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
-        $rawBody     = $request->rawBody();
+        $rawBody = $request->rawBody();
         $contentType = $this->detectContentType();
-        $payload     = $this->parsePayload($rawBody, $contentType);
+        $payload = $this->parsePayload($rawBody, $contentType);
 
         // Ekstrak event id & type jika tersedia — buatkan bila tidak ada
-        $eventId = $this->extractEventId($payload) ?? ('evt_' . Str::ulid());
-        $type    = $this->extractType($payload);
+        $eventId = $this->extractEventId($payload) ?? ('evt_'.Str::ulid());
+        $type = $this->extractType($payload);
 
         $result = $this->processor->process(
             $provider,
@@ -41,7 +41,7 @@ class WebhooksController extends Controller
                 'event' => [
                     'provider' => $provider,
                     'event_id' => $eventId,
-                    'type'     => $type,
+                    'type' => $type,
                 ],
                 'result' => $result,
             ],
@@ -66,12 +66,14 @@ class WebhooksController extends Controller
 
         if (str_contains($ct, 'application/json')) {
             $arr = json_decode($rawBody, true);
+
             return is_array($arr) ? $arr : [];
         }
 
         if (str_contains($ct, 'application/x-www-form-urlencoded')) {
             $out = [];
             parse_str($rawBody, $out);
+
             return is_array($out) ? $out : [];
         }
 
@@ -91,6 +93,7 @@ class WebhooksController extends Controller
                 return $v;
             }
         }
+
         return null;
     }
 
@@ -105,6 +108,7 @@ class WebhooksController extends Controller
                 return $v;
             }
         }
+
         return null;
     }
 }

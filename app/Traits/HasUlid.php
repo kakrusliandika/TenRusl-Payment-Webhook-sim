@@ -30,7 +30,7 @@ trait HasUlid
     {
         static::creating(function ($model): void {
             $key = $model->getKeyName();
-            if (!isset($model->{$key}) || $model->{$key} === '') {
+            if (! isset($model->{$key}) || $model->{$key} === '') {
                 // Str::ulid() membutuhkan symfony/uid; cast ke string untuk penyimpanan
                 $model->{$key} = strtolower((string) Str::ulid());
             }

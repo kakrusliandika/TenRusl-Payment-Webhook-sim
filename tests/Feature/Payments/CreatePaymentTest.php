@@ -3,20 +3,21 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+
 use function Pest\Laravel\postJson;
 
 uses(RefreshDatabase::class);
 
 it('creates a payment and returns 201 with basic resource structure', function () {
     $payload = [
-        'provider'    => 'mock',
-        'amount'      => 150000,
-        'currency'    => 'idr',
-        'description' => 'Order ' . now()->timestamp,
-        'metadata'    => ['order_id' => 'ORD-' . now()->timestamp],
+        'provider' => 'mock',
+        'amount' => 150000,
+        'currency' => 'idr',
+        'description' => 'Order '.now()->timestamp,
+        'metadata' => ['order_id' => 'ORD-'.now()->timestamp],
     ];
 
-    $idk1 = now()->timestamp . '-A';
+    $idk1 = now()->timestamp.'-A';
 
     $resp = postJson('/api/v1/payments', $payload, [
         'Idempotency-Key' => $idk1,
@@ -43,15 +44,15 @@ it('creates a payment and returns 201 with basic resource structure', function (
 
 it('is idempotent: same Idempotency-Key returns the same payment', function () {
     $payload = [
-        'provider'    => 'mock',
-        'amount'      => 50000,
-        'currency'    => 'IDR',
+        'provider' => 'mock',
+        'amount' => 50000,
+        'currency' => 'IDR',
         'description' => 'Idem test',
     ];
 
-    $key = 'idem-' . now()->timestamp;
+    $key = 'idem-'.now()->timestamp;
 
-    $first  = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
+    $first = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
     $second = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
 
     $id1 = (string) $first->json('data.id');
@@ -64,7 +65,7 @@ it('is idempotent: same Idempotency-Key returns the same payment', function () {
 it('rejects invalid provider with 422', function () {
     $payload = [
         'provider' => 'unknown',
-        'amount'   => 10000,
+        'amount' => 10000,
         'currency' => 'IDR',
     ];
 
