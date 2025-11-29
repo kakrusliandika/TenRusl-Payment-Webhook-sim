@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProviderController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,6 +11,9 @@ use Illuminate\Support\Facades\Route;
 | - '/'                      => main/index
 | - '/providers'             => pages/providers (via ProviderController@index)
 | - '/providers/{provider}'  => pages/show (via ProviderController@show)
+| - Endpoint JSON demo payments:
+|     - '/payments/providers'                        => PaymentController@providers
+|     - '/payments/{provider}/{providerRef}/status'  => PaymentController@status
 | - 'setlocale' is applied to the 'web' group via bootstrap/app.php
 */
 
@@ -37,6 +41,18 @@ Route::redirect('/p/providers', '/providers', 301);
 Route::get('/p/{provider}', function (string $provider) {
     return redirect()->route('providers.show', ['provider' => $provider], 301);
 });
+
+// ================= Payments demo (JSON sederhana) =================
+
+// Daftar provider aktif via JSON (non-API, sekadar demo)
+Route::get('/payments/providers', [PaymentController::class, 'providers'])
+    ->name('payments.providers');
+
+// Status simulasi payment dari adapter (tanpa DB)
+Route::get(
+    '/payments/{provider}/{providerRef}/status',
+    [PaymentController::class, 'status']
+)->name('payments.status');
 
 // ================= Health =================
 

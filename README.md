@@ -24,7 +24,10 @@ Demo **Laravel 12** untuk mengilustrasikan arsitektur payment: **idempotency**, 
 - [Swagger & Postman](#-swagger--postman)
 - [Testing & CI](#-testing--ci)
 - [Struktur Direktori](#-struktur-direktori)
+- [Operasional](#-operasional)
+- [Limitations & Next Steps](#-limitations--next-steps)
 - [Troubleshooting](#-troubleshooting)
+- [Rilis](#-rilis)
 - [Lisensi](#-lisensi)
 
 ---
@@ -97,28 +100,48 @@ php artisan serve  # http://127.0.0.1:8000
 
 Semua kunci tersedia di `.env.example`. Ringkasan kunci penting:
 
-| Kunci                        | Contoh        | Keterangan singkat |
-|-----------------------------|---------------|--------------------|
-| `MOCK_SECRET`               | `changeme`    | HMAC untuk provider **mock** |
-| `XENDIT_CALLBACK_TOKEN`     | `changeme`    | Token callback **Xendit** |
-| `MIDTRANS_SERVER_KEY`       | `changeme`    | *Server key* **Midtrans** |
-| `STRIPE_WEBHOOK_SECRET`     | `...`         | Secret **Stripe** (HMAC) |
-| `PAYPAL_ENV`                | `sandbox`     | Env PayPal |
-| `PADDLE_SIGNING_SECRET`     | `...`         | Secret **Paddle** (baru) |
-| `LS_WEBHOOK_SECRET`         | `...`         | Secret **Lemon Squeezy** |
-| `AIRWALLEX_WEBHOOK_SECRET`  | `...`         | Secret **Airwallex** |
-| `TRIPAY_PRIVATE_KEY`        | `...`         | Secret **Tripay** |
-| `DOKU_CLIENT_ID`            | `...`         | Client id **DOKU** |
-| `DOKU_SECRET_KEY`           | `...`         | Secret **DOKU** |
-| `DANA_PUBLIC_KEY`           | `PEM`         | Public key **DANA** (RSA) |
-| `OY_CALLBACK_SECRET`        | `...`         | Secret **OY!** *(opsional)* |
-| `PAYONEER_SHARED_SECRET`    | `...`         | Secret **Payoneer** |
-| `SKRILL_MD5_SECRET`         | `...`         | Secret **Skrill** |
-| `AMZN_BWP_PUBLIC_KEY`       | `PEM`         | Public key **Amazon Buy with Prime** |
+### 🔑 Kunci inti TenRusl
+
+| Kunci                            | Contoh        | Keterangan                                                  | Status         |
+|----------------------------------|---------------|-------------------------------------------------------------|----------------|
+| `TENRUSL_MAX_RETRY_ATTEMPTS`     | `5`           | Maksimum percobaan retry webhook                           | Opsional (dev) |
+| `TENRUSL_IDEMPOTENCY_TTL`        | `3600`        | TTL idempotensi legacy (fallback, detik)                   | Opsional (dev) |
+| `IDEMPOTENCY_TTL_SECONDS`        | `7200`        | TTL idempotensi utama (dipakai IdempotencyKeyService)      | Disarankan     |
+| `WEBHOOK_DEDUP_TTL_SECONDS`      | `86400`       | TTL ideal dedup webhook (hook untuk pruning ke depan)      | Opsional       |
+| `TENRUSL_SCHEDULER_PROVIDER`     | *(kosong)*    | Filter provider untuk scheduler retry (kosong = semua)     | Opsional       |
+| `TENRUSL_SCHEDULER_BACKOFF_MODE` | `full`        | Mode backoff: `full`, `equal`, atau `decorrelated`         | Opsional       |
+| `TENRUSL_SCHEDULER_LIMIT`        | `200`         | Batas event per eksekusi command retry                     | Opsional       |
+
+### 🌐 Kunci provider & signature
+
+| Kunci                        | Contoh        | Keterangan singkat                                         | Status       |
+|-----------------------------|---------------|-------------------------------------------------------------|--------------|
+| `MOCK_SECRET`               | `changeme`    | HMAC untuk provider **mock**                               | Wajib (mock) |
+| `XENDIT_CALLBACK_TOKEN`     | `changeme`    | Token callback **Xendit**                                  | Opsional     |
+| `MIDTRANS_SERVER_KEY`       | `changeme`    | *Server key* **Midtrans**                                  | Opsional     |
+| `STRIPE_WEBHOOK_SECRET`     | `...`         | Secret **Stripe** (HMAC)                                   | Opsional     |
+| `PAYPAL_ENV`                | `sandbox`     | Env PayPal (`sandbox` / `live`)                            | Opsional     |
+| `PADDLE_SIGNING_SECRET`     | `...`         | Secret **Paddle** (mode baru, HMAC)                        | Opsional     |
+| `PADDLE_PUBLIC_KEY`         | `PEM`         | Public key **Paddle** (mode lama, RSA)                     | Opsional     |
+| `LS_WEBHOOK_SECRET`         | `...`         | Secret **Lemon Squeezy**                                   | Opsional     |
+| `AIRWALLEX_WEBHOOK_SECRET`  | `...`         | Secret **Airwallex**                                       | Opsional     |
+| `TRIPAY_PRIVATE_KEY`        | `...`         | Secret **Tripay**                                          | Opsional     |
+| `DOKU_CLIENT_ID`            | `...`         | Client id **DOKU**                                         | Opsional     |
+| `DOKU_SECRET_KEY`           | `...`         | Secret **DOKU**                                            | Opsional     |
+| `DOKU_REQUEST_TARGET`       | `/orders/...` | Request target simulasi untuk signature DOKU               | Opsional     |
+| `DANA_PUBLIC_KEY`           | `PEM`         | Public key **DANA** (RSA)                                  | Opsional     |
+| `OY_CALLBACK_SECRET`        | `...`         | Secret **OY!** *(opsional, tergantung produk)*             | Opsional     |
+| `OY_IP_WHITELIST`           | `1.2.3.4`     | Whitelist IP **OY!**                                       | Opsional     |
+| `PAYONEER_SHARED_SECRET`    | `...`         | Secret **Payoneer**                                        | Opsional     |
+| `PAYONEER_MERCHANT_ID`      | `...`         | Merchant ID **Payoneer**                                   | Opsional     |
+| `SKRILL_MERCHANT_ID`        | `...`         | Merchant ID **Skrill**                                     | Opsional     |
+| `SKRILL_EMAIL`              | `...`         | Email merchant **Skrill**                                  | Opsional     |
+| `SKRILL_MD5_SECRET`         | `...`         | Secret MD5 **Skrill**                                      | Opsional     |
+| `AMZN_BWP_PUBLIC_KEY`       | `PEM`         | Public key **Amazon Buy with Prime**                       | Opsional     |
 
 Konfigurasi dipetakan di `config/tenrusl.php` termasuk `providers_allowlist`:
 
-```
+```text
 mock, xendit, midtrans, stripe, paypal, paddle, lemonsqueezy,
 airwallex, tripay, doku, dana, oy, payoneer, skrill, amazon_bwp
 ```
@@ -129,12 +152,12 @@ airwallex, tripay, doku, dana, oy, payoneer, skrill, amazon_bwp
 
 **Base URL**: `http://127.0.0.1:8000/api/v1`
 
-| Method | Path                                       | Deskripsi                                           | Header Penting                     |
-|:-----:|--------------------------------------------|-----------------------------------------------------|------------------------------------|
-| POST  | `/payments`                                 | Buat payment *(idempotent)*                         | `Idempotency-Key: <uuid>`          |
-| GET   | `/payments/{provider}/{provider_ref}/status`| Lihat status payment berdasarkan provider & referensi| –                                  |
-| POST  | `/webhooks/{provider}`                      | Terima event webhook dari provider                  | Lihat tabel [Signature](#-webhook-signature-simulasi) |
-| OPT   | `/webhooks/{provider}`                      | Preflight CORS                                       | –                                  |
+| Method  | Path                                       | Deskripsi                                              | Header Penting                     |
+|:-------:|--------------------------------------------|--------------------------------------------------------|------------------------------------|
+| POST    | `/payments`                                | Buat payment *(idempotent)*                            | `Idempotency-Key: <uuid>`          |
+| GET     | `/payments/{provider}/{provider_ref}/status`| Lihat status payment berdasarkan provider & referensi  | –                                  |
+| POST    | `/webhooks/{provider}`                     | Terima event webhook dari provider                     | Lihat tabel [Signature](#-webhook-signature-simulasi) |
+| OPTIONS | `/webhooks/{provider}`                     | Preflight CORS (di-handle CORS middleware / Laravel)   | –                                  |
 
 **Contoh cURL**:
 
@@ -203,14 +226,16 @@ php artisan test --testsuite=Feature
 
 ## 🗂️ Struktur Direktori (ringkas)
 
-```
+```text
 app/
   Console/Commands/RetryWebhookCommand.php
   Http/Controllers/Api/V1/{PaymentsController,WebhooksController}.php
+  Http/Controllers/{PaymentController,ProviderController}.php
   Http/Middleware/{CorrelationIdMiddleware,VerifyWebhookSignature}.php
   Http/Requests/Api/V1/{CreatePaymentRequest,WebhookRequest}.php
   Http/Resources/Api/V1/{PaymentResource,WebhookEventResource}.php
   Models/{Payment,WebhookEvent}.php
+  Repositories/{PaymentRepository,WebhookEventRepository}.php
   Services/
     Idempotency/{IdempotencyKeyService,RequestFingerprint}.php
     Payments/Adapters/*.php
@@ -234,6 +259,32 @@ tests/{Feature,Unit,CreatesApplication.php,Pest.php,TestCase.php}
 
 ---
 
+## ⚠️ Limitations & Next Steps
+
+Sengaja didesain sebagai **simulator edukasi** dan **portfolio-ready**, bukan drop-in replacement gateway produksi:
+
+- Semua provider berjalan di mode **simulasi**:
+  - Tidak ada panggilan langsung ke endpoint produksi payment gateway.
+  - Payload/example mengikuti pola umum, tapi tidak selalu 1:1 dengan kontrak resmi terbaru.
+- Retry webhook:
+  - Menggunakan command `tenrusl:webhooks:retry` + scheduler Laravel standar.
+  - Tidak ada worker terpisah per provider / sharding khusus.
+- Idempotensi:
+  - Disimpan di cache (file/redis) dengan TTL yang bisa diatur.
+  - Opsi `idempotency.storage = database` disiapkan sebagai hook untuk eksperimen lanjutan.
+- Dedup webhook:
+  - Saat ini dedup utama berbasis kombinasi `(provider, event_id)`.
+  - TTL `WEBHOOK_DEDUP_TTL_SECONDS` baru menjadi konfigurasi ideal untuk pruning di masa depan.
+
+**Ide pengembangan selanjutnya:**
+
+- Tambah **implementasi idempotensi berbasis database** (tabel khusus), toggle via config.
+- Tambah command maintenance untuk **pruning webhook_events** berdasarkan `WEBHOOK_DEDUP_TTL_SECONDS`.
+- Contoh integrasi sederhana ke gateway real (mode sandbox) dengan kredensial dummy.
+- Panel kecil (frontend) untuk melihat log webhook & status retry secara visual.
+
+---
+
 ## 🛟 Troubleshooting
 
 - **Swagger UI 404 / fetch error**
@@ -242,11 +293,11 @@ tests/{Feature,Unit,CreatesApplication.php,Pest.php,TestCase.php}
 - **Webhook 401 (Mock/Stripe/etc.)**
   Hitung signature dari **raw body** yang benar-benar terkirim. Postman sudah menyediakan *pre-request script*.
 
-- **Gagal migrate SQLite:**
+- **Gagal migrate SQLite**
   Buat file `database/database.sqlite`, set `.env`: `DB_CONNECTION=sqlite`, lalu `php artisan migrate`.
 
 - **Intelephense false positive (Laravel Request methods)**
-  Abaikan peringatan seperti `Undefined method input/merge/route` jika test tetap *green* — itu limite plugin.
+  Abaikan peringatan seperti `Undefined method input/merge/route` jika test tetap *green* — itu keterbatasan plugin, bukan bug runtime.
 
 ---
 

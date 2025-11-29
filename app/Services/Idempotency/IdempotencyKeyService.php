@@ -16,9 +16,14 @@ use Illuminate\Support\Facades\Cache;
  * - Atomic check-then-set untuk mencegah race condition (pakai Cache::lock jika driver mendukung; fallback ke Cache::add).
  * - Simpan response pertama (status, headers terpilih, body) + fingerprint; repeat request balikan hasil identik.
  *
- * Konfigurasi TTL:
- *   config('tenrusl.idempotency.ttl_seconds') ATAU config('tenrusl.idempotency_ttl')
- *   config('tenrusl.idempotency.lock_seconds') (opsional, default 30s)
+ * Konfigurasi TTL (sumber utama):
+ *   config('tenrusl.idempotency.ttl_seconds')   // env: IDEMPOTENCY_TTL_SECONDS
+ *
+ * Fallback legacy (kompatibilitas ke belakang):
+ *   config('tenrusl.idempotency_ttl')           // env: TENRUSL_IDEMPOTENCY_TTL
+ *
+ * Lock TTL:
+ *   config('tenrusl.idempotency.lock_seconds')  // default 30 detik
  */
 final class IdempotencyKeyService
 {
@@ -34,7 +39,7 @@ final class IdempotencyKeyService
      */
     public function resolveKey(Request $request): string
     {
-        $hdr = trim((string) $request->header('Idempotency-Key', ''));
+        $hdr = \trim((string) $request->header('Idempotency-Key', ''));
 
         return $hdr !== '' ? $hdr : $this->fingerprint->hash($request);
     }
@@ -44,7 +49,7 @@ final class IdempotencyKeyService
      * - Menggunakan atomic lock (Cache::lock) bila store mendukung.
      * - Fallback ke Cache::add (set-if-not-exists) jika tidak mendukung lock.
      *
-     * @return bool true jika lock berhasil diakuisisi (request pertama), False jika duplikat/sudah terkunci
+     * @return bool true jika lock berhasil diakuisisi (request pertama), false jika duplikat/sudah terkunci
      */
     public function acquireLock(string $key): bool
     {
@@ -109,17 +114,19 @@ final class IdempotencyKeyService
             'body' => $response['body'] ?? null,
         ];
 
+        $fingerprint = $this->responseFingerprint($normalized);
+
         $payload = [
-            'stored_at' => now()->toIso8601String(),
-            'fingerprint' => $this->responseFingerprint($normalized),
-            'response' => $normalized,
+            'stored_at'   => now()->toIso8601String(),
+            'fingerprint' => $fingerprint,
+            'response'    => $normalized,
         ];
 
         Cache::put($this->respKey($key), $payload, now()->addSeconds($ttl));
     }
 
     /**
-     * Ambil response yang pernah disimpan (jika ada).
+     * Ambil response yang pernah disimpan (jika ada & fingerprint masih cocok).
      *
      * @return array{
      *   status:int,
@@ -131,17 +138,34 @@ final class IdempotencyKeyService
     {
         /** @var array|null $cached */
         $cached = Cache::get($this->respKey($key));
-        if (! $cached || ! isset($cached['response'])) {
+        if (! $cached || ! isset($cached['response'], $cached['fingerprint'])) {
             return null;
         }
 
-        // (Opsional) bisa verifikasi ulang fingerprint di sini jika dibutuhkan.
-        return $cached['response'];
+        $response = $cached['response'];
+
+        // Verifikasi ulang fingerprint untuk memastikan payload di cache
+        // masih konsisten dengan fingerprint yang disimpan.
+        $currentFingerprint = $this->responseFingerprint($response);
+        $storedFingerprint  = (string) $cached['fingerprint'];
+
+        if (! \hash_equals($storedFingerprint, $currentFingerprint)) {
+            // Fingerprint berbeda: anggap tidak valid (misuse / korup), jangan pakai cache.
+            return null;
+        }
+
+        return $response;
     }
 
+    /**
+     * TTL utama idempotensi:
+     * - Prioritas: tenrusl.idempotency.ttl_seconds (IDEMPOTENCY_TTL_SECONDS).
+     * - Fallback:  tenrusl.idempotency_ttl (TENRUSL_IDEMPOTENCY_TTL) untuk kompatibilitas.
+     */
     private function ttlSeconds(): int
     {
         $ttl = config('tenrusl.idempotency.ttl_seconds');
+
         if ($ttl === null) {
             $ttl = config('tenrusl.idempotency_ttl', 3600);
         }
@@ -177,13 +201,13 @@ final class IdempotencyKeyService
 
         $norm = [];
         foreach ($headers as $k => $v) {
-            $lk = strtolower((string) $k);
-            if (in_array($lk, $whitelist, true)) {
+            $lk = \strtolower((string) $k);
+            if (\in_array($lk, $whitelist, true)) {
                 $norm[$lk] = $v;
             }
         }
 
-        ksort($norm);
+        \ksort($norm);
 
         return $norm;
     }
@@ -201,21 +225,24 @@ final class IdempotencyKeyService
     {
         $headers = $response['headers'] ?? [];
         // Urutkan nilai header array agar stabil
-        $headers = array_map(
-            fn ($v) => is_array($v) ? Arr::sort($v) : $v,
+        $headers = \array_map(
+            static fn ($v) => \is_array($v) ? Arr::sort($v) : $v,
             $headers
         );
-        ksort($headers);
+        \ksort($headers);
 
         $payload = [
-            'status' => (int) $response['status'],
+            'status'  => (int) $response['status'],
             'headers' => $headers,
             // JSON canonical (tanpa escaping ekstra) agar stabil
-            'body' => $response['body'],
+            'body'    => $response['body'],
         ];
 
-        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION);
+        $json = \json_encode(
+            $payload,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION
+        );
 
-        return hash('sha256', $json ?: '');
+        return \hash('sha256', $json ?: '');
     }
 }

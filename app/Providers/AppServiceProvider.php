@@ -28,7 +28,7 @@ class AppServiceProvider extends ServiceProvider
             return new PaymentsService(adapters: null, allowedProviders: $allowed);
         });
 
-        // Repository bindings
+        // Repository bindings (digunakan di berbagai service, termasuk WebhookProcessor)
         $this->app->singleton(PaymentRepository::class, fn () => new PaymentRepository);
         $this->app->singleton(WebhookEventRepository::class, fn () => new WebhookEventRepository);
     }

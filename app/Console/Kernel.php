@@ -25,6 +25,12 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Jalankan tiap menit; batasi overlap agar aman di beban tinggi.
+        // Nilai-nilai di bawah ini dibaca dari config/tenrusl.php
+        // yang pada gilirannya membaca env:
+        // - TENRUSL_MAX_RETRY_ATTEMPTS
+        // - TENRUSL_SCHEDULER_PROVIDER
+        // - TENRUSL_SCHEDULER_BACKOFF_MODE
+        // - TENRUSL_SCHEDULER_LIMIT
         $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
         $provider = (string) config('tenrusl.scheduler_provider', '');      // opsional filter
         $mode = (string) config('tenrusl.scheduler_backoff_mode', 'full'); // full|equal|decorrelated
@@ -38,7 +44,7 @@ class Kernel extends ConsoleKernel
         );
 
         if ($provider !== '') {
-            $cmd .= ' --provider='.$provider;
+            $cmd .= ' --provider=' . $provider;
         }
 
         $schedule
@@ -52,7 +58,7 @@ class Kernel extends ConsoleKernel
      */
     protected function commands(): void
     {
-        $this->load(__DIR__.'/Commands');
+        $this->load(__DIR__ . '/Commands');
         require base_path('routes/console.php');
     }
 }

@@ -36,7 +36,7 @@ class VerifyWebhookSignature
             return $this->unauthorized('Missing provider in route.');
         }
 
-        // Raw body diperlukan untuk verifikasi HMAC yang benar
+        // Baca raw body SEKALI lewat Request::getContent()
         $rawBody = (string) $request->getContent();
 
         if ($rawBody === '') {
@@ -44,8 +44,11 @@ class VerifyWebhookSignature
             return $this->unauthorized('Empty webhook payload.', $provider);
         }
 
-        // Di sini kita hanya kirim provider + raw body + request.
-        // Timestamp leeway & constant-time compare di-handle di SignatureVerifier.
+        // Simpan raw body ke attribute request supaya bisa dipakai ulang
+        // oleh WebhookRequest::rawBody() dan layer lain tanpa baca stream ulang.
+        $request->attributes->set('tenrusl_raw_body', $rawBody);
+
+        // Verifikasi signature via service
         $verified = SignatureVerifier::verify($provider, $rawBody, $request);
 
         if (! $verified) {

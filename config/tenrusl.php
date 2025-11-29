@@ -38,36 +38,137 @@ return [
     ],
 
     // Retry & idempotency demo knobs
+    //
+    // max_retry_attempts dipakai oleh:
+    // - App\Console\Commands\RetryWebhookCommand
+    // - App\Console\Kernel (sebagai default argument command)
     'max_retry_attempts' => env('TENRUSL_MAX_RETRY_ATTEMPTS', 5),
+
+    // TTL idempotensi legacy (fallback untuk IdempotencyKeyService).
+    // Nilai utama TTL sekarang diambil dari blok 'idempotency.ttl_seconds' di bawah.
     'idempotency_ttl' => env('TENRUSL_IDEMPOTENCY_TTL', 3600),
+
+    // Scheduler knobs (dibaca di App\Console\Kernel)
+    //
+    // - scheduler_provider     : filter provider tertentu (string kosong = semua)
+    // - scheduler_backoff_mode : full|equal|decorrelated
+    // - scheduler_limit        : jumlah event per eksekusi tenrusl:webhooks:retry
+    'scheduler_provider' => env('TENRUSL_SCHEDULER_PROVIDER', ''),
+    'scheduler_backoff_mode' => env('TENRUSL_SCHEDULER_BACKOFF_MODE', 'full'),
+    'scheduler_limit' => env('TENRUSL_SCHEDULER_LIMIT', 200),
 
     // --- IMPORTANT: store plain relative asset paths only (no asset()/url()/route()) ---
     'providers_meta' => [
-        'airwallex' => ['display_name' => 'Airwallex',     'signature_type' => 'HMAC',   'logo' => 'providers/airwallex.png'],
-        'amazon_bwp' => ['display_name' => 'Amazon BWP',    'signature_type' => 'RSA',    'logo' => 'providers/amazon_bwp.png'],
-        'dana' => ['display_name' => 'DANA',          'signature_type' => 'RSA',    'logo' => 'providers/dana.png'],
-        'doku' => ['display_name' => 'DOKU',          'signature_type' => 'HMAC',   'logo' => 'providers/doku.png'],
-        'lemonsqueezy' => ['display_name' => 'Lemon Squeezy', 'signature_type' => 'HMAC',   'logo' => 'providers/lemonsqueezy.png'],
-        'midtrans' => ['display_name' => 'Midtrans',      'signature_type' => 'SHA512', 'logo' => 'providers/midtrans.png'],
-        'mock' => ['display_name' => 'Mock',          'signature_type' => 'SIM',    'logo' => 'providers/mock.png'],
-        'oy' => ['display_name' => 'OY! Indonesia', 'signature_type' => 'HMAC',   'logo' => 'providers/oy.png'],
-        'paddle' => ['display_name' => 'Paddle',        'signature_type' => 'HMAC',   'logo' => 'providers/paddle.png'],
-        'payoneer' => ['display_name' => 'Payoneer',      'signature_type' => 'Token',  'logo' => 'providers/payoneer.png'],
-        'paypal' => ['display_name' => 'PayPal',        'signature_type' => 'API',    'logo' => 'providers/paypal.png'],
-        'skrill' => ['display_name' => 'Skrill',        'signature_type' => 'MD5',    'logo' => 'providers/skrill.png'],
-        'stripe' => ['display_name' => 'Stripe',        'signature_type' => 'HMAC',   'logo' => 'providers/stripe.png'],
-        'tripay' => ['display_name' => 'TriPay',        'signature_type' => 'HMAC',   'logo' => 'providers/tripay.png'],
-        'xendit' => ['display_name' => 'Xendit',        'signature_type' => 'Token',  'logo' => 'providers/xendit.png'],
+        'airwallex' => [
+            'display_name' => 'Airwallex',
+            'signature_type' => 'HMAC',
+            'logo' => 'providers/airwallex.png',
+        ],
+        'amazon_bwp' => [
+            'display_name' => 'Amazon BWP',
+            'signature_type' => 'RSA',
+            'logo' => 'providers/amazon_bwp.png',
+        ],
+        'dana' => [
+            'display_name' => 'DANA',
+            'signature_type' => 'RSA',
+            'logo' => 'providers/dana.png',
+        ],
+        'doku' => [
+            'display_name' => 'DOKU',
+            'signature_type' => 'HMAC',
+            'logo' => 'providers/doku.png',
+        ],
+        'lemonsqueezy' => [
+            'display_name' => 'Lemon Squeezy',
+            'signature_type' => 'HMAC',
+            'logo' => 'providers/lemonsqueezy.png',
+        ],
+        'midtrans' => [
+            'display_name' => 'Midtrans',
+            'signature_type' => 'SHA512',
+            'logo' => 'providers/midtrans.png',
+        ],
+        'mock' => [
+            'display_name' => 'Mock',
+            'signature_type' => 'SIM',
+            'logo' => 'providers/mock.png',
+        ],
+        'oy' => [
+            'display_name' => 'OY! Indonesia',
+            'signature_type' => 'HMAC',
+            'logo' => 'providers/oy.png',
+        ],
+        'paddle' => [
+            'display_name' => 'Paddle',
+            'signature_type' => 'HMAC',
+            'logo' => 'providers/paddle.png',
+        ],
+        'payoneer' => [
+            'display_name' => 'Payoneer',
+            'signature_type' => 'Token',
+            'logo' => 'providers/payoneer.png',
+        ],
+        'paypal' => [
+            'display_name' => 'PayPal',
+            'signature_type' => 'API',
+            'logo' => 'providers/paypal.png',
+        ],
+        'skrill' => [
+            'display_name' => 'Skrill',
+            'signature_type' => 'MD5',
+            'logo' => 'providers/skrill.png',
+        ],
+        'stripe' => [
+            'display_name' => 'Stripe',
+            'signature_type' => 'HMAC',
+            'logo' => 'providers/stripe.png',
+        ],
+        'tripay' => [
+            'display_name' => 'TriPay',
+            'signature_type' => 'HMAC',
+            'logo' => 'providers/tripay.png',
+        ],
+        'xendit' => [
+            'display_name' => 'Xendit',
+            'signature_type' => 'Token',
+            'logo' => 'providers/xendit.png',
+        ],
     ],
+
+    // Konfigurasi idempotensi (dipakai oleh App\Services\Idempotency\IdempotencyKeyService)
     'idempotency' => [
+        // TTL utama untuk kunci idempotensi. TENRUSL_IDEMPOTENCY_TTL di atas
+        // tetap didukung sebagai fallback demi kompatibilitas.
         'ttl_seconds' => env('IDEMPOTENCY_TTL_SECONDS', 7200), // 2 jam
-        'storage' => 'cache', // atau 'database'
+
+        // Saat ini implementasi di IdempotencyKeyService hanya menggunakan cache sebagai
+        // storage idempotensi (mis. Cache::put / remember).
+        //
+        // Nilai 'database' disiapkan sebagai "hook" untuk eksperimen lanjutan:
+        // jika nanti ingin memindahkan idempotency ke tabel DB khusus, value ini
+        // bisa dipakai sebagai toggle. Untuk saat ini belum diimplementasikan penuh.
+        'storage' => 'cache', // atau 'database' (BELUM diimplementasikan)
+
+        // Lama waktu lock idempotensi untuk mencegah race condition pada create payment.
         'lock_seconds'  => 30,
     ],
+
+    // Konfigurasi dedup webhook
     'webhook' => [
+        // Saat ini dedup utama di WebhookProcessor masih berbasis (provider, event_id)
+        // tanpa TTL. Nilai ini disiapkan sebagai TTL ideal untuk:
+        // - pruning event lama via command maintenance, atau
+        // - logika dedup tambahan di masa depan.
+        //
+        // Artinya: ini "hook untuk eksperimen lanjutan", belum dipakai penuh di runtime.
         'dedup_ttl_seconds' => env('WEBHOOK_DEDUP_TTL_SECONDS', 86400),
     ],
+
+    // Konfigurasi signature global
     'signature' => [
+        // Batas toleransi perbedaan waktu untuk header timestamp (bila provider
+        // memakai pola ts+signature). Beberapa provider akan menggunakan nilai ini.
         'timestamp_leeway_seconds' => env('SIG_TS_LEEWAY', 300), // 5 menit
     ],
 ];

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Webhooks;
 
-use App\Models\WebhookEvent;
+use App\Repositories\PaymentRepository;
+use App\Repositories\WebhookEventRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Proses webhook:
@@ -21,14 +21,19 @@ use Illuminate\Support\Facades\DB;
  */
 final class WebhookProcessor
 {
+    public function __construct(
+        private readonly WebhookEventRepository $events,
+        private readonly PaymentRepository $payments,
+    ) {}
+
     /**
      * Proses sebuah event webhook.
      *
      * @param  string  $provider  contoh: 'stripe','xendit','midtrans',dst.
-     * @param  string  $eventId  ID unik event dari provider (atau buatkan hash jika tidak ada).
-     * @param  string  $type  tipe/subject event (optional, untuk log)
-     * @param  string  $rawBody  payload mentah (string JSON/form) untuk arsip/signature audit
-     * @param  array  $payload  payload terurai (array)
+     * @param  string  $eventId   ID unik event dari provider (atau buatkan hash jika tidak ada).
+     * @param  string  $type      tipe/subject event (optional, untuk log)
+     * @param  string  $rawBody   payload mentah (string JSON/form) untuk arsip/signature audit
+     * @param  array   $payload   payload terurai (array)
      * @return array{
      *   duplicate:bool,
      *   persisted:bool,
@@ -43,30 +48,25 @@ final class WebhookProcessor
 
         // 1) Dedup: cek apakah event sudah pernah disimpan
         $duplicate = false;
-        $event = WebhookEvent::query()
-            ->where('provider', $provider)
-            ->where('event_id', $eventId)
-            ->first();
 
-        if ($event) {
-            // Tambah hit counter / attempts
-            $event->attempts = ($event->attempts ?? 0) + 1;
-            $event->last_attempt_at = $now;
-            $event->save();
+        $event = $this->events->findByProviderEvent($provider, $eventId);
+
+        if ($event !== null) {
             $duplicate = true;
+            $this->events->touchAttempt($event, $now);
         } else {
-            // simpan baru
-            $event = new WebhookEvent;
-            $event->provider = $provider;
-            $event->event_id = $eventId;
-            $event->event_type = $type;
-            $event->payload_raw = $rawBody;
-            $event->payload = $payload;
-            $event->attempts = 1;
-            $event->received_at = $now;
-            $event->last_attempt_at = $now;
-            $event->save();
+            $event = $this->events->storeNew(
+                provider: $provider,
+                eventId: $eventId,
+                eventType: $type,
+                rawBody: $rawBody,
+                payload: $payload,
+                receivedAt: $now,
+            );
         }
+
+        // Refresh nilai attempts setelah update/store
+        $attempts = (int) ($event->attempts ?? 1);
 
         // 2) Tentukan status generik dari payload
         $status = $this->inferStatus($provider, $payload);
@@ -76,19 +76,27 @@ final class WebhookProcessor
         $persisted = false;
 
         if ($providerRef !== null) {
-            $persisted = $this->applyPaymentStatus($provider, $providerRef, $status);
-            $event->payment_provider_ref = $providerRef;
-            $event->payment_status = $status;
-            $event->processed_at = $now;
-            $event->save();
+            $affected = $this->payments->updateStatusByProviderRef($provider, $providerRef, $status);
+            $persisted = $affected > 0;
+
+            // Tandai event sudah diproses & simpan relasi ke payment (jika ada)
+            $this->events->markProcessed(
+                event: $event,
+                paymentProviderRef: $providerRef,
+                status: $status,
+                processedAt: $now,
+            );
         }
 
         // 4) Jadwal retry simulasi (hanya jika butuh retry)
         $nextRetryMs = null;
+
         if ($status === 'pending') {
-            $nextRetryMs = RetryBackoff::compute(($event->attempts ?? 1) + 1);
-            $event->next_retry_at = $now->addMilliseconds($nextRetryMs);
-            $event->save();
+            // attempts di event sudah naik setiap kali diproses, gunakan +1 sebagai basis next backoff
+            $nextRetryMs = RetryBackoff::compute($attempts + 1);
+            $nextAt = $now->addMilliseconds($nextRetryMs);
+
+            $this->events->scheduleNextRetry($event, $nextAt);
         }
 
         return [
@@ -124,6 +132,7 @@ final class WebhookProcessor
         if (in_array($v, $truthy, true)) {
             return 'succeeded';
         }
+
         if (in_array($v, $falsy, true)) {
             return 'failed';
         }
@@ -179,20 +188,5 @@ final class WebhookProcessor
         }
 
         return null;
-    }
-
-    /**
-     * Update Payment berdasarkan (provider, provider_ref) jika kolomnya ada.
-     */
-    private function applyPaymentStatus(string $provider, string $providerRef, string $status): bool
-    {
-        // Asumsi skema tabel payments minimal punya kolom 'provider' & 'provider_ref'
-        return (bool) DB::table('payments')
-            ->where('provider', $provider)
-            ->where('provider_ref', $providerRef)
-            ->update([
-                'status' => $status,
-                'updated_at' => now(),
-            ]);
     }
 }

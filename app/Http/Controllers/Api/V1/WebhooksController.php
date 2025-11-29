@@ -21,17 +21,30 @@ class WebhooksController extends Controller
     public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
         $rawBody = $request->rawBody();
-        $contentType = $this->detectContentType();
+        $contentType = $this->detectContentType($request);
         $payload = $this->parsePayload($rawBody, $contentType);
 
-        // Ekstrak event id & type jika tersedia — buatkan bila tidak ada
-        $eventId = $this->extractEventId($payload) ?? ('evt_'.Str::ulid());
-        $type = $this->extractType($payload);
+        // Ambil input tervalidasi (event_id/type jika dikirim sebagai field resmi)
+        $validated = $request->validated();
+
+        // event_id:
+        // 1. pakai dari request (jika lolos validasi),
+        // 2. fallback ke hasil ekstraksi dari payload,
+        // 3. terakhir generate evt_<ulid>
+        $eventId = $validated['event_id']
+            ?? $this->extractEventId($payload)
+            ?? ('evt_' . Str::ulid());
+
+        // type:
+        // 1. pakai dari request tervalidasi (jika ada),
+        // 2. fallback ke hasil ekstraksi dari payload,
+        // 3. jika tetap null, passing string kosong ke processor
+        $type = $validated['type'] ?? $this->extractType($payload) ?? '';
 
         $result = $this->processor->process(
             $provider,
             $eventId,
-            $type ?? '',
+            $type,
             $rawBody,
             $payload
         );
@@ -41,20 +54,30 @@ class WebhooksController extends Controller
                 'event' => [
                     'provider' => $provider,
                     'event_id' => $eventId,
-                    'type' => $type,
+                    'type'     => $type !== '' ? $type : null,
                 ],
                 'result' => $result,
             ],
         ], 202);
     }
 
-    /** Ambil Content-Type tanpa memanggil helper yang di-flag Intelephense */
-    private function detectContentType(): string
+    /**
+     * Ambil Content-Type dari Request.
+     *
+     * Menggunakan header Request (idiomatik Laravel) dengan fallback ke server vars.
+     */
+    private function detectContentType(WebhookRequest $request): string
     {
-        // Gunakan superglobal agar aman untuk static analyzer
+        $header = $request->header('Content-Type');
+
+        if (\is_string($header) && $header !== '') {
+            return $header;
+        }
+
+        // Fallback defensif (kalau ada proxy/stack khusus)
         return (string) (
-            $_SERVER['CONTENT_TYPE']
-            ?? $_SERVER['HTTP_CONTENT_TYPE']
+            $request->server('CONTENT_TYPE')
+            ?? $request->server('HTTP_CONTENT_TYPE')
             ?? ''
         );
     }
@@ -62,19 +85,19 @@ class WebhooksController extends Controller
     /** Parse payload sesuai content-type. */
     private function parsePayload(string $rawBody, ?string $contentType): array
     {
-        $ct = strtolower((string) $contentType);
+        $ct = \strtolower((string) $contentType);
 
-        if (str_contains($ct, 'application/json')) {
-            $arr = json_decode($rawBody, true);
+        if (\str_contains($ct, 'application/json')) {
+            $arr = \json_decode($rawBody, true);
 
-            return is_array($arr) ? $arr : [];
+            return \is_array($arr) ? $arr : [];
         }
 
-        if (str_contains($ct, 'application/x-www-form-urlencoded')) {
+        if (\str_contains($ct, 'application/x-www-form-urlencoded')) {
             $out = [];
-            parse_str($rawBody, $out);
+            \parse_str($rawBody, $out);
 
-            return is_array($out) ? $out : [];
+            return \is_array($out) ? $out : [];
         }
 
         return [];
@@ -89,7 +112,7 @@ class WebhooksController extends Controller
             Arr::get($p, 'resource.id'),
             Arr::get($p, 'object.id'),
         ] as $v) {
-            if (is_string($v) && $v !== '') {
+            if (\is_string($v) && $v !== '') {
                 return $v;
             }
         }
@@ -104,7 +127,7 @@ class WebhooksController extends Controller
             Arr::get($p, 'event'),
             Arr::get($p, 'data.object'),
         ] as $v) {
-            if (is_string($v) && $v !== '') {
+            if (\is_string($v) && $v !== '') {
                 return $v;
             }
         }

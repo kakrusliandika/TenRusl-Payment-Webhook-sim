@@ -106,6 +106,8 @@ class CreatePaymentRequest extends FormRequest
             'provider' => 'payment provider',
             'amount' => 'amount',
             'currency' => 'currency (ISO-4217)',
+            // Label konsisten untuk keduanya, supaya pesan error rapi
+            'metadata' => 'metadata',
             'meta' => 'metadata',
         ];
     }
