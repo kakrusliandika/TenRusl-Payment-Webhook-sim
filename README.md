@@ -9,6 +9,8 @@
 
 Demo **Laravel 12** untuk mengilustrasikan arsitektur payment: **idempotency**, **dedup webhook**, **signature verification**, dan **exponential backoff retry (simulasi)** — tanpa kredensial gateway asli. Cocok untuk portfolio & pembelajaran praktik produksi.
 
+Live Demo : **https://tenrusl.alwaysdata.net/payment-webhook-sim/**
+
 > **Catatan**: Semua provider di mode *simulator*. Jangan memakai kredensial asli di repo.
 
 ---
