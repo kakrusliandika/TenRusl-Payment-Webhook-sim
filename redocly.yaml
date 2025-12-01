@@ -1,0 +1,11 @@
+apis:
+  tenrusl:
+    root: docs/openapi.yaml
+
+extends:
+  - recommended
+
+rules:
+  # biar lebih “rapi” dan konsisten
+  operation-operationId: error
+  no-unused-components: warn

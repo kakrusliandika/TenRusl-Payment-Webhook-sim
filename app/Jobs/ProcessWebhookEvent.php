@@ -19,10 +19,6 @@ class ProcessWebhookEvent implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    /**
-     * Nama queue khusus untuk webhook.
-     * Untuk driver database, akan mengisi kolom `queue` pada tabel jobs.
-     */
     public string $queue = 'webhooks';
 
     public function __construct(
@@ -31,13 +27,18 @@ class ProcessWebhookEvent implements ShouldQueue
 
     public function handle(WebhookProcessor $processor): void
     {
+        /** @var WebhookEvent|null $event */
         $event = WebhookEvent::find($this->webhookEventId);
 
         if (! $event) {
             return;
         }
 
-        // Sama seperti jalur inline di command.
+        // Guard: kalau sudah processed & tidak pending, skip (idempotent terhadap duplicate job)
+        if ($event->status === 'processed' && ($event->payment_status ?? null) !== 'pending') {
+            return;
+        }
+
         $processor->process(
             $event->provider,
             $event->event_id,

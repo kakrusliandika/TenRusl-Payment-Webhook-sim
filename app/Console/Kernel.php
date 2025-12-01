@@ -24,33 +24,33 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Jalankan tiap menit; batasi overlap agar aman di beban tinggi.
-        // Nilai-nilai di bawah ini dibaca dari config/tenrusl.php
-        // yang pada gilirannya membaca env:
-        // - TENRUSL_MAX_RETRY_ATTEMPTS
-        // - TENRUSL_SCHEDULER_PROVIDER
-        // - TENRUSL_SCHEDULER_BACKOFF_MODE
-        // - TENRUSL_SCHEDULER_LIMIT
+        // Nilai-nilai di bawah ini dibaca dari config/tenrusl.php (yang biasanya baca dari env).
         $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
-        $provider = (string) config('tenrusl.scheduler_provider', '');      // opsional filter
-        $mode = (string) config('tenrusl.scheduler_backoff_mode', 'full'); // full|equal|decorrelated
-        $limit = (int) config('tenrusl.scheduler_limit', 200);
+        $provider    = (string) config('tenrusl.scheduler_provider', '');      // opsional filter
+        $mode        = (string) config('tenrusl.scheduler_backoff_mode', 'full'); // full|equal|decorrelated
+        $limit       = (int) config('tenrusl.scheduler_limit', 200);
 
-        $cmd = sprintf(
-            'tenrusl:webhooks:retry --limit=%d --max-attempts=%d --mode=%s',
-            $limit,
-            $maxAttempts,
-            $mode
-        );
+        // Kirim sebagai parameter array (Laravel scheduler mendukung command via class + arg list). :contentReference[oaicite:2]{index=2}
+        $params = [
+            "--limit={$limit}",
+            "--max-attempts={$maxAttempts}",
+            "--mode={$mode}",
+        ];
 
         if ($provider !== '') {
-            $cmd .= ' --provider=' . $provider;
+            $params[] = "--provider={$provider}";
         }
 
-        $schedule
-            ->command($cmd)
+        $event = $schedule
+            ->command(RetryWebhookCommand::class, $params)
             ->everyMinute()
-            ->withoutOverlapping(); // gunakan cache lock default
+            // Cegah overlap. Set expiry lock (menit) supaya tidak “nyangkut” lama bila proses crash. :contentReference[oaicite:3]{index=3}
+            ->withoutOverlapping(10)
+            ->name('tenrusl:webhooks:retry');
+
+        // Kalau scheduler jalan di MULTI server dan cache driver kamu shared (redis/db/memcached/dynamodb),
+        // kamu bisa aktifkan ini supaya hanya jalan di satu server. :contentReference[oaicite:4]{index=4}
+        // $event->onOneServer();
     }
 
     /**

@@ -37,25 +37,20 @@ return [
         'doku', 'dana', 'oy', 'payoneer', 'skrill', 'amazon_bwp',
     ],
 
-    // Retry & idempotency demo knobs
-    //
-    // max_retry_attempts dipakai oleh:
-    // - App\Console\Commands\RetryWebhookCommand
-    // - App\Console\Kernel (sebagai default argument command)
-    'max_retry_attempts' => env('TENRUSL_MAX_RETRY_ATTEMPTS', 5),
+    // Retry knobs (dipakai oleh RetryWebhookCommand / WebhookProcessor sesuai implementasi kamu)
+    'max_retry_attempts' => (int) env('TENRUSL_MAX_RETRY_ATTEMPTS', 5),
 
-    // TTL idempotensi legacy (fallback untuk IdempotencyKeyService).
-    // Nilai utama TTL sekarang diambil dari blok 'idempotency.ttl_seconds' di bawah.
-    'idempotency_ttl' => env('TENRUSL_IDEMPOTENCY_TTL', 3600),
+    // Base/cap backoff (ms) — dipakai oleh RetryWebhookCommand (yang versi final sebelumnya).
+    'retry_base_ms' => (int) env('TENRUSL_RETRY_BASE_MS', 500),
+    'retry_cap_ms'  => (int) env('TENRUSL_RETRY_CAP_MS', 30000),
+
+    // TTL idempotensi legacy (fallback untuk kompatibilitas lama)
+    'idempotency_ttl' => (int) env('TENRUSL_IDEMPOTENCY_TTL', 3600),
 
     // Scheduler knobs (dibaca di App\Console\Kernel)
-    //
-    // - scheduler_provider     : filter provider tertentu (string kosong = semua)
-    // - scheduler_backoff_mode : full|equal|decorrelated
-    // - scheduler_limit        : jumlah event per eksekusi tenrusl:webhooks:retry
     'scheduler_provider' => env('TENRUSL_SCHEDULER_PROVIDER', ''),
-    'scheduler_backoff_mode' => env('TENRUSL_SCHEDULER_BACKOFF_MODE', 'full'),
-    'scheduler_limit' => env('TENRUSL_SCHEDULER_LIMIT', 200),
+    'scheduler_backoff_mode' => env('TENRUSL_SCHEDULER_BACKOFF_MODE', 'full'), // full|equal|decorrelated
+    'scheduler_limit' => (int) env('TENRUSL_SCHEDULER_LIMIT', 200),
 
     // --- IMPORTANT: store plain relative asset paths only (no asset()/url()/route()) ---
     'providers_meta' => [
@@ -138,37 +133,34 @@ return [
 
     // Konfigurasi idempotensi (dipakai oleh App\Services\Idempotency\IdempotencyKeyService)
     'idempotency' => [
-        // TTL utama untuk kunci idempotensi. TENRUSL_IDEMPOTENCY_TTL di atas
-        // tetap didukung sebagai fallback demi kompatibilitas.
-        'ttl_seconds' => env('IDEMPOTENCY_TTL_SECONDS', 7200), // 2 jam
+        // TTL utama. Prefer TENRUSL_IDEMPOTENCY_TTL_SECONDS, fallback ke IDEMPOTENCY_TTL_SECONDS.
+        'ttl_seconds' => (int) env(
+            'TENRUSL_IDEMPOTENCY_TTL_SECONDS',
+            env('IDEMPOTENCY_TTL_SECONDS', 7200)
+        ),
 
-        // Saat ini implementasi di IdempotencyKeyService hanya menggunakan cache sebagai
-        // storage idempotensi (mis. Cache::put / remember).
-        //
-        // Nilai 'database' disiapkan sebagai "hook" untuk eksperimen lanjutan:
-        // jika nanti ingin memindahkan idempotency ke tabel DB khusus, value ini
-        // bisa dipakai sebagai toggle. Untuk saat ini belum diimplementasikan penuh.
-        'storage' => 'cache', // atau 'database' (BELUM diimplementasikan)
+        // cache|database (database masih hook kalau belum diimplementasikan)
+        'storage' => env('IDEMPOTENCY_STORAGE', 'cache'),
 
-        // Lama waktu lock idempotensi untuk mencegah race condition pada create payment.
-        'lock_seconds'  => 30,
+        // Lock untuk cegah race idempotency
+        'lock_seconds' => (int) env('IDEMPOTENCY_LOCK_SECONDS', 30),
     ],
 
     // Konfigurasi dedup webhook
     'webhook' => [
-        // Saat ini dedup utama di WebhookProcessor masih berbasis (provider, event_id)
-        // tanpa TTL. Nilai ini disiapkan sebagai TTL ideal untuk:
-        // - pruning event lama via command maintenance, atau
-        // - logika dedup tambahan di masa depan.
-        //
-        // Artinya: ini "hook untuk eksperimen lanjutan", belum dipakai penuh di runtime.
-        'dedup_ttl_seconds' => env('WEBHOOK_DEDUP_TTL_SECONDS', 86400),
+        // Prefer TENRUSL_WEBHOOK_DEDUP_TTL_SECONDS, fallback ke WEBHOOK_DEDUP_TTL_SECONDS.
+        'dedup_ttl_seconds' => (int) env(
+            'TENRUSL_WEBHOOK_DEDUP_TTL_SECONDS',
+            env('WEBHOOK_DEDUP_TTL_SECONDS', 86400)
+        ),
     ],
 
     // Konfigurasi signature global
     'signature' => [
-        // Batas toleransi perbedaan waktu untuk header timestamp (bila provider
-        // memakai pola ts+signature). Beberapa provider akan menggunakan nilai ini.
-        'timestamp_leeway_seconds' => env('SIG_TS_LEEWAY', 300), // 5 menit
+        // Prefer TENRUSL_SIG_TS_LEEWAY, fallback ke SIG_TS_LEEWAY
+        'timestamp_leeway_seconds' => (int) env(
+            'TENRUSL_SIG_TS_LEEWAY',
+            env('SIG_TS_LEEWAY', 300)
+        ),
     ],
 ];

@@ -1,12 +1,19 @@
 openapi: 3.1.0
 info:
   title: TenRusl Payment Webhook Simulator API
-  version: "1.0.0"
+  version: 1.0.0
   description: |
     API untuk membuat pembayaran simulasi (idempotent) dan menerima webhook
     dari berbagai penyedia pembayaran. Status final ditentukan oleh webhook.
+
+    Catatan desain:
+    - Semua response membawa header `X-Request-ID` untuk tracing.
+    - `POST /payments` mendukung idempotency via header `Idempotency-Key`.
+  license:
+    name: UNLICENSED
 servers:
   - url: /
+security: []
 tags:
   - name: Payments
     description: Buat dan cek status pembayaran simulasi
@@ -15,114 +22,144 @@ tags:
 paths:
   /api/v1/payments:
     post:
-      tags: [Payments]
+      tags:
+        - Payments
+      operationId: createPayment
       summary: Buat pembayaran simulasi (idempotent)
       description: |
         Kirim `Idempotency-Key` pada header untuk memastikan operasi idempotent.
         Status awal selalu `pending` sampai webhook diterima.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XRequestIdRequest'
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreatePaymentRequest"
-            examples:
-              basic:
-                value:
-                  provider: xendit
-                  amount: 100000
-                  currency: IDR
-                  description: "Top up"
-                  metadata:
-                    order_id: "ORD-12345"
+        $ref: '#/components/requestBodies/CreatePaymentBody'
       responses:
-        "201":
+        '201':
           description: Created
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
             Idempotency-Key:
-              schema:
-                type: string
-              description: Idempotency-Key yang digunakan dalam permintaan
+              $ref: '#/components/headers/IdempotencyKeyEcho'
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: "#/components/schemas/Payment"
-        "400":
-          description: Bad Request
-        "409":
-          description: Idempotency conflict (parallel call)
+                $ref: '#/components/schemas/PaymentEnvelope'
+              examples:
+                created:
+                  value:
+                    data:
+                      id: 01JCDZQ2F1G8W3X1R7SZM3KZ2S
+                      provider: xendit
+                      provider_ref: sim_xendit_01JCDZQ2F1G8W3X1R7SZM3KZ2S
+                      amount: 100000
+                      currency: IDR
+                      status: pending
+                      meta:
+                        order_id: ORD-12345
+                      created_at: '2025-12-01T09:00:00Z'
+                      updated_at: '2025-12-01T09:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '429':
+          $ref: '#/components/responses/RateLimitedPayments'
   /api/v1/payments/{provider}/{provider_ref}/status:
     get:
-      tags: [Payments]
+      tags:
+        - Payments
+      operationId: getPaymentStatus
       summary: Cek status pembayaran simulasi
       parameters:
-        - $ref: "#/components/parameters/Provider"
-        - name: provider_ref
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/ProviderRef'
+        - $ref: '#/components/parameters/XRequestIdRequest'
       responses:
-        "200":
+        '200':
           description: OK
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: "#/components/schemas/Payment"
+                $ref: '#/components/schemas/PaymentEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitedStatus'
   /api/v1/webhooks/{provider}:
     post:
-      tags: [Webhooks]
+      tags:
+        - Webhooks
+      operationId: receiveWebhook
       summary: Terima webhook dari provider
       description: |
-        Signature diverifikasi per provider (lihat dokumentasi masing-masing).
-        - Xendit: **X-CALLBACK-TOKEN**.
-        - Midtrans: **signature_key** = SHA512(order_id + status_code + gross_amount + server_key).
-        - DOKU: header **Signature** berbasis Client-Id, Request-Id, Request-Timestamp, Request-Target, Digest.
-        - Airwallex: **x-timestamp** + **x-signature** = HMAC-SHA256(ts+rawBody).
-        - Lemon Squeezy: **X-Signature** (HMAC-SHA256 raw body).
+        Signature diverifikasi per provider.
+
+        Header yang digunakan berbeda per provider, contoh:
+        - Xendit: `X-CALLBACK-TOKEN`
+        - Midtrans: `signature_key` (sha512(order_id+status_code+gross_amount+server_key))
+        - Stripe: `Stripe-Signature`
+        - Lemon Squeezy: `X-Signature`
+        - Airwallex: `x-timestamp` + `x-signature` (HMAC-SHA256(ts+rawBody))
+        - DOKU: `Signature` (berbasis Client-Id, Request-Id, Request-Timestamp, Request-Target, Digest, dll)
+
+        Jika signature invalid, respon 401.
+      security:
+        - webhookSignature: []
       parameters:
-        - $ref: "#/components/parameters/Provider"
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/XRequestIdRequest'
+        - $ref: '#/components/parameters/StripeSignature'
+        - $ref: '#/components/parameters/XenditCallbackToken'
+        - $ref: '#/components/parameters/LemonSignature'
+        - $ref: '#/components/parameters/AirwallexTimestamp'
+        - $ref: '#/components/parameters/AirwallexSignature'
+        - $ref: '#/components/parameters/DokuSignature'
       requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
+        $ref: '#/components/requestBodies/WebhookBody'
       responses:
-        "202":
+        '202':
           description: Accepted (diproses idempotent & retry-aware)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: object
-                    properties:
+                $ref: '#/components/schemas/WebhookReceiveEnvelope'
+              examples:
+                accepted:
+                  value:
+                    data:
                       event:
-                        type: object
-                        properties:
-                          provider: { type: string }
-                          event_id: { type: string }
-                          type: { type: string, nullable: true }
+                        provider: xendit
+                        event_id: evt_123
+                        type: invoice.paid
                       result:
-                        type: object
-                        properties:
-                          duplicate: { type: boolean }
-                          persisted: { type: boolean }
-                          status: { type: string, enum: [pending, succeeded, failed] }
-                          payment_provider_ref: { type: string, nullable: true }
-                          next_retry_ms: { type: integer, nullable: true }
+                        duplicate: false
+                        persisted: true
+                        status: succeeded
+                        payment_provider_ref: sim_xendit_01JCDZQ...
+                        next_retry_ms: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitedWebhooks'
 components:
+  securitySchemes:
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: |
+        Skema generic untuk signature webhook. Di implementasi nyata, tiap provider
+        menggunakan header yang berbeda (Stripe-Signature, X-CALLBACK-TOKEN, dll).
   parameters:
     Provider:
       name: provider
@@ -146,10 +183,262 @@ components:
           - payoneer
           - skrill
           - amazon_bwp
+      description: Nama provider (sesuai allowlist)
+    ProviderRef:
+      name: provider_ref
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9\-\._]+$
+      description: Referensi payment di simulator (provider_ref)
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 255
+      description: |
+        Kunci idempotensi untuk POST /payments.
+        Jika request diulang dengan body yang sama → respon sama.
+        Jika request paralel dengan state berbeda → 409.
+    XRequestIdRequest:
+      name: X-Request-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Correlation / request ID dari client (opsional)
+    StripeSignature:
+      name: Stripe-Signature
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Stripe signature header
+    XenditCallbackToken:
+      name: X-CALLBACK-TOKEN
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Xendit callback token header
+    LemonSignature:
+      name: X-Signature
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Lemon Squeezy signature header
+    AirwallexTimestamp:
+      name: x-timestamp
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Airwallex timestamp header
+    AirwallexSignature:
+      name: x-signature
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Airwallex signature header
+    DokuSignature:
+      name: Signature
+      in: header
+      required: false
+      schema:
+        type: string
+      description: DOKU signature header
+  headers:
+    XRequestId:
+      schema:
+        type: string
+      description: Correlation/request ID untuk tracing server-side
+    IdempotencyKeyEcho:
+      schema:
+        type: string
+      description: Idempotency-Key yang digunakan dalam permintaan
+    RetryAfter:
+      schema:
+        type: integer
+      description: Detik sampai klien boleh mencoba kembali
+  requestBodies:
+    CreatePaymentBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreatePaymentRequest'
+          examples:
+            basic:
+              value:
+                provider: xendit
+                amount: 100000
+                currency: IDR
+                description: Top up
+                metadata:
+                  order_id: ORD-12345
+    WebhookBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/WebhookAnyPayload'
+          examples:
+            generic:
+              value:
+                id: evt_123
+                status: paid
+                data:
+                  object:
+                    id: sim_xendit_01JCDZQ...
+                    status: paid
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            additionalProperties: true
+  responses:
+    BadRequest:
+      description: Bad Request (validasi gagal / payload tidak sesuai)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            bad_request:
+              value:
+                message: Invalid payload
+                code: validation_error
+                trace_id: 01JCDZQ2F1G8W3X1R7SZM3KZ2S
+                details:
+                  provider:
+                    - The provider field is required.
+    Unauthorized:
+      description: Signature webhook tidak valid / tidak lolos auth
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid_signature:
+              value:
+                message: Invalid webhook signature.
+                provider: xendit
+                code: unauthorized
+                trace_id: 01JCDZQ2F1G8W3X1R7SZM3KZ2S
+    NotFound:
+      description: Resource tidak ditemukan
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            not_found:
+              value:
+                message: Payment not found
+                code: not_found
+                trace_id: 01JCDZQ2F1G8W3X1R7SZM3KZ2S
+    IdempotencyConflict:
+      description: Idempotency conflict (parallel call dengan state berbeda)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            conflict:
+              value:
+                message: Idempotency conflict
+                code: idempotency_conflict
+                trace_id: 01JCDZQ2F1G8W3X1R7SZM3KZ2S
+    RateLimitedPayments:
+      description: Terlalu banyak request ke endpoint payments
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitedStatus:
+      description: Terlalu banyak request ke endpoint payment status
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimitedWebhooks:
+      description: Terlalu banyak webhook ke endpoint ini (rate limited)
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        error:
+          type: string
+          description: Kode error singkat (opsional)
+          examples:
+            - not_found
+        code:
+          type: string
+          description: Kode error singkat (opsional)
+          examples:
+            - validation_error
+        message:
+          type: string
+          description: Pesan error yang dapat dibaca manusia
+          examples:
+            - Invalid payload
+        provider:
+          type: string
+          description: Provider terkait (opsional)
+        trace_id:
+          type: string
+          description: ID tracing internal (X-Request-ID) untuk debugging/log (opsional)
+        details:
+          type: object
+          additionalProperties: true
+          description: Informasi tambahan (mis. field error)
+      required:
+        - message
     CreatePaymentRequest:
       type: object
-      required: [provider, amount, currency]
+      additionalProperties: true
+      required:
+        - provider
+        - amount
+        - currency
       properties:
         provider:
           type: string
@@ -161,19 +450,25 @@ components:
         currency:
           type: string
           example: IDR
-          pattern: "^[A-Z]{3}$"
+          pattern: ^[A-Z]{3}$
         description:
           type: string
           maxLength: 255
         meta:
           type: object
-          description: Direkomendasikan; metadata bebas
+          additionalProperties: true
+          description: Metadata bebas (disarankan)
         metadata:
           type: object
-          description: Alias yang masih diterima; akan dipetakan ke 'meta'
+          additionalProperties: true
+          description: Alias legacy; dipetakan ke 'meta'
     Payment:
       type: object
-      required: [provider, provider_ref, status]
+      additionalProperties: true
+      required:
+        - provider
+        - provider_ref
+        - status
       properties:
         id:
           type: string
@@ -193,51 +488,94 @@ components:
           example: IDR
         status:
           type: string
-          enum: [pending, succeeded, failed]
+          enum:
+            - pending
+            - succeeded
+            - failed
           example: pending
         meta:
           type: object
+          additionalProperties: true
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-    WebhookEvent:
+    PaymentEnvelope:
       type: object
-      required: [provider, event_id]
+      additionalProperties: true
       properties:
-        id:
+        data:
+          $ref: '#/components/schemas/Payment'
+      required:
+        - data
+    WebhookAnyPayload:
+      type: object
+      additionalProperties: true
+      description: |
+        Payload webhook berbeda-beda tiap provider.
+        Untuk simulator ini, payload diterima sebagai object bebas.
+    WebhookReceiveResult:
+      type: object
+      additionalProperties: true
+      properties:
+        duplicate:
+          type: boolean
+        persisted:
+          type: boolean
+        status:
           type: string
+          enum:
+            - pending
+            - succeeded
+            - failed
+        payment_provider_ref:
+          type:
+            - string
+            - 'null'
+        next_retry_ms:
+          type:
+            - integer
+            - 'null'
+      required:
+        - duplicate
+        - persisted
+        - status
+        - payment_provider_ref
+        - next_retry_ms
+    WebhookReceiveEvent:
+      type: object
+      additionalProperties: true
+      properties:
         provider:
           type: string
         event_id:
           type: string
-        event_type:
-          type: string
-          nullable: true
-        payment_provider_ref:
-          type: string
-          nullable: true
-        payment_status:
-          type: string
-          enum: [pending, succeeded, failed]
-          nullable: true
-        attempts:
-          type: integer
-        received_at:
-          type: string
-          format: date-time
-        last_attempt_at:
-          type: string
-          format: date-time
-        processed_at:
-          type: string
-          format: date-time
-          nullable: true
-        next_retry_at:
-          type: string
-          format: date-time
-          nullable: true
-        payload:
-          type: object
+        type:
+          type:
+            - string
+            - 'null'
+      required:
+        - provider
+        - event_id
+        - type
+    WebhookReceiveData:
+      type: object
+      additionalProperties: true
+      properties:
+        event:
+          $ref: '#/components/schemas/WebhookReceiveEvent'
+        result:
+          $ref: '#/components/schemas/WebhookReceiveResult'
+      required:
+        - event
+        - result
+    WebhookReceiveEnvelope:
+      type: object
+      additionalProperties: true
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookReceiveData'
+      required:
+        - data

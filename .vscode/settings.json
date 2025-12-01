@@ -14,5 +14,8 @@
 
   // JANGAN exclude vendor di Intelephense, biar bisa baca tipe Laravel
   "intelephense.environment.phpVersion": "8.3",
-  "intelephense.files.exclude": ["**/storage/**", "**/node_modules/**"]
+  "intelephense.files.exclude": ["**/storage/**", "**/node_modules/**"],
+  "php.problems.exclude": {
+    "**/vendor/**": [418]
+  }
 }

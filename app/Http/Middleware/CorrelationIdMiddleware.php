@@ -13,7 +13,6 @@ use Symfony\Component\HttpFoundation\Response;
 class CorrelationIdMiddleware
 {
     public const HEADER = 'X-Request-ID';
-
     public const ATTR = 'correlation_id';
 
     /**
@@ -23,21 +22,27 @@ class CorrelationIdMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Ambil dari header kalau ada, kalau tidak generate ULID (lowercase).
         $incoming = (string) ($request->headers->get(self::HEADER) ?? '');
-        $requestId = $incoming !== '' ? $incoming : strtolower((string) Str::ulid());
+        $requestId = $this->sanitizeRequestId($incoming);
 
-        // Simpan ke attribute supaya bisa diakses handler / service.
+        if ($requestId === '') {
+            $requestId = strtolower((string) Str::ulid());
+        }
+
+        // Set ke request attribute agar bisa diakses controller/service
         $request->attributes->set(self::ATTR, $requestId);
 
-        // Share ke log context, sehingga semua log di request ini punya field "request_id".
-        // Di Laravel 10+ kita bisa pakai shareContext (di bawah ini tetap kompatibel).
-        if (method_exists(Log::getLogger(), 'shareContext')) {
-            // Laravel 11/12 style (Monolog v3)
+        // (Optional) Set juga ke request header supaya downstream yang baca header tetap dapat nilainya
+        $request->headers->set(self::HEADER, $requestId);
+
+        // Share ke logging context:
+        // - Laravel baru: Log::shareContext()
+        // - Laravel lama: Log::withContext()
+        // shareContext dibahas di dokumentasi logging. :contentReference[oaicite:1]{index=1}
+        if (method_exists(Log::class, 'shareContext')) {
             Log::shareContext(['request_id' => $requestId]);
         } else {
-            // Fallback: gunakan withContext per log call (beberapa logger/versi lama)
-            Log::withContext(['request_id' => $requestId]);
+            Log::withContext(['request_id' => $requestId]); // ada sejak Laravel 8.49+ :contentReference[oaicite:2]{index=2}
         }
 
         /** @var \Symfony\Component\HttpFoundation\Response $response */
@@ -47,5 +52,27 @@ class CorrelationIdMiddleware
         $response->headers->set(self::HEADER, $requestId);
 
         return $response;
+    }
+
+    /**
+     * Sanitasi request id agar aman (hindari header injection / terlalu panjang).
+     */
+    private function sanitizeRequestId(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        // Max length proteksi
+        if (strlen($value) > 128) {
+            $value = substr($value, 0, 128);
+        }
+
+        // Izinkan: alnum + - _ . :
+        $value = preg_replace('/[^A-Za-z0-9\-\_\.\:]/', '', $value) ?? '';
+
+        return $value;
     }
 }

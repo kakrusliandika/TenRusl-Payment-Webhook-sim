@@ -1,17 +1,24 @@
 {
-    "$schema": "https://json.schemastore.org/package.json",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build",
-        "dev": "vite"
-    },
-    "devDependencies": {
-        "@tailwindcss/vite": "^4.0.0",
-        "axios": "^1.11.0",
-        "concurrently": "^9.0.1",
-        "laravel-vite-plugin": "^2.0.0",
-        "tailwindcss": "^4.0.0",
-        "vite": "^7.0.7"
-    }
+  "$schema": "https://json.schemastore.org/package.json",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "openapi:lint": "redocly lint docs/openapi.yaml",
+    "openapi:bundle": "redocly bundle docs/openapi.yaml -o storage/api-docs/openapi.yaml",
+    "postman:generate": "openapi2postmanv2 -s storage/api-docs/openapi.yaml -o postman/TenRusl.postman_collection.json -p -O folderStrategy=Tags,requestNameSource=operationId",
+    "docs:sync": "npm run openapi:lint && npm run openapi:bundle && npm run postman:generate"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.12.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "axios": "^1.11.0",
+    "concurrently": "^9.0.1",
+    "laravel-vite-plugin": "^2.0.0",
+    "openapi-to-postmanv2": "^4.18.0",
+    "tailwindcss": "^4.0.0",
+    "vite": "^7.0.7",
+    "yaml": "^2.8.2"
+  }
 }
