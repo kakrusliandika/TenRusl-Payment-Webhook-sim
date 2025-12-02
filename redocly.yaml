@@ -1,3 +1,4 @@
+# Redocly CLI config (root project)
 apis:
   tenrusl:
     root: docs/openapi.yaml
@@ -6,6 +7,6 @@ extends:
   - recommended
 
 rules:
-  # biar lebih “rapi” dan konsisten
+  # Biar lebih rapih dan konsisten
   operation-operationId: error
   no-unused-components: warn

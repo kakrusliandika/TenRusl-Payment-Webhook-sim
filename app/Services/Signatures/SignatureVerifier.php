@@ -1,4 +1,5 @@
 <?php
+// app/Services/Signatures/SignatureVerifier.php
 
 declare(strict_types=1);
 
@@ -7,31 +8,37 @@ namespace App\Services\Signatures;
 use Illuminate\Http\Request;
 
 /**
- * Router verifikasi signature berbasis nama provider.
+ * SignatureVerifier
+ * -----------------
+ * Source-of-truth untuk routing verifikasi signature berbasis provider.
  *
- * Kontrak:
- * - Endpoint: /webhooks/{provider}
- * - Provider diverifikasi terhadap allowlist (config('tenrusl.providers_allowlist'))
- * - Masing-masing kelas *Signature harus mengimplementasikan:
+ * Kontrak utama:
+ * - Dipanggil oleh middleware VerifyWebhookSignature sebelum masuk controller/domain.
+ * - Provider harus ada di allowlist config('tenrusl.providers_allowlist').
+ * - Tiap verifier provider WAJIB punya method:
  *
- *   public static function verify(string $rawBody, Request $request): bool
+ *     public static function verify(string $rawBody, Request $request): bool
  *
- *   Di dalamnya (tiap provider):
- *     - Baca header signature/timestamp sesuai provider (Stripe-Signature, X-*, dll)
- *     - Gunakan raw body ($rawBody) untuk HMAC, bukan json_encode hasil decode
- *     - Terapkan timestamp leeway (config('tenrusl.signature.timestamp_leeway_seconds', 300))
- *       bila provider memakai timestamp
- *     - Bandingkan signature dengan constant-time compare (hash_equals)
+ * Catatan penting:
+ * - Raw body HARUS yang asli dari Request::getContent() (bukan json_encode hasil decode).
+ * - Timestamp leeway (jika provider pakai timestamp) diterapkan di kelas verifier provider
+ *   memakai config('tenrusl.signature.timestamp_leeway_seconds', 300).
+ * - Bandingkan signature pakai constant-time compare (hash_equals) di verifier provider.
  */
 final class SignatureVerifier
 {
     /**
-     * Pemetaan provider → kelas verifier.
+     * Pemetaan provider → verifier class.
+     *
+     * NOTE:
+     * - Menggunakan ::class menghasilkan string class-name.
+     * - Kalau beberapa provider verifier belum ada, verify() akan return false
+     *   (karena class_exists / is_callable).
      *
      * @var array<string, class-string>
      */
     private const MAP = [
-        // existing
+        // existing / core demo
         'mock' => MockSignature::class,
         'xendit' => XenditSignature::class,
         'midtrans' => MidtransSignature::class,
@@ -54,43 +61,56 @@ final class SignatureVerifier
     /**
      * Verifikasi signature untuk provider tertentu.
      *
-     * @param  string  $provider Nama provider (mock, xendit, midtrans, dst)
-     * @param  string  $rawBody  Raw HTTP body (seperti diterima dari Request::getContent())
-     * @param  Request $request  Request Laravel (untuk akses header/query/ip, dsb)
+     * @param  string  $provider  Nama provider (mock, xendit, midtrans, dst)
+     * @param  string  $rawBody   Raw HTTP body dari Request::getContent()
+     * @param  Request $request   Request Laravel (untuk akses header, query, ip, dsb.)
      */
     public static function verify(string $provider, string $rawBody, Request $request): bool
     {
         // Normalisasi provider
         $provider = strtolower(trim($provider));
 
-        // Opsional: batasi ke allowlist dari config
-        $allow = (array) config('tenrusl.providers_allowlist', []);
-        if (! empty($allow) && ! in_array($provider, $allow, true)) {
+        if ($provider === '') {
             return false;
         }
 
-        // Mapping provider → kelas
+        /**
+         * Enforce allowlist:
+         * - Harus konsisten antara: route constraint, middleware, dan service.
+         * - Jika allowlist kosong, berarti "anggap semua bisa" (tapi untuk proyek ini,
+         *   biasanya allowlist diisi).
+         */
+        $allow = (array) config('tenrusl.providers_allowlist', []);
+        if ($allow !== [] && ! in_array($provider, $allow, true)) {
+            return false;
+        }
+
+        // Mapping provider → verifier class
         $class = self::MAP[$provider] ?? null;
         if ($class === null) {
-            // Provider tidak dikenal
+            // Provider tidak dikenal / belum didukung
             return false;
         }
 
-        // Pastikan kelas memenuhi kontrak
-        if (! method_exists($class, 'verify')) {
+        // Jangan paksa autoload kalau memang class belum ada
+        if (! class_exists($class)) {
             return false;
         }
 
-        /** @var callable(string, \Illuminate\Http\Request): bool $call */
+        // Pastikan class memenuhi kontrak: verify(string $rawBody, Request $request): bool
+        if (! is_callable([$class, 'verify'])) {
+            return false;
+        }
+
+        /** @var callable(string, Request): bool $call */
         $call = [$class, 'verify'];
 
-        // Hasil boolean final
         return (bool) $call($rawBody, $request);
     }
 
     /**
-     * Daftar provider yang didukung oleh verifier ini
-     * (interseksi allowlist jika allowlist diset).
+     * Daftar provider yang *disupport oleh verifier layer ini*.
+     * Jika allowlist diset, hasilnya adalah interseksi MAP vs allowlist.
      *
      * @return string[]
      */
@@ -99,7 +119,7 @@ final class SignatureVerifier
         $providers = array_keys(self::MAP);
         $allow = (array) config('tenrusl.providers_allowlist', []);
 
-        if (empty($allow)) {
+        if ($allow === []) {
             sort($providers);
             return $providers;
         }

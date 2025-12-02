@@ -12,12 +12,16 @@ namespace App\Services\Webhooks;
  *  - 'equal'         : EQUAL JITTER  -> exp/2 + random(0, exp/2)
  *  - 'decorrelated'  : DECORRELATED  -> min(cap, random(base, prev*3))
  *
- * Nilai balik dalam milidetik.
+ * Nilai balik dalam milidetik (ms).
+ *
+ * Referensi konsep jitter ini umum dipakai di sistem retry agar:
+ * - menghindari thundering herd (semua retry di waktu yg sama),
+ * - lebih stabil saat provider webhook burst / timeout.
  */
 final class RetryBackoff
 {
     /**
-     * Normalisasi input mode (biar signature command lebih toleran).
+     * Normalisasi input mode agar tolerant terhadap input user/env.
      */
     public static function normalizeMode(string $mode): string
     {
@@ -30,14 +34,18 @@ final class RetryBackoff
     }
 
     /**
-     * Hitung delay untuk 1 percobaan.
+     * Hitung delay (ms) untuk sebuah attempt.
      *
-     * @param  int         $attempt     percobaan ke-berapa (mulai dari 1)
+     * Konvensi yang dipakai:
+     * - attempt dimulai dari 1
+     * - exp tanpa jitter: base * 2^(attempt-1) lalu di-cap ke capMs
+     *
+     * @param  int         $attempt     attempt ke- (mulai 1)
      * @param  int         $baseMs      base delay dalam ms
      * @param  int         $capMs       batas maksimal delay
      * @param  string      $mode        full|equal|decorrelated
-     * @param  int|null    $maxAttempts jika di-set, attempt dikunci ke maxAttempts
-     * @param  int|null    $prevMs      (opsional) delay sebelumnya untuk decorrelated
+     * @param  int|null    $maxAttempts bila diisi, clamp attempt ke maxAttempts
+     * @param  int|null    $prevMs      (opsional) delay sebelumnya utk decorrelated
      */
     public static function compute(
         int $attempt,
@@ -49,6 +57,7 @@ final class RetryBackoff
     ): int {
         $mode = self::normalizeMode($mode);
 
+        // Guard input
         $attempt = max(1, $attempt);
         if ($maxAttempts !== null && $maxAttempts > 0) {
             $attempt = min($attempt, $maxAttempts);
@@ -57,7 +66,8 @@ final class RetryBackoff
         $baseMs = max(0, $baseMs);
         $capMs = max($baseMs, $capMs);
 
-        // Exponential base (tanpa jitter) lalu cap.
+        // Exponential base (tanpa jitter) -> cap.
+        // base=500: attempt1=500, attempt2=1000, attempt3=2000, dst.
         $exp = (int) ($baseMs * (2 ** ($attempt - 1)));
         $exp = min($capMs, max(0, $exp));
 
@@ -69,9 +79,10 @@ final class RetryBackoff
     }
 
     /**
-     * Buat daftar jadwal retry (ms) untuk N percobaan.
+     * Buat daftar jadwal retry (ms) untuk N attempt.
+     * Berguna untuk debugging/README: lihat pattern delay.
      *
-     * @return array<int,int> indeks mulai 1 → delay ms
+     * @return array<int,int> key=attempt (mulai 1) => delay(ms)
      */
     public static function schedule(
         int $maxAttempts,
@@ -96,12 +107,15 @@ final class RetryBackoff
             );
 
             $out[$i] = $delay;
-            $prev = $delay;
+            $prev = $delay; // stateful utk decorrelated
         }
 
         return $out;
     }
 
+    /**
+     * FULL JITTER: random antara 0..exp
+     */
     private static function fullJitter(int $exp): int
     {
         if ($exp <= 0) {
@@ -111,6 +125,9 @@ final class RetryBackoff
         return random_int(0, $exp);
     }
 
+    /**
+     * EQUAL JITTER: exp/2 + random(0..exp/2)
+     */
     private static function equalJitter(int $exp): int
     {
         if ($exp <= 0) {
@@ -123,7 +140,7 @@ final class RetryBackoff
     }
 
     /**
-     * Decorrelated jitter (AWS-style):
+     * Decorrelated jitter (gaya AWS):
      * next = min(cap, random(base, prev*3))
      */
     private static function decorrelatedJitter(int $baseMs, int $capMs, int $prevMs): int

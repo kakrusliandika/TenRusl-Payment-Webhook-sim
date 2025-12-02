@@ -16,39 +16,53 @@ class Payment extends Model
 
     protected $table = 'payments';
 
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     /**
      * Kolom yang boleh diisi mass-assignment.
+     * Pastikan ini match dengan migrasi payments kamu.
      */
     protected $fillable = [
         'provider',
         'provider_ref',
+
         'amount',
         'currency',
-        'status',
+        'description',
+
+        // metadata bebas untuk simulator (di OpenAPI pakai "meta")
         'meta',
+
+        // pending | succeeded | failed
+        'status',
+
+        // idempotency (kalau dipakai oleh CreatePaymentRequest/controller)
+        'idempotency_key',
+        'idempotency_request_hash',
     ];
 
     /**
-     * Casting atribut.
-     * - enum casting ke PaymentStatus (PHP 8.1 backed enum)
-     * - meta JSON → array
-     * - amount: integer (selaras dengan migrasi awal unsignedInteger)
-     * - timestamps → datetime Carbon
+     * Casting:
+     * - JSON meta => array
+     * - status => enum/cast PaymentStatus (jika implemented sebagai enum cast) :contentReference[oaicite:5]{index=5}
      */
     protected $casts = [
-        'status' => PaymentStatus::class,
-        'meta' => 'array',
         'amount' => 'integer',
+        'meta' => 'array',
+        'status' => PaymentStatus::class,
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
 
     /**
-     * Scope bantu untuk mencari berdasarkan provider & ref.
+     * Scope bantu untuk lookup payment berdasarkan provider & provider_ref.
      */
     public function scopeByProviderRef($query, string $provider, string $providerRef)
     {
-        return $query->where('provider', $provider)
+        return $query
+            ->where('provider', $provider)
             ->where('provider_ref', $providerRef);
     }
 }

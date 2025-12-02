@@ -3,22 +3,70 @@ name: Docs Sync
 on:
   push:
     branches: ["main"]
+    paths:
+      - "docs/**"
+      - "redocly.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - "postman/**"
+      - "storage/api-docs/**"
+      - ".github/workflows/docs.yml"
   pull_request:
+    paths:
+      - "docs/**"
+      - "redocly.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - "postman/**"
+      - "storage/api-docs/**"
+      - ".github/workflows/docs.yml"
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   docs:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 15
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
 
-      - run: npm ci
-      - run: npm run docs:sync
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-package-lock
+          fi
 
-      # Optional: fail kalau ada perubahan yang belum di-commit
-      - run: |
+      - name: Run docs:sync
+        run: npm run docs:sync
+
+      - name: Fail if there are uncommitted generated changes
+        run: |
           git status --porcelain
           test -z "$(git status --porcelain)"
+
+      - name: Upload docs artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-docs
+          path: |
+            docs/openapi.yaml
+            redocly.yaml
+            storage/api-docs/**
+            postman/**
+          if-no-files-found: ignore

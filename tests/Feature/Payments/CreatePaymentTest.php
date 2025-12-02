@@ -3,63 +3,81 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 
 use function Pest\Laravel\postJson;
 
 uses(RefreshDatabase::class);
 
-it('creates a payment and returns 201 with basic resource structure', function () {
+it('creates a payment and returns 201 with expected resource structure', function () {
+    $ts = now()->timestamp;
+
     $payload = [
         'provider' => 'mock',
         'amount' => 150000,
-        'currency' => 'idr',
-        'description' => 'Order '.now()->timestamp,
-        'metadata' => ['order_id' => 'ORD-'.now()->timestamp],
+        'currency' => 'idr', // sengaja lowercase untuk ngetes normalisasi jadi IDR
+        'description' => 'Order ' . $ts,
+        'metadata' => ['order_id' => 'ORD-' . $ts],
     ];
 
-    $idk1 = now()->timestamp.'-A';
+    $idemKey = 'idem-' . $ts . '-' . Str::random(6);
 
     $resp = postJson('/api/v1/payments', $payload, [
-        'Idempotency-Key' => $idk1,
+        'Idempotency-Key' => $idemKey,
     ]);
 
-    expect($resp->status())->toBeIn([201, 200]);
+    // tergantung implementasi: bisa 201 (created) atau 200 (replay/cache)
+    expect($resp->getStatusCode())->toBeIn([200, 201]);
+
+    // header tracing & idempotency (kalau middleware kamu sudah dipasang)
+    $resp->assertHeader('X-Request-ID');
+    $resp->assertHeader('Idempotency-Key', $idemKey);
 
     $resp->assertJsonStructure([
         'data' => [
             'id',
             'provider',
+            'provider_ref',
             'amount',
             'currency',
             'status',
+            'created_at',
+            'updated_at',
         ],
     ]);
 
-    $provider = (string) $resp->json('data.provider');
-    $currency = strtoupper((string) $resp->json('data.currency'));
-
-    expect($provider)->toBe('mock');
-    expect($currency)->toBe('IDR');
+    expect((string) $resp->json('data.provider'))->toBe('mock');
+    expect(strtoupper((string) $resp->json('data.currency')))->toBe('IDR');
 });
 
-it('is idempotent: same Idempotency-Key returns the same payment', function () {
+it('is idempotent: same Idempotency-Key returns the same payment id', function () {
+    $ts = now()->timestamp;
+
     $payload = [
         'provider' => 'mock',
         'amount' => 50000,
         'currency' => 'IDR',
-        'description' => 'Idem test',
+        'description' => 'Idempotency test ' . $ts,
+        'metadata' => ['order_id' => 'ORD-' . $ts],
     ];
 
-    $key = 'idem-'.now()->timestamp;
+    $key = 'idem-' . $ts;
 
     $first = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
     $second = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
 
+    expect($first->getStatusCode())->toBeIn([200, 201]);
+    expect($second->getStatusCode())->toBeIn([200, 201, 208, 409]); // 409 kalau implementasi lock ketat
+
     $id1 = (string) $first->json('data.id');
     $id2 = (string) $second->json('data.id');
 
-    expect($id1)->toBeString()->and($id2)->toBeString()->and($id1)->toBe($id2);
-    expect($second->status())->toBeIn([200, 201, 409, 208]);
+    expect($id1)->toBeString()->not->toBeEmpty();
+    expect($id2)->toBeString()->not->toBeEmpty();
+    expect($id2)->toBe($id1);
+
+    // pastikan idempotency header tetap ada
+    $second->assertHeader('Idempotency-Key', $key);
 });
 
 it('rejects invalid provider with 422', function () {

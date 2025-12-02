@@ -1,40 +1,44 @@
-# ====== Build stage: Composer deps ======
+# ====== Stage: vendor deps (Composer) ======
 FROM composer:2 AS vendor
 WORKDIR /app
+
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts
+RUN composer install --no-interaction --prefer-dist --no-progress
 
-# ====== Runtime stage ======
-FROM php:8.3-cli-alpine
+# ====== Stage: runtime (PHP-FPM) ======
+FROM php:8.3-fpm-alpine
 
-# Install required extensions & tools
-RUN apk add --no-cache git unzip libzip-dev oniguruma-dev icu-dev \
- && docker-php-ext-install pdo pdo_sqlite intl
+# System deps untuk ekstensi PHP umum (Laravel)
+RUN apk add --no-cache \
+      bash \
+      git \
+      unzip \
+      icu-dev \
+      libzip-dev \
+  && docker-php-ext-install \
+      pdo \
+      pdo_mysql \
+      pdo_sqlite \
+      intl \
+      zip \
+  && rm -rf /var/cache/apk/*
 
-WORKDIR /app
+# Copy composer binary ke runtime supaya bisa dipakai di container (compose command)
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
-# Copy app source
-COPY . /app
-# Copy vendor from build stage
-COPY --from=vendor /app/vendor /app/vendor
+WORKDIR /var/www/html
 
-# Ensure writable dirs
+# Copy source (untuk image build tanpa bind-mount)
+COPY . /var/www/html
+
+# Copy vendor hasil composer stage
+COPY --from=vendor /app/vendor /var/www/html/vendor
+
+# Pastikan direktori writable Laravel
 RUN mkdir -p storage bootstrap/cache database \
+ && chown -R www-data:www-data storage bootstrap/cache database \
  && chmod -R 775 storage bootstrap/cache \
- && touch database/database.sqlite
+ && touch database/database.sqlite || true
 
-# Render will inject PORT. Expose for clarity.
-EXPOSE 8080
-
-# Start: key, cache, migrate, background workers, serve
-CMD sh -lc '\
-  php -v; \
-  [ -n "$APP_KEY" ] || php artisan key:generate --force || true; \
-  php artisan config:cache || true; \
-  php artisan route:cache || true; \
-  if [ "$DB_CONNECTION" = "sqlite" ]; then touch database/database.sqlite; fi; \
-  php artisan migrate --force || true; \
-  (php artisan schedule:work &); \
-  (php artisan queue:work --sleep=1 --tries=1 &); \
-  php -S 0.0.0.0:${PORT:-8080} -t public \
-'
+EXPOSE 9000
+CMD ["php-fpm"]

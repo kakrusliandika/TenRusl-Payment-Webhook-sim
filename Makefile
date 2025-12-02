@@ -1,18 +1,39 @@
-.PHONY: init test openapi up down logs
+.PHONY: init test lint analyse docs dev up down logs
 
+PHP ?= php
+COMPOSER ?= composer
+NPM ?= npm
+ARTISAN = $(PHP) artisan
+
+# Inisialisasi lokal cepat
 init:
-	composer install
+	$(COMPOSER) install
 	cp .env.example .env || true
-	php artisan key:generate || true
-	php artisan migrate --force
-	npm install
+	$(ARTISAN) key:generate || true
+	$(ARTISAN) migrate --force
+	$(NPM) install
 
+# Jalankan test suite (Pest)
 test:
-	composer test
+	$(COMPOSER) test
 
-openapi:
-	php artisan l5-swagger:generate
+# Lint/format (Pint) — sesuaikan dengan script composer kamu
+lint:
+	$(COMPOSER) format:check
 
+# Static analysis (Larastan/PHPStan) — sesuaikan dengan script composer kamu
+analyse:
+	$(COMPOSER) analyse:larastan
+
+# Sinkronisasi docs OpenAPI (Redocly bundle + Postman)
+docs:
+	$(NPM) run docs:sync
+
+# Dev server (Vite)
+dev:
+	$(NPM) run dev
+
+# Docker (default pakai docker-compose.yml di root)
 up:
 	docker compose up -d
 

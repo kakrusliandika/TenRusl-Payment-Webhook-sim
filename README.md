@@ -1,17 +1,19 @@
 # 💳 TenRusl Payment Webhook Simulator
 
-[![CI](https://github.com/kakrusliandika/tenrusl-payment-webhook-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/kakrusliandika/tenrusl-payment-webhook-sim/actions)
-![License](https://img.shields.io/github/license/kakrusliandika/tenrusl-payment-webhook-sim)
-![Release](https://img.shields.io/github/v/release/kakrusliandika/tenrusl-payment-webhook-sim?include_prereleases&sort=semver)
+[![CI](https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim/actions/workflows/ci.yml/badge.svg)](https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim/actions)
+![License](https://img.shields.io/github/license/kakrusliandika/TenRusl-Payment-Webhook-sim)
+![Release](https://img.shields.io/github/v/release/kakrusliandika/TenRusl-Payment-Webhook-sim?include_prereleases&sort=semver)
 ![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)
 ![Pest](https://img.shields.io/badge/Tests-Pest-18181B?logo=pestphp&logoColor=white)
+![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?logo=openapi-initiative&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 
-Demo **Laravel 12** untuk mengilustrasikan arsitektur payment: **idempotency**, **dedup webhook**, **signature verification**, dan **exponential backoff retry (simulasi)** — tanpa kredensial gateway asli. Cocok untuk portfolio & pembelajaran praktik produksi.
+Demo **Laravel 12** yang mencontohkan arsitektur payment “production-minded”: **idempotency**, **dedup webhook**, **signature verification (gate)**, dan **exponential backoff retry** — semuanya dalam mode **simulator** (tanpa kredensial gateway asli). Cocok untuk **portfolio** & belajar pola reliabilitas API.
 
-Live Demo : **https://tenrusl.alwaysdata.net/payment-webhook-sim/**
+🌍 Live Demo: **https://tenrusl.alwaysdata.net/payment-webhook-sim/**
 
-> **Catatan**: Semua provider di mode *simulator*. Jangan memakai kredensial asli di repo.
+> **Catatan**: seluruh provider di repo ini berjalan sebagai simulator. Jangan menaruh kredensial produksi.
 
 ---
 
@@ -19,36 +21,49 @@ Live Demo : **https://tenrusl.alwaysdata.net/payment-webhook-sim/**
 
 - [Fitur](#-fitur)
 - [Arsitektur Singkat](#-arsitektur-singkat)
-- [Quick Start](#-quick-start)
-- [Konfigurasi Lingkungan](#-konfigurasi-lingkungan)
+- [Reliability Guarantees](#-reliability-guarantees)
+- [Quick Start (SQLite)](#-quick-start-sqlite)
+- [Commands Cheat Sheet](#-commands-cheat-sheet)
+- [Konfigurasi (config/tenrusl.php + .env)](#-konfigurasi-configtenruslphp--env)
 - [Endpoint API](#-endpoint-api)
-- [Webhook Signature (Simulasi)](#-webhook-signature-simulasi)
-- [Swagger & Postman](#-swagger--postman)
-- [Testing & CI](#-testing--ci)
+- [Webhook Signature (Simulator)](#-webhook-signature-simulator)
+- [Retry Engine & Scheduler](#-retry-engine--scheduler)
+- [OpenAPI → Bundle → Postman](#-openapi--bundle--postman)
+- [Testing](#-testing)
+- [CI Workflows](#-ci-workflows)
+- [Docker (Dev)](#-docker-dev)
+- [Deploy (Render/Railway)](#-deploy-renderrain)
 - [Struktur Direktori](#-struktur-direktori)
-- [Operasional](#-operasional)
 - [Limitations & Next Steps](#-limitations--next-steps)
 - [Troubleshooting](#-troubleshooting)
-- [Rilis](#-rilis)
 - [Lisensi](#-lisensi)
 
 ---
 
 ## ✨ Fitur
 
-- 🔐 **Idempotency** untuk `POST /payments` via header `Idempotency-Key`
-- 🧬 **Dedup Webhook** berdasarkan `provider + event_id`
-- 🔏 **Signature Verification** siap multi-provider:
-  - **mock** (HMAC-SHA256 raw body + `MOCK_SECRET`)
-  - **xendit** (`x-callback-token`)
-  - **midtrans** (`signature_key`)
-  - **stripe**, **paypal**, **paddle**, **lemonsqueezy**
-  - **airwallex**, **tripay**, **doku**, **dana**, **oy**
-  - **payoneer**, **skrill**, **amazon_bwp**
-- 🔁 **Exponential Backoff Retry** (simulasi) untuk event gagal
-- 📜 **OpenAPI (Swagger UI)** + 🗂️ **Postman collection & environment**
-- 🧪 **Pest tests** lengkap (Feature + Unit) + ✅ **GitHub Actions CI**
-- 🐳 **Docker dev** (opsional) & siap deploy (Render/Railway)
+### 🔐 Idempotency — `POST /api/v1/payments`
+- Header: `Idempotency-Key`
+- Store hasil response (status+headers+body) untuk replay yang konsisten.
+- Lock untuk mencegah eksekusi paralel dengan key yang sama (menghindari double-create).
+
+### 🧬 Dedup Webhook — `(provider, event_id)`
+- Unique constraint di DB untuk memastikan **race-condition safe**.
+- Insert → jika duplicate-key → ambil row existing dan **lock row** (agar state konsisten).
+- Attempts di-*touch* saat duplicate datang dari provider (bukan internal retry).
+
+### 🔏 Signature Verification Gate (sebelum masuk domain)
+- Route webhook dipasangi middleware `verify.webhook.signature`.
+- Raw body disimpan ke request attribute `tenrusl_raw_body` agar hashing selalu memakai body mentah (bukan `json_encode` ulang).
+- `SignatureVerifier` jadi source-of-truth: mapping `provider → <VerifierClass>` + enforce allowlist.
+
+### 🔁 Retry dengan Exponential Backoff + Jitter
+- `RetryBackoff` mendukung mode: `full`, `equal`, `decorrelated` (AWS-style).
+- Scheduler/command memilih event “due” dan melakukan claiming agar tidak double-process.
+
+### 🧪 Tests & CI
+- Pest Feature tests untuk payments, webhooks, dedup, signature gate, retry command.
+- GitHub Actions: QA (pint + larastan + tests), docs sync, artifacts OpenAPI.
 
 ---
 
@@ -58,23 +73,53 @@ Live Demo : **https://tenrusl.alwaysdata.net/payment-webhook-sim/**
 flowchart TD
   A[Client] -->|Idempotency-Key| B[POST /api/v1/payments]
   B -->|create pending| P[(payments)]
-  W[Provider] -->|POST /api/v1/webhooks/&#123;provider&#125;| C[WebhooksController]
-  C -->|Verify Signature| S[SignatureVerifier]
-  C -->|Dedup + Orkestrasi| R[WebhookProcessor]
-  R -->|Update Status| P
-  R -->|Retry Fail| Q[(webhook_events)]
+
+  W[Provider] -->|POST /api/v1/webhooks/{provider}| M[VerifyWebhookSignature]
+  M -->|rawBody in request attr| C[WebhooksController]
+  C -->|Dedup + orchestrate| R[WebhookProcessor]
+  R -->|Update status atomic| P
+  R -->|Schedule retry| E[(webhook_events)]
+
+  S[Scheduler] -->|everyMinute| K[tenrusl:webhooks:retry]
+  K -->|claim due events| E
+  K -->|queue/inline| J[ProcessWebhookEvent Job]
+  J -->|skip processed| R
 ```
 
-- **PaymentsService**: create & status + idempotensi (TTL/Cache)
-- **SignatureVerifier**: verifikasi per provider (header/token/HMAC/RSA)
-- **WebhookProcessor**: dedup → update payment → set retry
-- **RetryBackoff**: jeda eksponensial (dengan jitter, batas maksimum)
+**Komponen inti:**
+- **SignatureVerifier**: gate signature per provider + allowlist.
+- **WebhookProcessor**: dedup + update payment + update event audit + scheduling retry.
+- **RetryWebhookCommand**: selection due events + claiming/locking + dispatch inline/queue.
+- **CorrelationIdMiddleware**: inject `X-Request-ID` untuk tracing konsisten.
 
 ---
 
-## 🚀 Quick Start
+## 🧷 Reliability Guarantees
 
-**Prasyarat**: PHP 8.3+, Composer, SQLite (untuk dev cepat), Git
+Bagian ini menjelaskan “janji” sistem dan kenapa implementasinya aman:
+
+1) **Idempotent create payment**
+   - Kunci: `Idempotency-Key`
+   - Replay: request yang sama → response sama (body/status/headers).
+   - Paralel call dengan key sama → ditahan oleh lock; kalau collision → `409`.
+
+2) **Dedup webhook benar-benar race-safe**
+   - Unique DB: `(provider, event_id)`
+   - On conflict: ambil row existing + `FOR UPDATE` untuk menghindari update state yang saling timpa.
+
+3) **Update event + payment konsisten**
+   - Saat event berhasil memfinalkan status payment, event juga ditandai `processed` + `processed_at` + `payment_provider_ref` + `payment_status` dalam orkestrasi yang konsisten.
+
+4) **Retry tidak “mandek”**
+   - Event due: `next_retry_at IS NULL OR next_retry_at <= now()`
+   - Claiming: attempts/lease di-update dulu dalam transaction, baru diproses.
+   - Scheduler: jalan tiap menit + `withoutOverlapping()`.
+
+---
+
+## 🚀 Quick Start (SQLite)
+
+**Prasyarat:** PHP 8.3+, Composer, Node 20+, Git
 
 ```bash
 git clone https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim.git
@@ -85,64 +130,110 @@ composer install
 cp .env.example .env
 php artisan key:generate
 
-# SQLite (dev cepat)
+# SQLite dev cepat
 mkdir -p database && touch database/database.sqlite
 php artisan migrate
 
-php artisan serve  # http://127.0.0.1:8000
+php artisan serve
+# http://127.0.0.1:8000
 ```
 
-**Swagger UI**: `http://127.0.0.1:8000/api/documentation`
-
-> **Tip**: untuk uji *idempotency*, kirim `POST /api/v1/payments` dengan **header** `Idempotency-Key` yang sama, dua kali.
+Swagger UI (jika `l5-swagger` diaktifkan):
+- `http://127.0.0.1:8000/api/documentation`
 
 ---
 
-## 🔧 Konfigurasi Lingkungan
+## 🧰 Commands Cheat Sheet
 
-Semua kunci tersedia di `.env.example`. Ringkasan kunci penting:
+### 🐘 Composer scripts (composer.json)
 
-### 🔑 Kunci inti TenRusl
+> Jalankan dari root project
 
-| Kunci                            | Contoh        | Keterangan                                                  | Status         |
-|----------------------------------|---------------|-------------------------------------------------------------|----------------|
-| `TENRUSL_MAX_RETRY_ATTEMPTS`     | `5`           | Maksimum percobaan retry webhook                           | Opsional (dev) |
-| `TENRUSL_IDEMPOTENCY_TTL`        | `3600`        | TTL idempotensi legacy (fallback, detik)                   | Opsional (dev) |
-| `IDEMPOTENCY_TTL_SECONDS`        | `7200`        | TTL idempotensi utama (dipakai IdempotencyKeyService)      | Disarankan     |
-| `WEBHOOK_DEDUP_TTL_SECONDS`      | `86400`       | TTL ideal dedup webhook (hook untuk pruning ke depan)      | Opsional       |
-| `TENRUSL_SCHEDULER_PROVIDER`     | *(kosong)*    | Filter provider untuk scheduler retry (kosong = semua)     | Opsional       |
-| `TENRUSL_SCHEDULER_BACKOFF_MODE` | `full`        | Mode backoff: `full`, `equal`, atau `decorrelated`         | Opsional       |
-| `TENRUSL_SCHEDULER_LIMIT`        | `200`         | Batas event per eksekusi command retry                     | Opsional       |
+```bash
+# Setup lengkap (install + env + key + migrate + npm + build)
+composer setup
 
-### 🌐 Kunci provider & signature
+# Dev mode (server + queue + logs pail + vite) via concurrently
+composer dev
 
-| Kunci                        | Contoh        | Keterangan singkat                                         | Status       |
-|-----------------------------|---------------|-------------------------------------------------------------|--------------|
-| `MOCK_SECRET`               | `changeme`    | HMAC untuk provider **mock**                               | Wajib (mock) |
-| `XENDIT_CALLBACK_TOKEN`     | `changeme`    | Token callback **Xendit**                                  | Opsional     |
-| `MIDTRANS_SERVER_KEY`       | `changeme`    | *Server key* **Midtrans**                                  | Opsional     |
-| `STRIPE_WEBHOOK_SECRET`     | `...`         | Secret **Stripe** (HMAC)                                   | Opsional     |
-| `PAYPAL_ENV`                | `sandbox`     | Env PayPal (`sandbox` / `live`)                            | Opsional     |
-| `PADDLE_SIGNING_SECRET`     | `...`         | Secret **Paddle** (mode baru, HMAC)                        | Opsional     |
-| `PADDLE_PUBLIC_KEY`         | `PEM`         | Public key **Paddle** (mode lama, RSA)                     | Opsional     |
-| `LS_WEBHOOK_SECRET`         | `...`         | Secret **Lemon Squeezy**                                   | Opsional     |
-| `AIRWALLEX_WEBHOOK_SECRET`  | `...`         | Secret **Airwallex**                                       | Opsional     |
-| `TRIPAY_PRIVATE_KEY`        | `...`         | Secret **Tripay**                                          | Opsional     |
-| `DOKU_CLIENT_ID`            | `...`         | Client id **DOKU**                                         | Opsional     |
-| `DOKU_SECRET_KEY`           | `...`         | Secret **DOKU**                                            | Opsional     |
-| `DOKU_REQUEST_TARGET`       | `/orders/...` | Request target simulasi untuk signature DOKU               | Opsional     |
-| `DANA_PUBLIC_KEY`           | `PEM`         | Public key **DANA** (RSA)                                  | Opsional     |
-| `OY_CALLBACK_SECRET`        | `...`         | Secret **OY!** *(opsional, tergantung produk)*             | Opsional     |
-| `OY_IP_WHITELIST`           | `1.2.3.4`     | Whitelist IP **OY!**                                       | Opsional     |
-| `PAYONEER_SHARED_SECRET`    | `...`         | Secret **Payoneer**                                        | Opsional     |
-| `PAYONEER_MERCHANT_ID`      | `...`         | Merchant ID **Payoneer**                                   | Opsional     |
-| `SKRILL_MERCHANT_ID`        | `...`         | Merchant ID **Skrill**                                     | Opsional     |
-| `SKRILL_EMAIL`              | `...`         | Email merchant **Skrill**                                  | Opsional     |
-| `SKRILL_MD5_SECRET`         | `...`         | Secret MD5 **Skrill**                                      | Opsional     |
-| `AMZN_BWP_PUBLIC_KEY`       | `PEM`         | Public key **Amazon Buy with Prime**                       | Opsional     |
+# Code style
+composer format
+composer format:check
 
-Konfigurasi dipetakan di `config/tenrusl.php` termasuk `providers_allowlist`:
+# Static analysis (Larastan/PHPStan)
+composer analyse
+composer analyse:larastan
 
+# Tests
+composer test
+composer test:unit
+
+# Prepare test env (aman untuk CI/local)
+composer test:prepare
+
+# “All-in-one” QA
+composer qa
+```
+
+### 🟩 NPM scripts (package.json)
+
+```bash
+# Frontend dev (Vite)
+npm run dev
+
+# Production build
+npm run build
+
+# Docs pipeline
+npm run docs:prepare
+npm run openapi:lint
+npm run openapi:bundle
+npm run postman:generate
+npm run docs:sync
+```
+
+### 🧩 Artisan commands penting
+
+```bash
+# Retry processor utama (dipanggil scheduler)
+php artisan tenrusl:webhooks:retry --limit=200 --max-attempts=5 --mode=full
+php artisan tenrusl:webhooks:retry --provider=mock --limit=50 --mode=decorrelated
+
+# Wrapper manual trigger
+php artisan tenrusl:webhooks:retry-once
+
+# Utility
+php artisan route:list --path=api/v1
+php artisan migrate
+php artisan test
+```
+
+---
+
+## 🔧 Konfigurasi (config/tenrusl.php + .env)
+
+Konfigurasi utama ada di `config/tenrusl.php` dan dikontrol via `.env`.
+
+### 🎛️ Knob inti (dipakai nyata di service)
+| Config Key | Env | Default | Dipakai oleh |
+|---|---|---:|---|
+| `tenrusl.max_retry_attempts` | `TENRUSL_MAX_RETRY_ATTEMPTS` | `5` | WebhookProcessor, RetryWebhookCommand, Kernel scheduler |
+| `tenrusl.retry_base_ms` | `TENRUSL_RETRY_BASE_MS` | `500` | RetryBackoff (via command/processor) |
+| `tenrusl.retry_cap_ms` | `TENRUSL_RETRY_CAP_MS` | `30000` | RetryBackoff (cap) |
+| `tenrusl.scheduler_limit` | `TENRUSL_SCHEDULER_LIMIT` | `200` | App\Console\Kernel |
+| `tenrusl.scheduler_backoff_mode` | `TENRUSL_SCHEDULER_BACKOFF_MODE` | `full` | Kernel → RetryWebhookCommand |
+| `tenrusl.scheduler_provider` | `TENRUSL_SCHEDULER_PROVIDER` | `""` | Kernel filter provider |
+| `tenrusl.idempotency.ttl_seconds` | `TENRUSL_IDEMPOTENCY_TTL_SECONDS` | `7200` | IdempotencyKeyService |
+| `tenrusl.idempotency.lock_seconds` | `IDEMPOTENCY_LOCK_SECONDS` | `30` | IdempotencyKeyService |
+| `tenrusl.webhook.dedup_ttl_seconds` | `TENRUSL_WEBHOOK_DEDUP_TTL_SECONDS` | `86400` | (hook) pruning/maintenance (future) |
+| `tenrusl.signature.timestamp_leeway_seconds` | `TENRUSL_SIG_TS_LEEWAY` | `300` | verifiers yang pakai timestamp |
+
+### ✅ Allowlist provider
+Allowlist diset di `tenrusl.providers_allowlist` dan dipakai konsisten oleh:
+- constraint route (`whereIn('provider', $providers)`)
+- SignatureVerifier allowlist gate
+
+Default allowlist (contoh):
 ```text
 mock, xendit, midtrans, stripe, paypal, paddle, lemonsqueezy,
 airwallex, tripay, doku, dana, oy, payoneer, skrill, amazon_bwp
@@ -152,160 +243,245 @@ airwallex, tripay, doku, dana, oy, payoneer, skrill, amazon_bwp
 
 ## 📡 Endpoint API
 
-**Base URL**: `http://127.0.0.1:8000/api/v1`
+Base URL: `http://127.0.0.1:8000/api/v1`
 
-| Method  | Path                                       | Deskripsi                                              | Header Penting                     |
-|:-------:|--------------------------------------------|--------------------------------------------------------|------------------------------------|
-| POST    | `/payments`                                | Buat payment *(idempotent)*                            | `Idempotency-Key: <uuid>`          |
-| GET     | `/payments/{provider}/{provider_ref}/status`| Lihat status payment berdasarkan provider & referensi  | –                                  |
-| POST    | `/webhooks/{provider}`                     | Terima event webhook dari provider                     | Lihat tabel [Signature](#-webhook-signature-simulasi) |
-| OPTIONS | `/webhooks/{provider}`                     | Preflight CORS (di-handle CORS middleware / Laravel)   | –                                  |
+| Method | Path | Deskripsi | Catatan |
+|---:|---|---|---|
+| POST | `/payments` | Create payment (idempotent) | Header `Idempotency-Key` |
+| GET | `/payments/{provider}/{provider_ref}/status` | Status check | provider constrained allowlist |
+| POST | `/webhooks/{provider}` | Receive webhook | Middleware signature wajib |
+| OPTIONS | `/webhooks/{provider}` | Preflight | untuk CORS strict client |
 
-**Contoh cURL**:
+### Contoh cURL — create payment (idempotent)
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/payments \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: 123e4567-e89b-12d3-a456-426614174000" \
-  -d '{"provider":"mock","amount":25000,"currency":"IDR","description":"Topup"}'
+  -H "X-Request-ID: req-demo-001" \
+  -d '{"provider":"mock","amount":25000,"currency":"IDR","description":"Topup","metadata":{"order_id":"ORD-123"}}'
+```
+
+### Contoh response envelope (201)
+
+```json
+{
+  "data": {
+    "id": "01JCDZQ2F1G8W3X1R7SZM3KZ2S",
+    "provider": "mock",
+    "provider_ref": "sim_mock_01JCDZQ2F1G8W3X1R7SZM3KZ2S",
+    "amount": 25000,
+    "currency": "IDR",
+    "status": "pending",
+    "meta": { "order_id": "ORD-123" },
+    "created_at": "2025-12-01T09:00:00Z",
+    "updated_at": "2025-12-01T09:00:00Z"
+  }
+}
 ```
 
 ---
 
-## 🔏 Webhook Signature (Simulasi)
+## 🔏 Webhook Signature (Simulator)
 
-| Provider        | Header/Metode                | Rumus singkat / Catatan                                                                 |
-|----------------|------------------------------|-----------------------------------------------------------------------------------------|
-| **mock**       | `X-Mock-Signature`           | `hex(hmac_sha256(raw_body, MOCK_SECRET))`                                               |
-| **xendit**     | `x-callback-token`           | Harus sama dengan `XENDIT_CALLBACK_TOKEN`                                              |
-| **midtrans**   | `signature_key`              | `sha512(order_id + status_code + gross_amount + MIDTRANS_SERVER_KEY)`                   |
-| **stripe**     | `Stripe-Signature`           | HMAC SHA-256 atas `t.payload` (verifikasi timestamp + signature)                        |
-| **paypal**     | Verify Webhook Signature     | Gunakan API PayPal (simulator menyiapkan struktur verify)                               |
-| **paddle**     | `p_signature`/signing secret | Mode lama RSA / mode baru HMAC (simulator siap keduanya)                                |
-| **lemonsqueezy**| `X-Signature`               | HMAC SHA-256 atas raw body                                                             |
-| **airwallex**  | `x-timestamp` + `x-signature`| Base64(HMAC-SHA256(`timestamp + body`))                                                 |
-| **tripay**     | `X-Callback-Signature`       | HMAC SHA-256 raw JSON body                                                             |
-| **doku**       | `Signature` (+Digest, dll.)  | HMACSHA256=base64(...), memanfaatkan `Client-Id`,`Request-Id`,`Digest`,`Request-Target` |
-| **dana**       | `X-SIGNATURE` (RSA)          | Verifikasi RSA-2048 SHA-256 atas raw body (pakai public key)                            |
-| **oy**         | `X-OY-Signature`/whitelist   | Tergantung produk; dukungan signature/whitelist disiapkan                               |
-| **payoneer**   | Header signature             | Tergantung produk; disediakan adapter & verifier dasar                                  |
-| **skrill**     | `md5sig` (form encoded)      | MD5 gabungan field IPN                                                                  |
-| **amazon_bwp** | `x-amzn-signature` (RSA)     | Verifikasi tanda tangan dengan public key                                               |
+Webhook lewat gate middleware: `VerifyWebhookSignature` → `SignatureVerifier` → `<ProviderSignature>::verify(rawBody, Request)`.
 
-> **Catatan**: beberapa provider punya variasi dan *environment specific*. Di simulator, verifikasi difokuskan di *header presence/structure* + HMAC/RSA generik untuk edukasi.
+| Provider | Header/Metode | Catatan ringkas |
+|---|---|---|
+| `mock` | `X-Mock-Signature` | `hex(hmac_sha256(raw_body, MOCK_SECRET))` |
+| `xendit` | `X-CALLBACK-TOKEN` | harus sama dengan `XENDIT_CALLBACK_TOKEN` |
+| `midtrans` | `signature_key` | `sha512(order_id + status_code + gross_amount + MIDTRANS_SERVER_KEY)` |
+| `stripe` | `Stripe-Signature` | HMAC + timestamp leeway |
+| `paddle` | `p_signature` / signing secret | dukung pola lama (RSA) dan baru (HMAC) |
+| `lemonsqueezy` | `X-Signature` | HMAC raw body |
+| `airwallex` | `x-timestamp` + `x-signature` | HMAC SHA256 `timestamp + body` |
+| `tripay` | `X-Callback-Signature` | HMAC raw JSON |
+| `doku` | `Signature` (+Digest, dll.) | signer style DOKU (disederhanakan untuk demo) |
+| `dana` | RSA signature header | verifikasi RSA (public key) |
+| `oy` | secret/whitelist | dipersiapkan (simulasi) |
+| `payoneer` | shared secret | dipersiapkan (simulasi) |
+| `skrill` | MD5/IPN | dipersiapkan (simulasi) |
+| `amazon_bwp` | RSA signature header | dipersiapkan (simulasi) |
 
----
-
-## 📜 Swagger & 📨 Postman
-
-- **Swagger UI**: `http://127.0.0.1:8000/api/documentation`
-  Output generator di `storage/api-docs/openapi.yaml|json`.
-- **Postman**: impor berkas berikut:
-  - `postman/TenRusl-Payment-Sim.postman_collection.json`
-  - `postman/TenRusl-Local.postman_environment.json`
-
-**Fitur Postman**:
-- Auto generate `Idempotency-Key`
-- Auto HMAC `X-Mock-Signature`
-- Inject `x-callback-token` (Xendit)
-- (Opsional) Hitung `signature_key` Midtrans
+> Karena ini simulator, beberapa provider dibuat “edukatif”: fokus pada pola gate + raw body + constant-time compare + timestamp leeway.
 
 ---
 
-## 🧪 Testing & ✅ CI
+## 🔁 Retry Engine & Scheduler
 
+### RetryBackoff modes
+- **full**: `random(0, exp)`
+- **equal**: `exp/2 + random(0, exp/2)`
+- **decorrelated**: `min(cap, random(base, prev*3))`
+
+### RetryWebhookCommand — prinsip penting
+- Query event **due**: `next_retry_at <= now OR next_retry_at IS NULL`
+- Filter provider: `--provider=<name>`
+- Limit batch: `--limit=<n>`
+- Claiming via transaction + `FOR UPDATE`:
+  - `attempts++`
+  - `last_attempt_at = now`
+  - set “lease” `next_retry_at = now + backoff`
+- Proses inline atau queue (`--queue`) tanpa double-processing
+
+### Scheduler (Kernel)
+Scheduler memanggil `tenrusl:webhooks:retry` tiap menit dengan:
+- `withoutOverlapping(10)` untuk mencegah overlap
+- parameter dibaca dari config/env agar knobs benar-benar hidup
+
+---
+
+## 📜 OpenAPI → Bundle → Postman
+
+### Berkas docs utama
+- `docs/openapi.yaml` (source of truth)
+- `redocly.yaml` (lint rules + pointer ke openapi)
+- output bundle: `storage/api-docs/openapi.yaml`
+- output Postman: `postman/TenRusl.postman_collection.json`
+
+### One-liner
 ```bash
-php artisan test        # semua test (Pest)
-php artisan test --unit # unit saja
-php artisan test --testsuite=Feature
+npm run docs:sync
 ```
 
-- **Feature**: Payments + Webhooks (semua provider) + Retry.
-- **Unit**: IdempotencyKeyService, RetryBackoff, SignatureVerifier, Bootstrap config.
-- **CI**: GitHub Actions menjalankan composer install → migrate (SQLite) → test.
+Yang dijalankan:
+1) buat folder output (`storage/api-docs`, `postman`)
+2) lint OpenAPI (`redocly lint`)
+3) bundle (`redocly bundle`)
+4) generate Postman (`openapi2postmanv2`)
 
 ---
 
-## 🗂️ Struktur Direktori (ringkas)
+## 🧪 Testing
+
+Jalankan test suite:
+```bash
+composer test
+```
+
+Test penting yang ada/ditambah:
+- **dedup**: webhook event_id sama dua kali → hanya 1 row + attempts naik
+- **signature invalid**: webhook tanpa signature valid → `401`
+- **retry command**: hanya ambil event due + menghormati `--limit`
+
+---
+
+## ✅ CI Workflows
+
+Folder: `.github/workflows/`
+
+- **ci.yml**: Composer install → migrate SQLite → pint → larastan → pest → docs artifact
+- **docs.yml**: `npm ci` → `npm run docs:sync` + fail jika ada file berubah (opsional)
+- **php-ci.yml**: jalankan tests cepat
+- **railway-deploy.yml**: deploy ke Railway pada push main
+- **retry-schedule.yml**: workflow schedule untuk menjalankan retry processor (opsional)
+
+---
+
+## 🐳 Docker (Dev)
+
+Repo menyediakan beberapa opsi compose (pilih salah satu sesuai kebutuhan).
+
+### ✅ Opsi: MySQL + Nginx (recommended untuk dev Docker)
+1) Pastikan file compose yang dipakai sudah menunjuk ke `Dockerfile` dan `docker/nginx/default.conf`.
+2) Jalankan:
+```bash
+docker compose up -d --build
+```
+3) Akses app:
+- `http://localhost:8000`
+
+### Troubleshooting Docker
+- Jika `vendor/` kosong di container, compose menyiapkan volume `tenrusl-vendor` agar install composer tidak hilang saat bind mount.
+- Pastikan MySQL healthcheck “healthy” sebelum app start.
+
+---
+
+## 🚢 Deploy (Render/Railway)
+
+### Render (Docker)
+- Blueprint: `render.yaml`
+- Default: SQLite (ephemeral) — cocok untuk demo cepat.
+
+### Railway (Nixpacks)
+- Config: `railway.toml`
+- Start script: `start-postgres.sh` (Postgres) / `start.sh` (SQLite fast mode)
+
+---
+
+## 🗂️ Struktur Direktori
 
 ```text
 app/
   Console/Commands/RetryWebhookCommand.php
-  Http/Controllers/Api/V1/{PaymentsController,WebhooksController}.php
-  Http/Controllers/{PaymentController,ProviderController}.php
-  Http/Middleware/{CorrelationIdMiddleware,VerifyWebhookSignature}.php
-  Http/Requests/Api/V1/{CreatePaymentRequest,WebhookRequest}.php
-  Http/Resources/Api/V1/{PaymentResource,WebhookEventResource}.php
-  Models/{Payment,WebhookEvent}.php
-  Repositories/{PaymentRepository,WebhookEventRepository}.php
+  Http/Controllers/Api/V1/PaymentsController.php
+  Http/Controllers/Api/V1/WebhooksController.php
+  Http/Middleware/CorrelationIdMiddleware.php
+  Http/Middleware/VerifyWebhookSignature.php
+  Http/Requests/Api/V1/CreatePaymentRequest.php
+  Http/Requests/Api/V1/WebhookRequest.php
+  Jobs/ProcessWebhookEvent.php
+  Models/Payment.php
+  Models/WebhookEvent.php
+  Repositories/PaymentRepository.php
+  Repositories/WebhookEventRepository.php
   Services/
-    Idempotency/{IdempotencyKeyService,RequestFingerprint}.php
-    Payments/Adapters/*.php
-    Payments/{PaymentsService}.php
-    Signatures/*.php
-    Webhooks/{RetryBackoff,WebhookProcessor}.php
-  ValueObjects/PaymentStatus.php
+    Idempotency/
+    Payments/
+    Signatures/
+    Webhooks/
 config/tenrusl.php
-routes/{api,web,console}.php
-docs/{openapi.yaml,architecture.md,decisions/0001-idempotency.md}
-postman/{TenRusl-Payment-Sim.postman_collection.json,TenRusl-Local.postman_environment.json}
-tests/{Feature,Unit,CreatesApplication.php,Pest.php,TestCase.php}
+routes/api.php
+routes/console.php
+docs/openapi.yaml
+redocly.yaml
+postman/
+tests/Feature/
+.github/workflows/
 ```
-
----
-
-## 🛠️ Operasional
-
-- **Retry sekali jalan**: `php artisan tenrusl:webhooks:retry-once`
-- **Retry periodik (cron)**: jalankan scheduler `php artisan schedule:work` lalu daftarkan jadwal di `app/Console/Kernel.php`.
 
 ---
 
 ## ⚠️ Limitations & Next Steps
 
-Sengaja didesain sebagai **simulator edukasi** dan **portfolio-ready**, bukan drop-in replacement gateway produksi:
+Tujuan repo ini adalah edukasi + portfolio.
 
-- Semua provider berjalan di mode **simulasi**:
-  - Tidak ada panggilan langsung ke endpoint produksi payment gateway.
-  - Payload/example mengikuti pola umum, tapi tidak selalu 1:1 dengan kontrak resmi terbaru.
-- Retry webhook:
-  - Menggunakan command `tenrusl:webhooks:retry` + scheduler Laravel standar.
-  - Tidak ada worker terpisah per provider / sharding khusus.
-- Idempotensi:
-  - Disimpan di cache (file/redis) dengan TTL yang bisa diatur.
-  - Opsi `idempotency.storage = database` disiapkan sebagai hook untuk eksperimen lanjutan.
-- Dedup webhook:
-  - Saat ini dedup utama berbasis kombinasi `(provider, event_id)`.
-  - TTL `WEBHOOK_DEDUP_TTL_SECONDS` baru menjadi konfigurasi ideal untuk pruning di masa depan.
+Yang sengaja “disimulasikan”:
+- Provider payload tidak selalu identik 1:1 dengan kontrak terbaru.
+- Verifikasi signature untuk provider tertentu dibuat generik (pola gate + raw body), bukan implementasi produksi lengkap.
 
-**Ide pengembangan selanjutnya:**
-
-- Tambah **implementasi idempotensi berbasis database** (tabel khusus), toggle via config.
-- Tambah command maintenance untuk **pruning webhook_events** berdasarkan `WEBHOOK_DEDUP_TTL_SECONDS`.
-- Contoh integrasi sederhana ke gateway real (mode sandbox) dengan kredensial dummy.
-- Panel kecil (frontend) untuk melihat log webhook & status retry secara visual.
+Next steps yang masuk akal:
+- Tabel dedicated untuk idempotency (storage=`database`) + housekeeping TTL.
+- Command maintenance untuk pruning `webhook_events` berdasarkan `dedup_ttl_seconds`.
+- UI kecil untuk melihat event webhook, attempts, next_retry_at, dan status history.
 
 ---
 
 ## 🛟 Troubleshooting
 
-- **Swagger UI 404 / fetch error**
-  Pastikan `l5-swagger` mengeluarkan file ke `storage/api-docs` dan route `/api/documentation` aktif.
+### 1) Webhook selalu 401
+- Pastikan middleware signature aktif di route webhook.
+- Pastikan signature dihitung dari **raw body yang benar-benar dikirim**, bukan dari array hasil decode.
+- Untuk provider `mock`, hitung `X-Mock-Signature` dari raw JSON string persis.
 
-- **Webhook 401 (Mock/Stripe/etc.)**
-  Hitung signature dari **raw body** yang benar-benar terkirim. Postman sudah menyediakan *pre-request script*.
+### 2) Intelephense: “Undefined method 'post'” di Pest
+Jika kamu menulis test Pest seperti `$this->post(...)`, Intelephense bisa menganggap `$this` bukan TestCase (false positive).
+Solusi rapi: pakai helper Pest Laravel:
 
-- **Gagal migrate SQLite**
-  Buat file `database/database.sqlite`, set `.env`: `DB_CONNECTION=sqlite`, lalu `php artisan migrate`.
+```php
+use function Pest\Laravel\post;
+use function Pest\Laravel\postJson;
+use function Pest\Laravel\getJson;
+use function Pest\Laravel\call;
+```
 
-- **Intelephense false positive (Laravel Request methods)**
-  Abaikan peringatan seperti `Undefined method input/merge/route` jika test tetap *green* — itu keterbatasan plugin, bukan bug runtime.
+Lalu ganti `$this->post(...)` menjadi `post(...)` atau `call(...)` sesuai kebutuhan.
 
----
-
-## 📦 Rilis
-
-`v1.0.1` — Payments API (idempotent), webhook receiver multi-provider, retry simulasi, OpenAPI, Postman, Pest, CI.
+### 3) Swagger UI 404
+- `l5-swagger` optional (continue-on-error di CI). Jalankan:
+  ```bash
+  php artisan l5-swagger:generate
+  ```
 
 ---
 

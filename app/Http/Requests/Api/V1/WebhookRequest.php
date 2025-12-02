@@ -6,10 +6,20 @@ namespace App\Http\Requests\Api\V1;
 
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * FormRequest untuk:
+ * - POST /api/v1/webhooks/{provider}
+ *
+ * Catatan penting:
+ * - Verifikasi signature dilakukan oleh middleware VerifyWebhookSignature
+ *   sebelum masuk controller.
+ * - Middleware itu juga menyimpan raw body ke attribute 'tenrusl_raw_body'
+ *   supaya stream tidak dibaca berkali-kali.
+ */
 class WebhookRequest extends FormRequest
 {
     /**
-     * Tentukan apakah user diizinkan melakukan request ini.
+     * Endpoint webhook adalah public; auth dilakukan via signature (middleware).
      */
     public function authorize(): bool
     {
@@ -17,36 +27,36 @@ class WebhookRequest extends FormRequest
     }
 
     /**
-     * Ambil raw body dari Request.
+     * Ambil raw body dari request.
      *
      * Urutan:
-     * 1. Cek attribute 'tenrusl_raw_body' yang di-set oleh middleware
-     *    VerifyWebhookSignature (sumber utama dan tunggal pembacaan stream).
-     * 2. Jika tidak ada (misalnya middleware tidak dipakai), fallback ke getContent().
+     * 1) Attribute 'tenrusl_raw_body' yang di-set middleware VerifyWebhookSignature.
+     *    Ini jadi sumber utama supaya tidak membaca php://input dua kali.
+     * 2) Fallback ke getContent() (Laravel/Symfony biasanya meng-cache body).
      */
     public function rawBody(): string
     {
         $attr = $this->attributes->get('tenrusl_raw_body');
 
-        if (\is_string($attr) && $attr !== '') {
+        if (is_string($attr) && $attr !== '') {
             return $attr;
         }
 
-        // Fallback aman: getContent() milik Request (sudah meng-cache php://input)
         $raw = $this->getContent();
 
-        return \is_string($raw) ? $raw : '';
+        return is_string($raw) ? $raw : '';
     }
 
     /**
-     * Aturan validasi untuk webhook.
+     * Rule validasi untuk field "resmi" (opsional) di webhook.
      *
-     * - 'provider' tidak divalidasi di sini karena sudah dibatasi pada route
-     *   melalui whereIn() terhadap allowlist di config.
-     * - event_id dan type opsional; WebhooksController akan memakai nilai yang
-     *   tervalidasi jika ada, lalu fallback ke hasil ekstraksi dari payload.
+     * - provider tidak divalidasi di sini karena sudah dibatasi di route:
+     *   whereIn('provider', config('tenrusl.providers_allowlist'))
+     * - event_id dan type bersifat "optional override":
+     *   kalau dikirim dan valid, dipakai oleh controller;
+     *   kalau tidak, controller akan ekstrak dari payload atau generate id.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array|string>
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {

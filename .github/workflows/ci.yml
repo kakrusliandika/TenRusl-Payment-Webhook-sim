@@ -8,9 +8,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  php:
+    name: PHP (migrate + lint + analyse + test)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -19,10 +24,10 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: "8.3"
           coverage: none
-          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
           tools: composer
+          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
 
       - name: Validate composer.json
         run: composer validate --no-check-publish
@@ -30,8 +35,7 @@ jobs:
       - name: Cache Composer
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.composer/cache/files
+          path: ~/.composer/cache/files
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             composer-${{ runner.os }}-
@@ -42,7 +46,7 @@ jobs:
       - name: Prepare app (.env, key)
         run: |
           cp .env.example .env || true
-          php artisan key:generate
+          php artisan key:generate --force
           php artisan config:clear
 
       - name: Prepare SQLite database
@@ -60,7 +64,7 @@ jobs:
       - name: Run Pint (lint)
         run: composer format:check
 
-      - name: Run static analysis (PHPStan / Larastan)
+      - name: Run static analysis (Larastan)
         run: composer analyse:larastan
 
       - name: Run tests (Pest)
@@ -73,16 +77,45 @@ jobs:
       - name: Composer security audit
         run: composer audit --locked
 
-      - name: Generate OpenAPI (l5-swagger)
-        run: php artisan l5-swagger:generate
-        continue-on-error: true
+  docs:
+    name: Docs (OpenAPI -> bundle -> Postman)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-      - name: Upload OpenAPI artifacts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-package-lock
+          fi
+
+      - name: Sync OpenAPI, bundle, Postman
+        run: npm run docs:sync
+
+      - name: Ensure generated artifacts are committed
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+      - name: Upload docs artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: openapi-docs
+          name: api-docs
           path: |
             docs/openapi.yaml
+            redocly.yaml
             storage/api-docs/**
+            postman/**
           if-no-files-found: ignore

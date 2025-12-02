@@ -2,55 +2,57 @@
 services:
   - type: web
     name: tenrusl-payment-webhook-sim
-    env: docker
+    runtime: docker
     repo: https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim
     branch: main
     plan: free
     region: singapore
     autoDeploy: true
+
+    # Laravel health endpoint (Laravel default)
     healthCheckPath: /up
+
+    # Jika kamu ingin APP_KEY persisten:
+    # - Set APP_KEY sebagai "Secret" di dashboard Render (Recommended)
+    # - Kalau tidak, start.sh/Dockerfile kamu sudah generate ephemeral APP_KEY (aman untuk demo)
     envVars:
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
         value: "false"
+
+      # SQLite quick demo (ephemeral FS)
       - key: DB_CONNECTION
         value: sqlite
+      - key: DB_DATABASE
+        value: database/database.sqlite
+
+      # Runtime knobs (aman & sederhana untuk demo)
+      - key: CACHE_STORE
+        value: file
+      - key: SESSION_DRIVER
+        value: file
+      - key: QUEUE_CONNECTION
+        value: sync
+
+      # TenRusl knobs
+      - key: TENRUSL_MAX_RETRY_ATTEMPTS
+        value: "5"
+      - key: TENRUSL_RETRY_BASE_MS
+        value: "500"
+      - key: TENRUSL_RETRY_CAP_MS
+        value: "30000"
+      - key: TENRUSL_SCHEDULER_BACKOFF_MODE
+        value: full
+      - key: TENRUSL_SCHEDULER_LIMIT
+        value: "200"
+      - key: TENRUSL_SIG_TS_LEEWAY
+        value: "300"
+
+      # Mock/demo secrets (untuk production beneran: pindahkan ke secrets)
       - key: MOCK_SECRET
         value: changeme
       - key: XENDIT_CALLBACK_TOKEN
         value: changeme
       - key: MIDTRANS_SERVER_KEY
         value: changeme
-# Optional Postgres (persistent). Uncomment to enable.
-# databases:
-#   - name: tenrusl-pg
-#     plan: free
-#     region: singapore
-# services:
-#   - type: web
-#     name: tenrusl-payment-webhook-sim
-#     env: docker
-#     repo: https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim
-#     branch: main
-#     plan: free
-#     region: singapore
-#     autoDeploy: true
-#     healthCheckPath: /up
-#     envVars:
-#       - key: APP_ENV
-#         value: production
-#       - key: APP_DEBUG
-#         value: "false"
-#       - key: DB_CONNECTION
-#         value: pgsql
-#       - key: DATABASE_URL
-#         fromDatabase:
-#           name: tenrusl-pg
-#           property: connectionString
-#       - key: MOCK_SECRET
-#         value: changeme
-#       - key: XENDIT_CALLBACK_TOKEN
-#         value: changeme
-#       - key: MIDTRANS_SERVER_KEY
-#         value: changeme

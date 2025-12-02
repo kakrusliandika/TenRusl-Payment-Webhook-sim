@@ -10,10 +10,11 @@ info:
     - Semua response membawa header `X-Request-ID` untuk tracing.
     - `POST /payments` mendukung idempotency via header `Idempotency-Key`.
   license:
-    # Wajib ada "name" agar lolos lint (ubah sesuai license repo kamu).
-    name: UNLICENSED
+    # Wajib ada "name" agar lolos lint.
+    name: MIT
 
-# WAJIB untuk lolos rule "security-defined" (public API pun disarankan declare empty security). :contentReference[oaicite:2]{index=2}
+# Redocly rule "security-defined" mengharuskan security didefinisikan per-operation atau root.
+# Untuk API public tanpa auth, set root security ke array kosong.
 security: []
 
 servers:
@@ -115,8 +116,7 @@ paths:
 
         Jika signature invalid, respon 401.
 
-      # Agar komponen securitySchemes kepake (dan dokumentasi lebih jelas),
-      # webhook kita anggap “secured by signature”. :contentReference[oaicite:3]{index=3}
+      # Secara docs, endpoint webhook “secured by signature”.
       security:
         - webhookSignature: []
 

@@ -8,10 +8,29 @@ use App\Console\Commands\RetryWebhookCommand;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
+/*
+|--------------------------------------------------------------------------
+| Console Kernel
+|--------------------------------------------------------------------------
+| - Di Laravel 11/12+, scheduling “biasanya” didefinisikan di routes/console.php
+|   atau lewat ->withSchedule() di bootstrap/app.php.
+|
+| - File Kernel ini masih valid untuk:
+|   1) registrasi command class secara eksplisit (kalau kamu tidak mengandalkan auto-discovery),
+|   2) kebutuhan kompatibilitas project yang masih pakai pola Kernel.
+|
+| - Karena schedule sudah kita taruh di routes/console.php, method schedule() di sini
+|   sengaja dikosongkan untuk menghindari jadwal dobel.
+|--------------------------------------------------------------------------
+*/
 class Kernel extends ConsoleKernel
 {
     /**
      * Daftar command aplikasi.
+     *
+     * Catatan:
+     * - Kalau kamu pakai auto-discovery command, list ini bisa dikosongkan.
+     * - Tapi menaruhnya di sini itu “aman” dan eksplisit.
      *
      * @var array<class-string>
      */
@@ -21,44 +40,27 @@ class Kernel extends ConsoleKernel
 
     /**
      * Definisikan jadwal tugas.
+     *
+     * Penting:
+     * - Untuk menghindari double schedule, jadwal utama TenRusl ada di routes/console.php.
+     * - Kalau kamu *memutuskan* memindahkan scheduling balik ke Kernel, pindahkan block
+     *   Schedule::command(...) dari routes/console.php ke sini (dan hapus di routes/console.php).
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Nilai-nilai di bawah ini dibaca dari config/tenrusl.php (yang biasanya baca dari env).
-        $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
-        $provider    = (string) config('tenrusl.scheduler_provider', '');      // opsional filter
-        $mode        = (string) config('tenrusl.scheduler_backoff_mode', 'full'); // full|equal|decorrelated
-        $limit       = (int) config('tenrusl.scheduler_limit', 200);
-
-        // Kirim sebagai parameter array (Laravel scheduler mendukung command via class + arg list). :contentReference[oaicite:2]{index=2}
-        $params = [
-            "--limit={$limit}",
-            "--max-attempts={$maxAttempts}",
-            "--mode={$mode}",
-        ];
-
-        if ($provider !== '') {
-            $params[] = "--provider={$provider}";
-        }
-
-        $event = $schedule
-            ->command(RetryWebhookCommand::class, $params)
-            ->everyMinute()
-            // Cegah overlap. Set expiry lock (menit) supaya tidak “nyangkut” lama bila proses crash. :contentReference[oaicite:3]{index=3}
-            ->withoutOverlapping(10)
-            ->name('tenrusl:webhooks:retry');
-
-        // Kalau scheduler jalan di MULTI server dan cache driver kamu shared (redis/db/memcached/dynamodb),
-        // kamu bisa aktifkan ini supaya hanya jalan di satu server. :contentReference[oaicite:4]{index=4}
-        // $event->onOneServer();
+        // Intentionally left blank (schedule lives in routes/console.php).
     }
 
     /**
-     * Daftarkan file route konsol (jika diperlukan).
+     * Daftarkan command tambahan (jika diperlukan).
+     *
+     * Karena bootstrap/app.php sudah memuat routes/console.php, kita gunakan require_once
+     * biar tidak kedobel kalau suatu saat ini juga dipanggil.
      */
     protected function commands(): void
     {
         $this->load(__DIR__ . '/Commands');
-        require base_path('routes/console.php');
+
+        require_once base_path('routes/console.php');
     }
 }

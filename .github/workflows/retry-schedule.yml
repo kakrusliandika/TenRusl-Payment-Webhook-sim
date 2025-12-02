@@ -2,23 +2,44 @@ name: Retry Webhook Events (Scheduled)
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # jalan tiap 15 menit
-  workflow_dispatch: {}     # bisa dijalankan manual
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Filter provider (kosong = semua)"
+        required: false
+        default: ""
+      limit:
+        description: "Batch limit"
+        required: false
+        default: "100"
+      max_attempts:
+        description: "Max attempts"
+        required: false
+        default: "5"
+      mode:
+        description: "Backoff mode: full|equal|decorrelated"
+        required: false
+        default: "full"
+
+concurrency:
+  group: retry-schedule
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   retry:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     env:
       APP_ENV: production
-      # Untuk workflow ini kita gunakan SQLite ephemeral agar mandiri.
+
+      # Default: SQLite ephemeral biar workflow mandiri.
       DB_CONNECTION: sqlite
       DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-
-      # Opsi retry (bisa dioverride di "workflow_dispatch" dengan 'Env vars')
-      RETRY_LIMIT: "100"
-      RETRY_MAX_ATTEMPTS: "5"
-      RETRY_BACKOFF_MODE: "full"   # full|equal|decorrelated
-      RETRY_PROVIDER: ""           # isi "mock" atau provider lain untuk filter opsional
 
     steps:
       - name: Checkout
@@ -30,44 +51,49 @@ jobs:
           php-version: "8.3"
           coverage: none
           tools: composer
+          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
 
       - name: Cache Composer
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache/files
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
+          restore-keys: |
+            composer-${{ runner.os }}-
 
       - name: Install Dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Prepare App
+      - name: Prepare App + SQLite
         run: |
           mkdir -p database
           touch database/database.sqlite
           cp .env.example .env || true
-          php artisan key:generate || true
+          php artisan key:generate --force || true
+          php artisan config:clear || true
 
       - name: Run Migrations
         env:
-          APP_ENV: production
-          DB_CONNECTION: sqlite
+          DB_CONNECTION: ${{ env.DB_CONNECTION }}
           DB_DATABASE: ${{ env.DB_DATABASE }}
         run: php artisan migrate --force --no-interaction -v
 
       - name: Execute Retry Processor
         env:
-          APP_ENV: production
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ${{ env.DB_DATABASE }}
-          RETRY_LIMIT: ${{ env.RETRY_LIMIT }}
-          RETRY_MAX_ATTEMPTS: ${{ env.RETRY_MAX_ATTEMPTS }}
-          RETRY_BACKOFF_MODE: ${{ env.RETRY_BACKOFF_MODE }}
-          RETRY_PROVIDER: ${{ env.RETRY_PROVIDER }}
+          RETRY_PROVIDER: ${{ inputs.provider }}
+          RETRY_LIMIT: ${{ inputs.limit }}
+          RETRY_MAX_ATTEMPTS: ${{ inputs.max_attempts }}
+          RETRY_BACKOFF_MODE: ${{ inputs.mode }}
         run: |
-          CMD="php artisan tenrusl:webhooks:retry --limit=${RETRY_LIMIT} --max-attempts=${RETRY_MAX_ATTEMPTS} --mode=${RETRY_BACKOFF_MODE}"
-          if [ -n "${RETRY_PROVIDER}" ]; then
-            CMD="${CMD} --provider=${RETRY_PROVIDER}"
+          LIMIT="${RETRY_LIMIT:-100}"
+          MAX_ATTEMPTS="${RETRY_MAX_ATTEMPTS:-5}"
+          MODE="${RETRY_BACKOFF_MODE:-full}"
+          PROVIDER="${RETRY_PROVIDER:-}"
+
+          CMD="php artisan tenrusl:webhooks:retry --limit=${LIMIT} --max-attempts=${MAX_ATTEMPTS} --mode=${MODE}"
+          if [ -n "${PROVIDER}" ]; then
+            CMD="${CMD} --provider=${PROVIDER}"
           fi
+
           echo "Running: ${CMD}"
           ${CMD}

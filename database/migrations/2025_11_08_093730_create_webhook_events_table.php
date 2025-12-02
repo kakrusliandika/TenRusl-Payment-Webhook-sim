@@ -4,46 +4,95 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
+return new class extends Migration {
     public function up(): void
     {
         Schema::create('webhook_events', function (Blueprint $table) {
-            // ULID primary key (string)
+            /*
+             * Primary key ULID (string).
+             * Cocok untuk simulator + gampang di log/trace.
+             */
             $table->ulid('id')->primary();
 
-            $table->string('provider', 32);
-            $table->string('event_id', 150);
+            /*
+             * Dedup key (HARUS "keras" di DB):
+             * Kombinasi provider + event_id wajib unik.
+             */
+            $table->string('provider', 32)->index();   // mock | xendit | midtrans | dst.
+            $table->string('event_id', 150);           // id event dari provider (atau hash jika provider tidak punya id)
 
+            // Optional: tipe event untuk audit / debugging
             $table->string('event_type', 120)->nullable();
 
-            // Simpan jejak verifikasi (opsional) untuk audit
+            /*
+             * Simpan jejak verifikasi signature (opsional).
+             * Bisa berupa hash dari signature header atau fingerprint verifikasi untuk audit.
+             */
             $table->string('signature_hash', 128)->nullable();
 
-            // Raw body + parsed JSON payload
+            /*
+             * Raw body + parsed payload.
+             * - payload_raw: penting untuk audit dan verifikasi signature yang butuh raw body.
+             * - payload: hasil parsing JSON (atau bentuk lain yang kamu normalisasi).
+             */
             $table->longText('payload_raw')->nullable();
             $table->json('payload');
 
-            // received | processed | failed
+            /*
+             * Status event internal:
+             * - received   : event baru dicatat
+             * - processed  : sudah diproses dan (jika ada) payment berhasil diupdate
+             * - failed     : pemrosesan gagal (akan retry jika eligible)
+             */
             $table->string('status', 20)->default('received')->index();
 
-            // Status payment hasil infer (succeeded|failed|pending) untuk audit/troubleshooting
+            /*
+             * Status payment hasil infer (pending|succeeded|failed) untuk audit/troubleshooting.
+             * Jangan tumpang tindih makna dengan `status` event.
+             */
             $table->string('payment_status', 20)->nullable()->index();
+
+            /*
+             * Referensi payment di simulator yang terkait webhook ini.
+             * Berguna untuk tracing: webhook -> payment.
+             */
             $table->string('payment_provider_ref', 191)->nullable()->index();
 
-            // Attempt & retry scheduling
+            /*
+             * Attempt & retry scheduling
+             *
+             * attempts:
+             * - Dinaikkan setiap kali event diproses (inline / job / retry command).
+             * - Retry command hanya ambil event yang "due" dan attempts < max.
+             */
             $table->unsignedSmallInteger('attempts')->default(0);
+
+            // Timestamp-timestamp audit
             $table->timestamp('received_at')->nullable()->index();
             $table->timestamp('last_attempt_at')->nullable()->index();
             $table->timestamp('processed_at')->nullable()->index();
+
+            // Scheduler/command memproses jika next_retry_at <= now (atau null)
             $table->timestamp('next_retry_at')->nullable()->index();
 
+            // Simpan error terakhir (kalau gagal)
             $table->text('error_message')->nullable();
 
             $table->timestamps();
 
-            // Dedup kuat: kombinasi provider + event_id harus unik
+            /*
+             * Dedup kuat (enforced):
+             * Laravel mendukung multi-column unique index seperti ini. :contentReference[oaicite:1]{index=1}
+             */
             $table->unique(['provider', 'event_id'], 'webhook_events_provider_event_unique');
+
+            /*
+             * (Opsional, tapi bagus untuk performa retry selection)
+             * Jika query retry sering pakai filter provider + next_retry_at:
+             */
+            $table->index(['provider', 'next_retry_at'], 'webhook_events_provider_next_retry_idx');
+            // Bisa juga dipertimbangkan:
+            // $table->index(['payment_status', 'next_retry_at'], 'webhook_events_paystatus_next_retry_idx');
         });
     }
 

@@ -2,27 +2,52 @@ version: "3.8"
 
 services:
   app:
-    # Gunakan image Sail (sudah berisi ekstensi PHP yang umum untuk Laravel)
-    image: laravelsail/php83
+    build:
+      context: ..
+      dockerfile: Dockerfile
     container_name: tenrusl-app
     working_dir: /var/www/html
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: tenrusl_webhook
+      DB_USERNAME: tenrusl
+      DB_PASSWORD: secret
+
+      COMPOSER_CACHE_DIR: /tmp/composer
     volumes:
       - ../:/var/www/html
-    environment:
-      # Non-kritis, membantu izin file saat bind mount
-      - WWWUSER=1000
-      - WWWGROUP=1000
-      - LARAVEL_SAIL=1
+      - tenrusl-vendor:/var/www/html/vendor
+      - tenrusl-composer-cache:/tmp/composer
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    expose:
+      - "9000"
     networks:
       - tenrusl
+    command: >
+      sh -lc "
+      if [ ! -f vendor/autoload.php ]; then
+        composer install --no-interaction --prefer-dist --no-progress;
+      fi
+      && php artisan key:generate --force || true
+      && php artisan config:clear || true
+      && php artisan migrate --force || true
+      && php-fpm
+      "
 
   nginx:
     image: nginx:alpine
     container_name: tenrusl-nginx
     ports:
-      - "8000:80" # Akses app via http://localhost:8000
+      - "8000:80"
     volumes:
       - ../:/var/www/html:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
@@ -35,14 +60,13 @@ services:
     image: mysql:8.0
     container_name: tenrusl-mysql
     ports:
-      - "3307:3306" # MySQL host port 3307 agar tidak bentrok dengan lokal
+      - "3307:3306"
     environment:
-      - MYSQL_ROOT_PASSWORD=secret
-      - MYSQL_DATABASE=tenrusl_webhook
-      - MYSQL_USER=tenrusl
-      - MYSQL_PASSWORD=secret
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: tenrusl_webhook
+      MYSQL_USER: tenrusl
+      MYSQL_PASSWORD: secret
     command:
-      # Mode yang umum untuk Laravel; bebas sesuaikan
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -50,6 +74,11 @@ services:
     volumes:
       - tenrusl-mysql:/var/lib/mysql
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     networks:
       - tenrusl
 
@@ -63,6 +92,8 @@ services:
 
 volumes:
   tenrusl-mysql:
+  tenrusl-vendor:
+  tenrusl-composer-cache:
 
 networks:
   tenrusl:

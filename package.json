@@ -5,10 +5,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "docs:prepare": "node -e \"const fs=require('fs'); fs.mkdirSync('storage/api-docs',{recursive:true}); fs.mkdirSync('postman',{recursive:true});\"",
     "openapi:lint": "redocly lint docs/openapi.yaml",
     "openapi:bundle": "redocly bundle docs/openapi.yaml -o storage/api-docs/openapi.yaml",
-    "postman:generate": "openapi2postmanv2 -s storage/api-docs/openapi.yaml -o postman/TenRusl.postman_collection.json -p -O folderStrategy=Tags,requestNameSource=operationId",
-    "docs:sync": "npm run openapi:lint && npm run openapi:bundle && npm run postman:generate"
+    "postman:generate": "openapi2postmanv2 -s storage/api-docs/openapi.yaml -o postman/TenRusl.postman_collection.json -p -O folderStrategy=Tags,requestNameSource=Fallback",
+    "docs:sync": "npm run docs:prepare && npm run openapi:lint && npm run openapi:bundle && npm run postman:generate"
   },
   "devDependencies": {
     "@redocly/cli": "^2.12.0",
@@ -16,7 +17,7 @@
     "axios": "^1.11.0",
     "concurrently": "^9.0.1",
     "laravel-vite-plugin": "^2.0.0",
-    "openapi-to-postmanv2": "^4.18.0",
+    "openapi-to-postmanv2": "^5.4.1",
     "tailwindcss": "^4.0.0",
     "vite": "^7.0.7",
     "yaml": "^2.8.2"

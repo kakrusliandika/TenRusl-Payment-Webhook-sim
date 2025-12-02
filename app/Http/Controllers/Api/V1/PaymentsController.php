@@ -1,4 +1,5 @@
 <?php
+// app/Http/Controllers/Api/V1/PaymentsController.php
 
 declare(strict_types=1);
 
@@ -14,6 +15,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * PaymentsController (API v1)
+ * --------------------------
+ * Endpoint:
+ * - POST   /api/v1/payments
+ * - GET    /api/v1/payments/{provider}/{provider_ref}/status
+ *
+ * Penting:
+ * - store() WAJIB type-hint CreatePaymentRequest supaya validasi benar-benar dipakai.
+ */
 class PaymentsController extends Controller
 {
     public function __construct(
@@ -25,56 +36,73 @@ class PaymentsController extends Controller
     /**
      * POST /api/v1/payments
      * Buat pembayaran simulasi (idempotent).
+     *
+     * Flow idempotency (ringkas):
+     * 1) Resolve key (dari header atau generate)
+     * 2) Kalau pernah ada response tersimpan → replay response
+     * 3) Acquire lock untuk mencegah eksekusi paralel
+     * 4) Proses create + persist
+     * 5) Store response untuk replay berikutnya
+     * 6) Release lock
      */
     public function store(CreatePaymentRequest $request): JsonResponse
     {
+        // Resolve idempotency key (bisa dari header Idempotency-Key atau generate)
         $key = $this->idemp->resolveKey($request);
 
-        // Jika sudah ada hasil sebelumnya, kembalikan (idempotent replay)
+        // 1) Idempotent replay jika response sudah tersimpan
         if ($stored = $this->idemp->getStoredResponse($key)) {
             return response()
-                ->json($stored['body'], $stored['status'])
-                ->withHeaders(array_merge($stored['headers'] ?? [], [
+                ->json($stored['body'], (int) $stored['status'])
+                ->withHeaders(array_merge(($stored['headers'] ?? []), [
                     'Idempotency-Key' => $key,
                 ]));
         }
 
-        // Cegah eksekusi ganda paralel
+        // 2) Lock untuk mencegah concurrent execution
         if (! $this->idemp->acquireLock($key)) {
-            // Klien melakukan retry paralel; beri sinyal 409 agar retry kemudian
             return response()
-                ->json(['message' => 'Idempotency conflict'], Response::HTTP_CONFLICT)
+                ->json([
+                    'message' => 'Idempotency conflict',
+                    'code' => 'idempotency_conflict',
+                ], Response::HTTP_CONFLICT)
                 ->withHeaders(['Idempotency-Key' => $key]);
         }
 
         try {
+            // Validasi otomatis sudah dijalankan oleh Laravel karena type-hint FormRequest.
             $data = $request->validated();
 
-            // 1) Buat "intent" di adapter simulator
-            $created = $this->payments->create($data['provider'], [
-                'amount' => $data['amount'],
-                'currency' => $data['currency'] ?? 'IDR',
+            // Normalisasi metadata:
+            // - spec menerima 'meta' dan 'metadata' (alias)
+            $meta = $data['meta'] ?? $data['metadata'] ?? [];
+
+            // 3) Buat intent/simulasi via PaymentsService
+            $created = $this->payments->create((string) $data['provider'], [
+                'amount' => (int) $data['amount'],
+                'currency' => (string) ($data['currency'] ?? 'IDR'),
                 'description' => $data['description'] ?? null,
-                'metadata' => $data['metadata'] ?? [],
+                'meta' => $meta,
             ]);
 
-            // 2) Persist ke DB
+            // 4) Persist ke DB
+            // Catatan: sesuaikan keys ini dengan Payment model/migration kamu (meta vs metadata).
             $payment = $this->paymentsRepo->create([
-                'provider' => $created['provider'],
-                'provider_ref' => $created['provider_ref'],
-                'amount' => (string) $created['snapshot']['amount'],
-                'currency' => (string) $created['snapshot']['currency'],
-                'status' => (string) $created['status'],
-                'meta' => $created['snapshot'] ?? [],
+                'provider' => (string) $created['provider'],
+                'provider_ref' => (string) $created['provider_ref'],
+                'amount' => (int) ($created['snapshot']['amount'] ?? $data['amount']),
+                'currency' => (string) ($created['snapshot']['currency'] ?? ($data['currency'] ?? 'IDR')),
+                'status' => (string) ($created['status'] ?? 'pending'),
+                'meta' => $meta,
+                // Kalau kamu punya kolom idempotency_key di DB, kamu bisa simpan juga:
+                // 'idempotency_key' => $key,
             ]);
 
-            // 3) Bentuk response API resource
+            // 5) Response resource
             $resource = new PaymentResource($payment);
-            $body = [
-                'data' => $resource->toArray($request),
-            ];
+            $body = ['data' => $resource->toArray($request)];
 
-            // 4) Simpan hasil untuk idempotent replay
+            // 6) Simpan untuk idempotent replay
             $resp = [
                 'status' => Response::HTTP_CREATED,
                 'headers' => ['Idempotency-Key' => $key],
@@ -86,6 +114,7 @@ class PaymentsController extends Controller
                 ->json($body, Response::HTTP_CREATED)
                 ->withHeaders($resp['headers']);
         } finally {
+            // Pastikan lock selalu dilepas walaupun ada exception
             $this->idemp->releaseLock($key);
         }
     }
@@ -95,23 +124,18 @@ class PaymentsController extends Controller
      */
     public function status(Request $request, string $provider, string $providerRef): JsonResponse
     {
-        // Coba ambil dari DB; jika tidak ada, fallback ke adapter (tetap pending)
+        // Ambil dari DB
         $payment = $this->paymentsRepo->findByProviderRef($provider, $providerRef);
 
-        if ($payment) {
+        if (! $payment) {
             return response()->json([
-                'data' => (new PaymentResource($payment))->toArray($request),
-            ]);
+                'message' => 'Payment not found',
+                'code' => 'not_found',
+            ], Response::HTTP_NOT_FOUND);
         }
 
-        $status = $this->payments->status($provider, $providerRef);
-
         return response()->json([
-            'data' => [
-                'provider' => $status['provider'],
-                'provider_ref' => $status['provider_ref'],
-                'status' => $status['status'],
-            ],
+            'data' => (new PaymentResource($payment))->toArray($request),
         ]);
     }
 }
