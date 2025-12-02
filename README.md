@@ -74,13 +74,13 @@ flowchart TD
   A[Client] -->|Idempotency-Key| B[POST /api/v1/payments]
   B -->|create pending| P[(payments)]
 
-  W[Provider] -->|POST /api/v1/webhooks/{provider}| M[VerifyWebhookSignature]
-  M -->|rawBody in request attr| C[WebhooksController]
+  W[Provider] -->|POST /api/v1/webhooks/<provider>| M[VerifyWebhookSignature]
+  M -->|rawBody saved to request attr| C[WebhooksController]
   C -->|Dedup + orchestrate| R[WebhookProcessor]
-  R -->|Update status atomic| P
+  R -->|Update status (atomic)| P
   R -->|Schedule retry| E[(webhook_events)]
 
-  S[Scheduler] -->|everyMinute| K[tenrusl:webhooks:retry]
+  S[Scheduler] -->|everyMinute| K["tenrusl:webhooks:retry"]
   K -->|claim due events| E
   K -->|queue/inline| J[ProcessWebhookEvent Job]
   J -->|skip processed| R
