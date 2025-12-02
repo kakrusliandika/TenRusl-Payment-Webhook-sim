@@ -71,19 +71,19 @@ Demo **Laravel 12** yang mencontohkan arsitektur payment “production-minded”
 
 ```mermaid
 flowchart TD
-  A[Client] -->|Idempotency-Key| B[POST /api/v1/payments]
-  B -->|create pending| P[(payments)]
+  A[Client] -->|"Idempotency-Key"| B["POST /api/v1/payments"]
+  B -->|"create pending"| P[(payments)]
 
-  W[Provider] -->|POST /api/v1/webhooks/<provider>| M[VerifyWebhookSignature]
-  M -->|rawBody saved to request attr| C[WebhooksController]
-  C -->|Dedup + orchestrate| R[WebhookProcessor]
-  R -->|Update status (atomic)| P
-  R -->|Schedule retry| E[(webhook_events)]
+  W[Provider] -->|"POST /api/v1/webhooks/&#123;provider&#125;"| M[VerifyWebhookSignature]
+  M -->|"rawBody saved to request attr"| C[WebhooksController]
+  C -->|"Dedup + orchestrate"| R[WebhookProcessor]
+  R -->|"Update status (atomic)"| P
+  R -->|"Schedule retry"| E[(webhook_events)]
 
-  S[Scheduler] -->|everyMinute| K["tenrusl:webhooks:retry"]
-  K -->|claim due events| E
-  K -->|queue/inline| J[ProcessWebhookEvent Job]
-  J -->|skip processed| R
+  S[Scheduler] -->|"everyMinute"| K["tenrusl:webhooks:retry"]
+  K -->|"claim due events"| E
+  K -->|"queue/inline"| J[ProcessWebhookEvent Job]
+  J -->|"skip processed"| R
 ```
 
 **Komponen inti:**
