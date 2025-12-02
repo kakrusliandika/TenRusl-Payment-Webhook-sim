@@ -9,64 +9,94 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('webhook_events', function (Blueprint $table) {
+        $hasReceivedAt          = Schema::hasColumn('webhook_events', 'received_at');
+        $hasLastAttemptAt       = Schema::hasColumn('webhook_events', 'last_attempt_at');
+        $hasProcessedAt         = Schema::hasColumn('webhook_events', 'processed_at');
+        $hasPaymentStatus       = Schema::hasColumn('webhook_events', 'payment_status');
+        $hasPaymentProviderRef  = Schema::hasColumn('webhook_events', 'payment_provider_ref');
+        $hasAttempts            = Schema::hasColumn('webhook_events', 'attempts');
+        $hasAttemptCount        = Schema::hasColumn('webhook_events', 'attempt_count');
+
+        Schema::table('webhook_events', function (Blueprint $table) use (
+            $hasReceivedAt,
+            $hasLastAttemptAt,
+            $hasProcessedAt,
+            $hasPaymentStatus,
+            $hasPaymentProviderRef,
+            $hasAttempts
+        ) {
             // Kolom audit & status pembayaran yang diharapkan kode
-            if (! Schema::hasColumn('webhook_events', 'received_at')) {
-                $table->timestamp('received_at')->nullable()->after('payload');
-            }
-            if (! Schema::hasColumn('webhook_events', 'last_attempt_at')) {
-                $table->timestamp('last_attempt_at')->nullable()->after('received_at');
-            }
-            if (! Schema::hasColumn('webhook_events', 'processed_at')) {
-                $table->timestamp('processed_at')->nullable()->after('last_attempt_at');
-            }
-            if (! Schema::hasColumn('webhook_events', 'payment_status')) {
-                $table->string('payment_status', 20)->nullable()->after('status'); // pending|succeeded|failed
-            }
-            if (! Schema::hasColumn('webhook_events', 'payment_provider_ref')) {
-                $table->string('payment_provider_ref', 150)->nullable()->after('event_id');
+            if (! $hasReceivedAt) {
+                $table->timestamp('received_at')->nullable();
             }
 
-            // Tambah kolom attempts (target akhir), kemudian copy dari attempt_count jika ada
-            if (! Schema::hasColumn('webhook_events', 'attempts')) {
-                $table->unsignedSmallInteger('attempts')->default(0)->after('status');
+            if (! $hasLastAttemptAt) {
+                $table->timestamp('last_attempt_at')->nullable();
+            }
+
+            if (! $hasProcessedAt) {
+                $table->timestamp('processed_at')->nullable();
+            }
+
+            if (! $hasPaymentStatus) {
+                // pending|succeeded|failed (nullable untuk kompatibilitas state lama)
+                $table->string('payment_status', 20)->nullable();
+            }
+
+            if (! $hasPaymentProviderRef) {
+                $table->string('payment_provider_ref', 150)->nullable();
+            }
+
+            // Kolom attempts (target akhir)
+            if (! $hasAttempts) {
+                $table->unsignedSmallInteger('attempts')->default(0);
             }
         });
 
-        // Migrasi data attempt_count -> attempts (lalu drop attempt_count)
-        $hasAttemptCount = Schema::hasColumn('webhook_events', 'attempt_count');
-        $hasAttempts = Schema::hasColumn('webhook_events', 'attempts');
-
-        if ($hasAttemptCount && $hasAttempts) {
+        // Migrasi data attempt_count -> attempts (kalau attempt_count ada)
+        if ($hasAttemptCount && Schema::hasColumn('webhook_events', 'attempts')) {
             DB::statement('UPDATE webhook_events SET attempts = attempt_count WHERE attempts = 0');
-            // Drop kolom lama agar konsisten dengan kode
-            Schema::table('webhook_events', function (Blueprint $table) {
-                $table->dropColumn('attempt_count');
-            });
+
+            // Best-effort: drop kolom lama agar konsisten dengan kode.
+            // (Kalau suatu environment tidak mendukung dropColumn, jangan bikin migrasi gagal.)
+            try {
+                Schema::table('webhook_events', function (Blueprint $table) {
+                    $table->dropColumn('attempt_count');
+                });
+            } catch (\Throwable $e) {
+                // noop
+            }
         }
 
-        // Index untuk pemrosesan retry terjadwal
-        Schema::table('webhook_events', function (Blueprint $table) {
-            if (! self::indexExists('webhook_events', 'webhook_events_next_retry_at_index') && Schema::hasColumn('webhook_events', 'next_retry_at')) {
-                $table->index('next_retry_at');
-            }
-        });
+        /**
+         * PENTING:
+         * Jangan bikin index next_retry_at di sini.
+         * Di project kamu index itu SUDAH dibuat oleh migration create_webhook_events_table,
+         * dan mencoba create lagi akan error "index ... already exists" di SQLite.
+         */
     }
 
     public function down(): void
     {
-        // Kembalikan kolom attempt_count bila belum ada, salin balik data dari attempts, lalu hapus kolom baru
-        if (! Schema::hasColumn('webhook_events', 'attempt_count') && Schema::hasColumn('webhook_events', 'attempts')) {
+        // Restore attempt_count bila diperlukan untuk rollback
+        $hasAttemptCount = Schema::hasColumn('webhook_events', 'attempt_count');
+        $hasAttempts     = Schema::hasColumn('webhook_events', 'attempts');
+
+        if (! $hasAttemptCount && $hasAttempts) {
             Schema::table('webhook_events', function (Blueprint $table) {
-                $table->unsignedSmallInteger('attempt_count')->default(0)->after('status');
+                $table->unsignedSmallInteger('attempt_count')->default(0);
             });
+
             DB::statement('UPDATE webhook_events SET attempt_count = attempts');
         }
 
         Schema::table('webhook_events', function (Blueprint $table) {
+            // attempts
             if (Schema::hasColumn('webhook_events', 'attempts')) {
                 $table->dropColumn('attempts');
             }
+
+            // kolom audit
             if (Schema::hasColumn('webhook_events', 'received_at')) {
                 $table->dropColumn('received_at');
             }
@@ -76,29 +106,16 @@ return new class extends Migration
             if (Schema::hasColumn('webhook_events', 'processed_at')) {
                 $table->dropColumn('processed_at');
             }
+
+            // payment fields
             if (Schema::hasColumn('webhook_events', 'payment_status')) {
                 $table->dropColumn('payment_status');
             }
             if (Schema::hasColumn('webhook_events', 'payment_provider_ref')) {
                 $table->dropColumn('payment_provider_ref');
             }
-
-            if (self::indexExists('webhook_events', 'webhook_events_next_retry_at_index')) {
-                $table->dropIndex('webhook_events_next_retry_at_index');
-            }
         });
-    }
 
-    private static function indexExists(string $table, string $indexName): bool
-    {
-        try {
-            $connection = Schema::getConnection();
-            $schema = $connection->getDoctrineSchemaManager();
-            $indexes = $schema->listTableIndexes($table);
-
-            return array_key_exists($indexName, $indexes);
-        } catch (\Throwable $e) {
-            return false;
-        }
+        // Tidak drop index next_retry_at di sini karena bukan migration ini yang membuatnya.
     }
 };

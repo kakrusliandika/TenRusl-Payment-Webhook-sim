@@ -92,6 +92,7 @@ return new class extends Migration
 
     /**
      * Cek keberadaan index tanpa Doctrine DBAL.
+     * (SQLite bisa pakai PRAGMA index_list) :contentReference[oaicite:1]{index=1}
      */
     private static function indexExists(string $table, string $indexName): bool
     {
