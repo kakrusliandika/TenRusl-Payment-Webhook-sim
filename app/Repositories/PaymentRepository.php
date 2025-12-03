@@ -104,7 +104,7 @@ final class PaymentRepository
             ->where('provider_ref', $providerRef)
             ->where(function ($q) use ($status) {
                 $q->where('status', 'pending')
-                  ->orWhere('status', $status);
+                    ->orWhere('status', $status);
             })
             ->update($payload);
     }

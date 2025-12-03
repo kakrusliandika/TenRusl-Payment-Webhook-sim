@@ -1,4 +1,5 @@
 <?php
+
 // app/Services/Signatures/SignatureVerifier.php
 
 declare(strict_types=1);
@@ -62,8 +63,8 @@ final class SignatureVerifier
      * Verifikasi signature untuk provider tertentu.
      *
      * @param  string  $provider  Nama provider (mock, xendit, midtrans, dst)
-     * @param  string  $rawBody   Raw HTTP body dari Request::getContent()
-     * @param  Request $request   Request Laravel (untuk akses header, query, ip, dsb.)
+     * @param  string  $rawBody  Raw HTTP body dari Request::getContent()
+     * @param  Request  $request  Request Laravel (untuk akses header, query, ip, dsb.)
      */
     public static function verify(string $provider, string $rawBody, Request $request): bool
     {
@@ -121,6 +122,7 @@ final class SignatureVerifier
 
         if ($allow === []) {
             sort($providers);
+
             return $providers;
         }
 

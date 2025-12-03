@@ -40,7 +40,7 @@ it('handles OPTIONS preflight with 204', function () {
 
 it('rejects invalid signature with 401 (mock provider)', function () {
     $payload = [
-        'id' => 'evt_' . now()->timestamp,
+        'id' => 'evt_'.now()->timestamp,
         'type' => 'payment.paid',
         'status' => 'paid',
     ];
@@ -61,13 +61,13 @@ it('rejects invalid signature with 401 (mock provider)', function () {
 });
 
 it('dedup: same (provider,event_id) only creates 1 row and attempts increases', function () {
-    $eventId = 'evt_dedup_' . now()->timestamp . '_' . Str::random(6);
+    $eventId = 'evt_dedup_'.now()->timestamp.'_'.Str::random(6);
 
     $payload = [
         'id' => $eventId,
         'type' => 'payment.paid',
         'status' => 'paid',
-        'data' => ['object' => ['id' => 'sim_mock_' . Str::random(8)]],
+        'data' => ['object' => ['id' => 'sim_mock_'.Str::random(8)]],
     ];
 
     $raw = json_encode($payload, JSON_UNESCAPED_SLASHES);
@@ -116,7 +116,7 @@ it('retry command: only picks due events and respects --limit (queue mode)', fun
     DB::table('webhook_events')->insert([
         'id' => $id1,
         'provider' => 'mock',
-        'event_id' => 'evt_due_1_' . Str::random(6),
+        'event_id' => 'evt_due_1_'.Str::random(6),
         'event_type' => 'payment.paid',
         'payload_raw' => '{"id":"x"}',
         'payload' => json_encode(['id' => 'x']),
@@ -138,7 +138,7 @@ it('retry command: only picks due events and respects --limit (queue mode)', fun
     DB::table('webhook_events')->insert([
         'id' => $id2,
         'provider' => 'mock',
-        'event_id' => 'evt_due_2_' . Str::random(6),
+        'event_id' => 'evt_due_2_'.Str::random(6),
         'event_type' => 'payment.paid',
         'payload_raw' => '{"id":"y"}',
         'payload' => json_encode(['id' => 'y']),
@@ -160,7 +160,7 @@ it('retry command: only picks due events and respects --limit (queue mode)', fun
     DB::table('webhook_events')->insert([
         'id' => $id3,
         'provider' => 'mock',
-        'event_id' => 'evt_not_due_' . Str::random(6),
+        'event_id' => 'evt_not_due_'.Str::random(6),
         'event_type' => 'payment.paid',
         'payload_raw' => '{"id":"z"}',
         'payload' => json_encode(['id' => 'z']),

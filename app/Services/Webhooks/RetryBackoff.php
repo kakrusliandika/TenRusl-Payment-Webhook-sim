@@ -40,12 +40,12 @@ final class RetryBackoff
      * - attempt dimulai dari 1
      * - exp tanpa jitter: base * 2^(attempt-1) lalu di-cap ke capMs
      *
-     * @param  int         $attempt     attempt ke- (mulai 1)
-     * @param  int         $baseMs      base delay dalam ms
-     * @param  int         $capMs       batas maksimal delay
-     * @param  string      $mode        full|equal|decorrelated
-     * @param  int|null    $maxAttempts bila diisi, clamp attempt ke maxAttempts
-     * @param  int|null    $prevMs      (opsional) delay sebelumnya utk decorrelated
+     * @param  int  $attempt  attempt ke- (mulai 1)
+     * @param  int  $baseMs  base delay dalam ms
+     * @param  int  $capMs  batas maksimal delay
+     * @param  string  $mode  full|equal|decorrelated
+     * @param  int|null  $maxAttempts  bila diisi, clamp attempt ke maxAttempts
+     * @param  int|null  $prevMs  (opsional) delay sebelumnya utk decorrelated
      */
     public static function compute(
         int $attempt,

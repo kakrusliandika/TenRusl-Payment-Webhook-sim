@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/Api/V1/PaymentsController.php
 
 declare(strict_types=1);

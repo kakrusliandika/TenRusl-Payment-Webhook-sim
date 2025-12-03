@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/Api/V1/WebhooksController.php
 
 declare(strict_types=1);
@@ -56,7 +57,7 @@ class WebhooksController extends Controller
         // 3) generate fallback
         $eventId = $validated['event_id']
             ?? $this->extractEventId($payload)
-            ?? ('evt_' . (string) Str::ulid());
+            ?? ('evt_'.(string) Str::ulid());
 
         // type priority:
         // 1) dari input tervalidasi

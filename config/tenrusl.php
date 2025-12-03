@@ -42,7 +42,7 @@ return [
 
     // Base/cap backoff (ms) — dipakai oleh RetryWebhookCommand (yang versi final sebelumnya).
     'retry_base_ms' => (int) env('TENRUSL_RETRY_BASE_MS', 500),
-    'retry_cap_ms'  => (int) env('TENRUSL_RETRY_CAP_MS', 30000),
+    'retry_cap_ms' => (int) env('TENRUSL_RETRY_CAP_MS', 30000),
 
     // TTL idempotensi legacy (fallback untuk kompatibilitas lama)
     'idempotency_ttl' => (int) env('TENRUSL_IDEMPOTENCY_TTL', 3600),

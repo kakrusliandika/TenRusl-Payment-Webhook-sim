@@ -53,7 +53,7 @@ final class WebhookProcessor
 
         // Konfigurasi retry/backoff (boleh kamu tambahkan ke config/tenrusl.php; kalau belum ada pakai default)
         $baseMs = (int) config('tenrusl.retry_base_ms', 500);
-        $capMs  = (int) config('tenrusl.retry_cap_ms', 30000);
+        $capMs = (int) config('tenrusl.retry_cap_ms', 30000);
 
         // WAJIB: sinkron dengan scheduler/command (Kernel + RetryWebhookCommand)
         $mode = $this->normalizeBackoffMode((string) config('tenrusl.scheduler_backoff_mode', 'full'));

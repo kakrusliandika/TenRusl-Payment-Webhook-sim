@@ -11,7 +11,7 @@ use function Pest\Laravel\getJson;
 uses(RefreshDatabase::class);
 
 it('returns payment status by provider and provider_ref', function () {
-    $providerRef = 'sim_mock_' . now()->timestamp . '_' . Str::random(6);
+    $providerRef = 'sim_mock_'.now()->timestamp.'_'.Str::random(6);
 
     /** @var Payment $payment */
     $payment = Payment::query()->create([
@@ -20,7 +20,7 @@ it('returns payment status by provider and provider_ref', function () {
         'amount' => 100000,
         'currency' => 'IDR',
         'status' => 'pending',
-        'meta' => ['order_id' => 'ORD-' . now()->timestamp],
+        'meta' => ['order_id' => 'ORD-'.now()->timestamp],
     ]);
 
     $resp = getJson(sprintf(

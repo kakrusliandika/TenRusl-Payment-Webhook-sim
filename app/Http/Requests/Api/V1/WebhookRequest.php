@@ -62,7 +62,7 @@ class WebhookRequest extends FormRequest
     {
         return [
             'event_id' => ['sometimes', 'string', 'max:191'],
-            'type'     => ['sometimes', 'string', 'max:191'],
+            'type' => ['sometimes', 'string', 'max:191'],
         ];
     }
 }

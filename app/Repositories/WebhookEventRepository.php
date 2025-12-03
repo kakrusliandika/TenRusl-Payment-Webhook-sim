@@ -60,7 +60,7 @@ final class WebhookEventRepository
         $now = $receivedAt ?: CarbonImmutable::now();
 
         try {
-            $event = new WebhookEvent();
+            $event = new WebhookEvent;
 
             // Dedup identity
             $event->provider = $provider;

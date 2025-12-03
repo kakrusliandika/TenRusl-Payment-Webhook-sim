@@ -9,9 +9,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $hasProvider    = Schema::hasColumn('payments', 'provider');
+        $hasProvider = Schema::hasColumn('payments', 'provider');
         $hasProviderRef = Schema::hasColumn('payments', 'provider_ref');
-        $hasMeta        = Schema::hasColumn('payments', 'meta');
+        $hasMeta = Schema::hasColumn('payments', 'meta');
 
         Schema::table('payments', function (Blueprint $table) use ($hasProvider, $hasProviderRef, $hasMeta) {
             // IMPORTANT (SQLite): ADD COLUMN NOT NULL must have non-NULL default.

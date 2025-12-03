@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Middleware/CorrelationIdMiddleware.php
 
 declare(strict_types=1);

@@ -117,9 +117,9 @@ final class IdempotencyKeyService
         $fingerprint = $this->responseFingerprint($normalized);
 
         $payload = [
-            'stored_at'   => now()->toIso8601String(),
+            'stored_at' => now()->toIso8601String(),
             'fingerprint' => $fingerprint,
-            'response'    => $normalized,
+            'response' => $normalized,
         ];
 
         Cache::put($this->respKey($key), $payload, now()->addSeconds($ttl));
@@ -147,7 +147,7 @@ final class IdempotencyKeyService
         // Verifikasi ulang fingerprint untuk memastikan payload di cache
         // masih konsisten dengan fingerprint yang disimpan.
         $currentFingerprint = $this->responseFingerprint($response);
-        $storedFingerprint  = (string) $cached['fingerprint'];
+        $storedFingerprint = (string) $cached['fingerprint'];
 
         if (! \hash_equals($storedFingerprint, $currentFingerprint)) {
             // Fingerprint berbeda: anggap tidak valid (misuse / korup), jangan pakai cache.
@@ -232,10 +232,10 @@ final class IdempotencyKeyService
         \ksort($headers);
 
         $payload = [
-            'status'  => (int) $response['status'],
+            'status' => (int) $response['status'],
             'headers' => $headers,
             // JSON canonical (tanpa escaping ekstra) agar stabil
-            'body'    => $response['body'],
+            'body' => $response['body'],
         ];
 
         $json = \json_encode(

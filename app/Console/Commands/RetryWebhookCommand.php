@@ -54,7 +54,7 @@ class RetryWebhookCommand extends Command
 
         // Base/cap dari config (fallback aman kalau config belum ada)
         $baseMs = (int) config('tenrusl.retry_base_ms', 500);
-        $capMs  = (int) config('tenrusl.retry_cap_ms', 30000);
+        $capMs = (int) config('tenrusl.retry_cap_ms', 30000);
 
         // Lease minimum biar tidak kepilih ulang "langsung" (karena full jitter bisa 0ms).
         $minLeaseMs = (int) config('tenrusl.retry_min_lease_ms', 250);

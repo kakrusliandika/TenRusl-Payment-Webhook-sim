@@ -71,14 +71,14 @@ Artisan::command('tenrusl:route:list-v1', function () {
 |--------------------------------------------------------------------------
 */
 $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
-$provider    = (string) config('tenrusl.scheduler_provider', '');          // opsional filter provider
-$mode        = (string) config('tenrusl.scheduler_backoff_mode', 'full');  // full|equal|decorrelated
-$limit       = (int) config('tenrusl.scheduler_limit', 200);
+$provider = (string) config('tenrusl.scheduler_provider', '');          // opsional filter provider
+$mode = (string) config('tenrusl.scheduler_backoff_mode', 'full');  // full|equal|decorrelated
+$limit = (int) config('tenrusl.scheduler_limit', 200);
 
 // Sanitasi ringan (biar tidak kebablasan)
 $maxAttempts = $maxAttempts <= 0 ? 1 : $maxAttempts;
-$limit       = $limit <= 0 ? 200 : min($limit, 2000);
-$mode        = $mode !== '' ? $mode : 'full';
+$limit = $limit <= 0 ? 200 : min($limit, 2000);
+$mode = $mode !== '' ? $mode : 'full';
 
 // Format argumen seperti CLI:
 // tenrusl:webhooks:retry --limit=200 --max-attempts=5 --mode=full [--provider=xendit]
@@ -89,7 +89,7 @@ $params = [
 ];
 
 if (trim($provider) !== '') {
-    $params[] = "--provider=" . trim($provider);
+    $params[] = '--provider='.trim($provider);
 }
 
 Schedule::command(RetryWebhookCommand::class, $params)

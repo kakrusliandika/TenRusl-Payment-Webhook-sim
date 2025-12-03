@@ -12,14 +12,14 @@ uses(RefreshDatabase::class);
 
 it('create -> get status roundtrip works and fields are consistent', function () {
     $ts = now()->timestamp;
-    $idemKey = 'roundtrip-' . $ts . '-' . Str::random(6);
+    $idemKey = 'roundtrip-'.$ts.'-'.Str::random(6);
 
     $create = postJson('/api/v1/payments', [
         'provider' => 'mock',
         'amount' => 123456,
         'currency' => 'IDR',
         'description' => 'Roundtrip',
-        'metadata' => ['order_id' => 'ORD-' . $ts],
+        'metadata' => ['order_id' => 'ORD-'.$ts],
     ], [
         'Idempotency-Key' => $idemKey,
     ]);

@@ -9,13 +9,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $hasReceivedAt          = Schema::hasColumn('webhook_events', 'received_at');
-        $hasLastAttemptAt       = Schema::hasColumn('webhook_events', 'last_attempt_at');
-        $hasProcessedAt         = Schema::hasColumn('webhook_events', 'processed_at');
-        $hasPaymentStatus       = Schema::hasColumn('webhook_events', 'payment_status');
-        $hasPaymentProviderRef  = Schema::hasColumn('webhook_events', 'payment_provider_ref');
-        $hasAttempts            = Schema::hasColumn('webhook_events', 'attempts');
-        $hasAttemptCount        = Schema::hasColumn('webhook_events', 'attempt_count');
+        $hasReceivedAt = Schema::hasColumn('webhook_events', 'received_at');
+        $hasLastAttemptAt = Schema::hasColumn('webhook_events', 'last_attempt_at');
+        $hasProcessedAt = Schema::hasColumn('webhook_events', 'processed_at');
+        $hasPaymentStatus = Schema::hasColumn('webhook_events', 'payment_status');
+        $hasPaymentProviderRef = Schema::hasColumn('webhook_events', 'payment_provider_ref');
+        $hasAttempts = Schema::hasColumn('webhook_events', 'attempts');
+        $hasAttemptCount = Schema::hasColumn('webhook_events', 'attempt_count');
 
         Schema::table('webhook_events', function (Blueprint $table) use (
             $hasReceivedAt,
@@ -80,7 +80,7 @@ return new class extends Migration
     {
         // Restore attempt_count bila diperlukan untuk rollback
         $hasAttemptCount = Schema::hasColumn('webhook_events', 'attempt_count');
-        $hasAttempts     = Schema::hasColumn('webhook_events', 'attempts');
+        $hasAttempts = Schema::hasColumn('webhook_events', 'attempts');
 
         if (! $hasAttemptCount && $hasAttempts) {
             Schema::table('webhook_events', function (Blueprint $table) {

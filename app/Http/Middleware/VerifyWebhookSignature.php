@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Middleware/VerifyWebhookSignature.php
 
 declare(strict_types=1);

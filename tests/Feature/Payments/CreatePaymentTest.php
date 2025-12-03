@@ -16,11 +16,11 @@ it('creates a payment and returns 201 with expected resource structure', functio
         'provider' => 'mock',
         'amount' => 150000,
         'currency' => 'idr', // sengaja lowercase untuk ngetes normalisasi jadi IDR
-        'description' => 'Order ' . $ts,
-        'metadata' => ['order_id' => 'ORD-' . $ts],
+        'description' => 'Order '.$ts,
+        'metadata' => ['order_id' => 'ORD-'.$ts],
     ];
 
-    $idemKey = 'idem-' . $ts . '-' . Str::random(6);
+    $idemKey = 'idem-'.$ts.'-'.Str::random(6);
 
     $resp = postJson('/api/v1/payments', $payload, [
         'Idempotency-Key' => $idemKey,
@@ -57,11 +57,11 @@ it('is idempotent: same Idempotency-Key returns the same payment id', function (
         'provider' => 'mock',
         'amount' => 50000,
         'currency' => 'IDR',
-        'description' => 'Idempotency test ' . $ts,
-        'metadata' => ['order_id' => 'ORD-' . $ts],
+        'description' => 'Idempotency test '.$ts,
+        'metadata' => ['order_id' => 'ORD-'.$ts],
     ];
 
-    $key = 'idem-' . $ts;
+    $key = 'idem-'.$ts;
 
     $first = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
     $second = postJson('/api/v1/payments', $payload, ['Idempotency-Key' => $key]);
