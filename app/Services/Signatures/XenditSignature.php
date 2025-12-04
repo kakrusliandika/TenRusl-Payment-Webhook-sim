@@ -1,33 +1,50 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Signatures;
 
 use Illuminate\Http\Request;
 
-class XenditSignature
+final class XenditSignature
 {
     /**
-     * Verifikasi webhook Xendit menggunakan x-callback-token.
+     * Xendit webhook verification:
+     * - Token ada di header `x-callback-token` (atau variasi kapitalisasi)
+     * - Cocokkan dengan token di config/env kamu.
      *
-     * Setiap webhook Xendit menyertakan header:
-     *   x-callback-token: <token rahasia akun>
-     * Bandingkan nilai header tersebut dengan token di konfigurasi.
+     * Catatan: $rawBody tidak dipakai untuk token-based verification,
+     * tapi dipertahankan agar signature interface konsisten.
      */
     public static function verify(string $rawBody, Request $request): bool
     {
-        $expected = (string) config('tenrusl.xendit_callback_token');
-        if ($expected === '' || $expected === null) {
+        $expected = config('tenrusl.xendit_callback_token');
+        if (!is_string($expected) || trim($expected) === '') {
             return false;
         }
 
-        // Header bisa muncul dengan variasi kapitalisasi; Laravel header() case-insensitive.
-        $token = $request->header('x-callback-token')
-              ?? $request->header('X-CALLBACK-TOKEN');
+        $token = self::headerString($request, 'x-callback-token')
+            ?? self::headerString($request, 'X-CALLBACK-TOKEN')
+            ?? self::headerString($request, 'X-Callback-Token');
 
-        if (! is_string($token) || $token === '') {
+        if ($token === null) {
             return false;
         }
 
-        return hash_equals($expected, trim($token));
+        return hash_equals(trim($expected), $token);
+    }
+
+    private static function headerString(Request $request, string $key): ?string
+    {
+        // Symfony HeaderBag::get($key, $default = null) => ?string
+        $v = $request->headers->get($key);
+
+        if ($v === null) {
+            return null;
+        }
+
+        $v = trim($v);
+
+        return $v !== '' ? $v : null;
     }
 }

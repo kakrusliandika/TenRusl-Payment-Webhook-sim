@@ -1,16 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Signatures;
 
 use Illuminate\Http\Request;
 
-class PayoneerSignature
+final class PayoneerSignature
 {
     /**
      * Payoneer Checkout Notifications (simulator-friendly).
      *
-     * Rekomendasi resmi: gunakan "shared secret" untuk memverifikasi notifikasi.
-     * Di sini kita dukung dua pola umum:
+     * Pola verifikasi yang didukung:
      *  - Authorization: Bearer {PAYONEER_SHARED_SECRET}
      *  - X-Payoneer-Signature: hex(HMAC-SHA256(rawBody, PAYONEER_SHARED_SECRET))
      *
@@ -18,29 +19,34 @@ class PayoneerSignature
      */
     public static function verify(string $rawBody, Request $request): bool
     {
-        $secret = (string) config('tenrusl.payoneer_shared_secret');
-        if ($secret === '' || $secret === null) {
+        $secret = config('tenrusl.payoneer_shared_secret');
+        if (!is_string($secret) || $secret === '') {
             return false;
         }
 
         // Optional merchant id check
-        $cfgMerchantId = (string) config('tenrusl.payoneer_merchant_id', '');
-        $hdrMerchantId = (string) $request->header('X-Payoneer-Merchant-Id', '');
-        if ($cfgMerchantId !== '' && $hdrMerchantId !== '' && ! hash_equals($cfgMerchantId, $hdrMerchantId)) {
-            return false;
+        $cfgMerchantId = config('tenrusl.payoneer_merchant_id', '');
+        $cfgMerchantId = is_string($cfgMerchantId) ? trim($cfgMerchantId) : '';
+
+        $hdrMerchantId = self::headerString($request, 'X-Payoneer-Merchant-Id');
+
+        if ($cfgMerchantId !== '' && $hdrMerchantId !== null && $hdrMerchantId !== '') {
+            if (!hash_equals($cfgMerchantId, $hdrMerchantId)) {
+                return false;
+            }
         }
 
         // A) Authorization: Bearer <secret>
-        $auth = $request->header('Authorization');
-        if ($auth && preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
-            if (hash_equals($secret, trim($m[1]))) {
+        $auth = self::headerString($request, 'Authorization');
+        if ($auth !== null && preg_match('/^Bearer\s+(.+)$/i', $auth, $m) === 1) {
+            if (hash_equals($secret, trim((string) $m[1]))) {
                 return true;
             }
         }
 
         // B) HMAC-SHA256 signature header
-        $sig = $request->header('X-Payoneer-Signature');
-        if (is_string($sig) && $sig !== '') {
+        $sig = self::headerString($request, 'X-Payoneer-Signature');
+        if ($sig !== null) {
             $expected = hash_hmac('sha256', $rawBody, $secret);
             if (hash_equals(strtolower($expected), strtolower($sig))) {
                 return true;
@@ -48,5 +54,18 @@ class PayoneerSignature
         }
 
         return false;
+    }
+
+    private static function headerString(Request $request, string $key): ?string
+    {
+        $v = $request->header($key);
+
+        if (!is_string($v)) {
+            return null;
+        }
+
+        $v = trim($v);
+
+        return $v !== '' ? $v : null;
     }
 }

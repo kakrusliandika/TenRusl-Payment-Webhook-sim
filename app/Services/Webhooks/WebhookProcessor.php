@@ -6,6 +6,8 @@ namespace App\Services\Webhooks;
 
 use App\Repositories\PaymentRepository;
 use App\Repositories\WebhookEventRepository;
+use App\ValueObjects\PaymentStatus;
+use BackedEnum;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Arr;
@@ -13,20 +15,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-/**
- * Proses webhook (domain core):
- *  - Dedup berdasarkan (provider, event_id) -> ENFORCED oleh unique index di DB.
- *  - Race-safe: insert-or-get + handle duplicate-key + lockForUpdate (di dalam transaction).
- *  - Update Payment + update WebhookEvent dilakukan konsisten/atomic (dalam transaction yang sama).
- *  - Retry scheduling: next_retry_at dihitung memakai RetryBackoff, mode diambil dari config yang sama
- *    dengan scheduler/command (tenrusl.scheduler_backoff_mode).
- *
- * Catatan desain:
- * - "attempts" dimaknai sebagai jumlah percobaan proses yang sudah terjadi.
- *   Saat percobaan #1 gagal => delay dihitung pakai attempt=1 (base * 2^(1-1) = base).
- * - Jalur retry (queue/command) idealnya melakukan "claiming" + increment attempts sebelum memanggil processor.
- *   Tapi processor ini juga punya guard agar tidak double-increment jika sudah di-claim barusan.
- */
 final class WebhookProcessor
 {
     public function __construct(
@@ -51,26 +39,16 @@ final class WebhookProcessor
 
         $now = CarbonImmutable::now();
 
-        // Konfigurasi retry/backoff (boleh kamu tambahkan ke config/tenrusl.php; kalau belum ada pakai default)
         $baseMs = (int) config('tenrusl.retry_base_ms', 500);
         $capMs = (int) config('tenrusl.retry_cap_ms', 30000);
 
-        // WAJIB: sinkron dengan scheduler/command (Kernel + RetryWebhookCommand)
         $mode = $this->normalizeBackoffMode((string) config('tenrusl.scheduler_backoff_mode', 'full'));
         $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
 
-        // DB::transaction param ke-2 = retry attempts saat deadlock.
-        // Semua update event/payment dilakukan atomic di sini. :contentReference[oaicite:1]{index=1}
         return DB::transaction(function () use (
             $provider, $eventId, $type, $rawBody, $payload, $now,
             $baseMs, $capMs, $mode, $maxAttempts
         ): array {
-            // -------------------------
-            // 1) Dedup (race-safe) + lock event row
-            // -------------------------
-            // storeNewOrGetExisting:
-            // - coba insert (provider,event_id) -> kalau duplikat, ambil row existing (opsional lockForUpdate)
-            // - dedup "keras" tetap dijamin oleh unique index di DB.
             [$event, $duplicate] = $this->events->storeNewOrGetExisting(
                 provider: $provider,
                 eventId: $eventId,
@@ -81,30 +59,18 @@ final class WebhookProcessor
                 lockExisting: true
             );
 
-            // Jalur internal retry (queue/command) wajib memakai type='retry'
             $isInternalRetry = ($type === 'retry');
 
-            // -------------------------
-            // 1b) Attempts counting (hindari race & double increment)
-            // -------------------------
-            // Jika duplicate dari provider: ini “percobaan proses” baru => increment attempts.
-            // Jika internal retry:
-            //  - Idealnya: command sudah increment attempts ketika "claiming due events".
-            //  - Guard di bawah mencegah double increment jika baru saja di-claim.
             if ($duplicate && ! $isInternalRetry) {
                 $this->events->touchAttempt($event, $now);
             } elseif ($isInternalRetry && ! $this->wasClaimedVeryRecently($event, $now)) {
-                // fallback safety: kalau ternyata belum di-claim, kita increment di sini
                 $this->events->touchAttempt($event, $now);
             }
 
             $attempts = (int) ($event->attempts ?? 1);
 
-            // -------------------------
-            // 1c) Fast-path: event sudah processed & final -> skip (idempotent)
-            // -------------------------
-            // Kalau event sudah processed dan payment_status final, kita tidak schedule retry apa pun.
-            $existingStatus = strtolower((string) ($event->payment_status ?? ''));
+            // Fast-path: event sudah processed & final
+            $existingStatus = strtolower($this->statusToString($event->payment_status ?? null));
             if (($event->status ?? null) === 'processed' && $existingStatus !== '' && $existingStatus !== 'pending') {
                 return [
                     'duplicate' => true,
@@ -115,50 +81,40 @@ final class WebhookProcessor
                 ];
             }
 
-            // -------------------------
-            // 2) Infer status generik dari payload
-            // -------------------------
             $inferred = $this->inferStatus($provider, $payload); // pending|succeeded|failed
-
-            // -------------------------
-            // 3) Extract provider_ref (kalau ada)
-            // -------------------------
             $providerRef = $this->extractProviderRef($provider, $payload);
 
-            // Simpan audit field ke event (nanti akan ikut tersave oleh markProcessed/scheduleNextRetry/markFailed)
-            $event->payment_status = $inferred;
+            // Simpan audit field ke event (tipe aman: PaymentStatus|null)
+            $ps = $this->statusFromString($inferred);
+            if ($ps !== null) {
+                $event->payment_status = $ps;
+            }
             if ($providerRef !== null) {
                 $event->payment_provider_ref = $providerRef;
             }
 
-            // -------------------------
-            // 4) Update Payment (atomic bersama update event)
-            // -------------------------
             $persisted = false;
             $effectiveStatus = $inferred;
 
             if ($providerRef !== null) {
                 try {
-                    // Update status payment mengikuti aturan state transition (di PaymentRepository)
-                    // NOTE: $affected bisa 0 walau payment ada (mis. nilai sama), tergantung driver.
                     $this->payments->updateStatusByProviderRef($provider, $providerRef, $inferred);
 
-                    // Untuk memastikan "persisted" benar (payment ada / tidak), lakukan lookup model.
                     $payment = $this->payments->findByProviderRef($provider, $providerRef);
 
                     if ($payment !== null) {
                         $persisted = true;
 
-                        // Kalau payment sudah final (succeeded/failed), anggap event selesai.
-                        // Ini penting untuk:
-                        // - kasus duplicate webhook datang setelah payment final
-                        // - kasus retry yang terlambat
-                        $paymentStatus = strtolower((string) $payment->status);
+                        $paymentStatus = strtolower($this->statusToString($payment->status));
                         if (in_array($paymentStatus, ['succeeded', 'failed'], true)) {
                             $effectiveStatus = $paymentStatus;
 
-                            // Tandai processed, bersihkan next_retry_at.
-                            $this->events->markProcessed($event, $providerRef, $paymentStatus, $now);
+                            $this->events->markProcessed(
+                                $event,
+                                $providerRef,
+                                $this->statusFromString($paymentStatus) ?? $paymentStatus,
+                                $now
+                            );
 
                             return [
                                 'duplicate' => $duplicate,
@@ -170,8 +126,6 @@ final class WebhookProcessor
                         }
                     }
                 } catch (Throwable $e) {
-                    // Jangan biarkan exception payment update mematikan worker/request.
-                    // Kita catat, lalu producer akan masuk jalur retry jika attempts masih tersedia.
                     Log::warning('Payment update failed during webhook processing', [
                         'provider' => $provider,
                         'provider_ref' => $providerRef,
@@ -184,9 +138,13 @@ final class WebhookProcessor
                 }
             }
 
-            // Kalau inferred status final dan payment ada/ter-update, kita mark processed juga.
             if ($providerRef !== null && $persisted && $inferred !== 'pending') {
-                $this->events->markProcessed($event, $providerRef, $inferred, $now);
+                $this->events->markProcessed(
+                    $event,
+                    $providerRef,
+                    $this->statusFromString($inferred) ?? $inferred,
+                    $now
+                );
 
                 return [
                     'duplicate' => $duplicate,
@@ -197,15 +155,8 @@ final class WebhookProcessor
                 ];
             }
 
-            // -------------------------
-            // 5) Retry scheduling / failure (atomic)
-            // -------------------------
             $nextRetryMs = null;
 
-            // Butuh retry bila:
-            // - inferred masih pending (simulasi)
-            // - provider_ref tidak ketemu
-            // - payment belum ada/ga bisa dipersist
             $shouldRetry =
                 $attempts < $maxAttempts
                 && (
@@ -215,7 +166,6 @@ final class WebhookProcessor
                 );
 
             if ($shouldRetry) {
-                // Hitung delay berbasis jumlah attempts saat ini (attempt ke-n).
                 $nextRetryMs = RetryBackoff::compute(
                     $attempts,
                     $baseMs,
@@ -226,7 +176,6 @@ final class WebhookProcessor
 
                 $nextAt = $now->addMilliseconds($nextRetryMs);
 
-                // Simpan alasan untuk audit/debug (opsional)
                 $reason = null;
                 if ($providerRef === null) {
                     $reason = 'provider_ref not found in payload';
@@ -238,7 +187,6 @@ final class WebhookProcessor
 
                 $this->events->scheduleNextRetry($event, $nextAt, $reason);
             } else {
-                // Tidak retry lagi: tandai failed (misal max attempts tercapai)
                 $this->events->markFailed($event, 'Max retry attempts reached.', $now);
             }
 
@@ -252,26 +200,17 @@ final class WebhookProcessor
         }, 3);
     }
 
-    /**
-     * Normalisasi mode backoff agar tidak ada nilai liar.
-     */
     private function normalizeBackoffMode(string $mode): string
     {
         $m = strtolower(trim($mode));
-
         return in_array($m, ['full', 'equal', 'decorrelated'], true) ? $m : 'full';
     }
 
-    /**
-     * Guard anti double-increment: jika command sudah "claim" barusan,
-     * biasanya last_attempt_at akan sangat dekat dengan $now.
-     */
     private function wasClaimedVeryRecently($event, CarbonImmutable $now): bool
     {
         $last = $event->last_attempt_at ?? null;
 
         if ($last instanceof CarbonInterface) {
-            // Jika <= 2 detik terakhir, anggap sudah di-claim oleh scheduler/command
             return $last->greaterThan($now->subSeconds(2));
         }
 
@@ -279,8 +218,65 @@ final class WebhookProcessor
     }
 
     /**
-     * Mapping status generik dari berbagai provider → succeeded|failed|pending.
+     * Convert status apa pun jadi string aman untuk compare/logika.
      */
+    private function statusToString(mixed $status): string
+    {
+        // Backed enum: ambil property ->value (bukan method value()).
+        if ($status instanceof BackedEnum) {
+            return (string) $status->value;
+        }
+
+        if (is_string($status)) {
+            return $status;
+        }
+
+        if (is_int($status)) {
+            return (string) $status;
+        }
+
+        if (is_object($status)) {
+            // Pola VO: public $value
+            if (property_exists($status, 'value')) {
+                /** @var mixed $v */
+                $v = $status->{'value'};
+                if (is_string($v) || is_int($v)) {
+                    return (string) $v;
+                }
+            }
+
+            // Pola VO: method value() (pakai is_callable + call_user_func supaya Intelephense aman)
+            if (is_callable([$status, 'value'])) {
+                /** @var mixed $v */
+                $v = \call_user_func([$status, 'value']);
+                if (is_string($v) || is_int($v)) {
+                    return (string) $v;
+                }
+            }
+
+            if ($status instanceof \Stringable) {
+                return (string) $status;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Buat PaymentStatus dari string.
+     * (Tanpa method_exists() supaya PHPStan tidak warning "always true".)
+     */
+    private function statusFromString(string $status): ?PaymentStatus
+    {
+        $status = strtolower(trim($status));
+        if ($status === '') {
+            return null;
+        }
+
+        // Untuk backed enum, tryFrom() tersedia dan aman (mengembalikan null kalau invalid).
+        return PaymentStatus::tryFrom($status);
+    }
+
     private function inferStatus(string $provider, array $p): string
     {
         $v = strtolower((string) ($p['status']
@@ -290,13 +286,11 @@ final class WebhookProcessor
             ?? Arr::get($p, 'resource.status')
             ?? ''));
 
-        // Umum: status sukses
         $truthy = [
             'paid', 'succeeded', 'success', 'completed', 'captured',
             'charge.succeeded', 'payment_intent.succeeded', 'paid_out', 'settled',
         ];
 
-        // Umum: status gagal
         $falsy = [
             'failed', 'canceled', 'cancelled', 'void', 'expired', 'denied', 'rejected',
             'charge.failed', 'payment_intent.canceled',
@@ -310,7 +304,6 @@ final class WebhookProcessor
             return 'failed';
         }
 
-        // Provider-spesifik
         if ($provider === 'midtrans') {
             $vt = strtolower((string) ($p['transaction_status'] ?? ''));
 
@@ -321,7 +314,6 @@ final class WebhookProcessor
             };
         }
 
-        // Xendit sering punya paid:true
         if (Arr::get($p, 'paid') === true) {
             return 'succeeded';
         }
@@ -329,10 +321,6 @@ final class WebhookProcessor
         return 'pending';
     }
 
-    /**
-     * Ekstrak provider_ref dari payload (beragam kunci umum).
-     * Ini dipakai untuk lookup payment di simulator.
-     */
     private function extractProviderRef(string $provider, array $p): ?string
     {
         $candidates = [
@@ -349,7 +337,6 @@ final class WebhookProcessor
             Arr::get($p, 'merchant_reference'),
         ];
 
-        // Midtrans: order_id lazim dipakai sebagai ref.
         if ($provider === 'midtrans' && ! empty($p['order_id'])) {
             $candidates[] = (string) $p['order_id'];
         }

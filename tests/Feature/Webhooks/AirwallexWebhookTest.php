@@ -3,24 +3,27 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 use function Pest\Laravel\postJson;
 
+uses(RefreshDatabase::class);
+
 it('accepts Airwallex webhook with (bypassed) signature verification and returns 202', function () {
+    /** @var \Tests\TestCase $this */
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
     $payload = [
-        'id' => 'aw_'.now()->timestamp,
+        'id' => 'aw_' . now()->timestamp,
         'type' => 'payment_succeeded',
-        'data' => ['id' => 'pay_'.now()->timestamp],
+        'data' => ['id' => 'pay_' . now()->timestamp],
     ];
 
-    // gunakan milidetik untuk x-timestamp agar mirip contoh resminya
     $ts = (string) now()->getPreciseTimestamp(3);
 
     $resp = postJson('/api/v1/webhooks/airwallex', $payload, [
         'x-timestamp' => $ts,
-        'x-signature' => 'dummy', // tidak dipakai karena middleware dibypass
+        'x-signature' => 'dummy',
     ]);
 
     $resp->assertStatus(202)

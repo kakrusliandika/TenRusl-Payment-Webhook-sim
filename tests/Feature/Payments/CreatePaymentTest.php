@@ -72,8 +72,13 @@ it('is idempotent: same Idempotency-Key returns the same payment id', function (
     $id1 = (string) $first->json('data.id');
     $id2 = (string) $second->json('data.id');
 
-    expect($id1)->toBeString()->not->toBeEmpty();
-    expect($id2)->toBeString()->not->toBeEmpty();
+    // Replace ->not->toBeEmpty() to satisfy PHPStan
+    expect($id1)->toBeString();
+    expect(strlen($id1))->toBeGreaterThan(0);
+
+    expect($id2)->toBeString();
+    expect(strlen($id2))->toBeGreaterThan(0);
+
     expect($id2)->toBe($id1);
 
     // pastikan idempotency header tetap ada

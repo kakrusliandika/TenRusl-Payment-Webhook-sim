@@ -42,19 +42,12 @@ class WebhookRequest extends FormRequest
             return $attr;
         }
 
-        $raw = $this->getContent();
-
-        return is_string($raw) ? $raw : '';
+        // getContent() dipanggil tanpa $asResource, jadi body dibaca sebagai string.
+        return (string) $this->getContent();
     }
 
     /**
      * Rule validasi untuk field "resmi" (opsional) di webhook.
-     *
-     * - provider tidak divalidasi di sini karena sudah dibatasi di route:
-     *   whereIn('provider', config('tenrusl.providers_allowlist'))
-     * - event_id dan type bersifat "optional override":
-     *   kalau dikirim dan valid, dipakai oleh controller;
-     *   kalau tidak, controller akan ekstrak dari payload atau generate id.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

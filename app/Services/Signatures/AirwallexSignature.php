@@ -1,37 +1,59 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Signatures;
 
 use Illuminate\Http\Request;
 
-class AirwallexSignature
+final class AirwallexSignature
 {
     /**
      * Verify Airwallex webhook signature.
      *
-     * Docs: x-timestamp + x-signature (HMAC-SHA256).
+     * Docs (umum): x-timestamp + x-signature (HMAC-SHA256)
      * value_to_digest = "{$timestamp}{$rawBody}"
      * signature = hex(HMAC_SHA256(secret, value_to_digest))
      */
     public static function verify(string $rawBody, Request $request): bool
     {
-        $secret = (string) config('tenrusl.airwallex_webhook_secret');
-        if ($secret === '' || $secret === null) {
+        $secret = config('tenrusl.airwallex_webhook_secret');
+        if (!is_string($secret) || $secret === '') {
             return false;
         }
 
-        $timestamp = $request->header('x-timestamp');
-        $signature = $request->header('x-signature');
+        $timestamp = self::headerString($request, 'x-timestamp');
+        $signature = self::headerString($request, 'x-signature');
 
         if ($timestamp === null || $signature === null) {
             return false;
         }
 
-        // Build message per docs: timestamp + raw JSON body
-        $message = (string) $timestamp.$rawBody;
+        $message = $timestamp . $rawBody;
+
+        // hash_hmac default output = hex lowercase
         $expected = hash_hmac('sha256', $message, $secret);
 
-        // Airwallex docs show hex digest in header; compare case-insensitively
-        return hash_equals(strtolower($expected), strtolower((string) $signature));
+        // header bisa beda casing
+        $sigNorm = strtolower($signature);
+
+        return hash_equals($expected, $sigNorm);
+    }
+
+    /**
+     * Laravel Request::header($key) untuk $key string -> string|null.
+     * Jadi kita cukup normalize trim + empty-check.
+     */
+    private static function headerString(Request $request, string $key): ?string
+    {
+        $v = $request->header($key);
+
+        if (!is_string($v)) {
+            return null;
+        }
+
+        $v = trim($v);
+
+        return $v !== '' ? $v : null;
     }
 }

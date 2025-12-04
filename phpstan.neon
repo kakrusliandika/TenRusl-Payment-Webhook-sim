@@ -1,0 +1,28 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+
+parameters:
+    # Biar "phpstan analyse" bisa jalan tanpa argumen path (composer analyse kamu).
+    paths:
+        - app
+        - routes
+        - config
+        - database
+        - tests
+
+    # Mulai aman dulu. Naikkan pelan-pelan setelah bersih.
+    level: 5
+
+    # Cache result (supaya run berikutnya cepat).
+    tmpDir: storage/phpstan
+    tipsOfTheDay: false
+
+    # Optional: kurangi false-positive dari tipe yang "datang dari PHPDoc"
+    treatPhpDocTypesAsCertain: false
+
+    excludePaths:
+        analyseAndScan:
+            - storage
+            - bootstrap/cache
+            - vendor

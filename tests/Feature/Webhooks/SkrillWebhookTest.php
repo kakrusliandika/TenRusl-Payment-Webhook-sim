@@ -3,20 +3,24 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 use function Pest\Laravel\post;
 
+uses(TestCase::class, RefreshDatabase::class);
+
 it('accepts Skrill webhook (form-encoded) with (bypassed) signature verification and returns 202', function () {
+    /** @var TestCase $this */
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
-    // Form-url-encoded sesuai pola IPN/status_url Skrill
     $form = [
         'transaction_id' => 'sk_'.now()->timestamp,
         'merchant_id' => '123456',
         'mb_amount' => '100.00',
         'mb_currency' => 'EUR',
         'status' => '2',
-        'md5sig' => 'dummy', // tidak dipakai (middleware dibypass)
+        'md5sig' => 'dummy', // tidak dipakai karena middleware dibypass
     ];
 
     $resp = post('/api/v1/webhooks/skrill', $form, [
@@ -40,7 +44,8 @@ it('rejects Skrill webhook with missing/invalid md5sig and returns 401', functio
         'mb_amount' => '100.00',
         'mb_currency' => 'EUR',
         'status' => '2',
-        // 'md5sig' omitted
+        // signature sengaja salah/invalid
+        'md5sig' => 'invalid',
     ];
 
     $resp = post('/api/v1/webhooks/skrill', $form, [

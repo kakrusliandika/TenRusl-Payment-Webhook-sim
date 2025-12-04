@@ -1,41 +1,40 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Signatures;
 
 use Illuminate\Http\Request;
 
-class DanaSignature
+final class DanaSignature
 {
     /**
-     * Verify DANA signature (Simulator).
+     * Verify DANA signature (SIMULATOR).
      *
-     * DANA menggunakan Asymmetric Signature (RSA) & header seperti X-SIGNATURE, X-TIMESTAMP,
-     * X-PARTNER-ID pada SNAP API. Skema asli membangun canonical string khusus.
-     * Untuk SIMULATOR ini, kita validasi X-SIGNATURE sebagai base64(RSA-SHA256(rawBody)).
-     *
-     * Jika nanti diperlukan mengikuti skema kanonikal DANA, ganti $message sesuai regulasi.
+     * Simulator:
+     * - Validasi X-SIGNATURE sebagai base64(RSA-SHA256(rawBody)).
+     * - Real-world DANA biasanya pakai canonical string (header + body). Bisa kamu ubah di $message.
      */
     public static function verify(string $rawBody, Request $request): bool
     {
-        $publicKey = (string) config('tenrusl.dana_public_key');
-        if ($publicKey === '' || $publicKey === null) {
+        $publicKey = config('tenrusl.dana_public_key');
+        if (!is_string($publicKey) || $publicKey === '') {
             return false;
         }
 
-        $signatureB64 = $request->header('X-SIGNATURE');
-        if (! $signatureB64) {
+        $signatureB64 = self::headerString($request, 'X-SIGNATURE');
+        if ($signatureB64 === null) {
             return false;
         }
 
-        $signature = base64_decode((string) $signatureB64, true);
+        $signature = base64_decode($signatureB64, true);
         if ($signature === false) {
             return false;
         }
 
-        // SIMULATOR: verifikasi atas raw body; real-world bisa memakai canonical string (header + body)
+        // Simulator: sign/verify langsung raw body
         $message = $rawBody;
 
-        // Pastikan format PEM benar
         $pem = self::normalizePem($publicKey);
 
         $ok = openssl_verify($message, $signature, $pem, OPENSSL_ALGO_SHA256);
@@ -43,19 +42,29 @@ class DanaSignature
         return $ok === 1;
     }
 
-    /**
-     * Ensure PEM has proper headers/footers.
-     */
     private static function normalizePem(string $key): string
     {
         $trim = trim($key);
+
         if (str_contains($trim, 'BEGIN PUBLIC KEY')) {
             return $trim;
         }
 
-        // If key provided without header/footer, wrap it
         $wrapped = chunk_split(str_replace(["\r", "\n", ' '], '', $trim), 64, "\n");
 
         return "-----BEGIN PUBLIC KEY-----\n{$wrapped}-----END PUBLIC KEY-----\n";
+    }
+
+    private static function headerString(Request $request, string $key): ?string
+    {
+        $v = $request->header($key);
+
+        if (!is_string($v)) {
+            return null;
+        }
+
+        $v = trim($v);
+
+        return $v !== '' ? $v : null;
     }
 }

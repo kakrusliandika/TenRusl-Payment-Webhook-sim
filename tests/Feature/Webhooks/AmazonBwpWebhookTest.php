@@ -3,21 +3,24 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 use function Pest\Laravel\postJson;
 
+uses(RefreshDatabase::class);
+
 it('accepts Amazon BWP webhook with (bypassed) signature verification and returns 202', function () {
+    /** @var \Tests\TestCase $this */
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
-    // Contoh event sederhana
     $payload = [
         'detail-type' => 'BuyWithPrime.OrderCompleted',
-        'detail' => ['orderId' => 'amzn_'.now()->timestamp],
-        'id' => 'evt_'.now()->timestamp,
+        'detail' => ['orderId' => 'amzn_' . now()->timestamp],
+        'id' => 'evt_' . now()->timestamp,
     ];
 
     $resp = postJson('/api/v1/webhooks/amazon_bwp', $payload, [
-        'x-amzn-signature' => 'dummy', // tidak dipakai karena middleware dibypass
+        'x-amzn-signature' => 'dummy',
     ]);
 
     $resp->assertStatus(202)

@@ -15,9 +15,7 @@ it('prefers explicit Idempotency-Key header over fingerprint', function () {
     $request->headers->set('Content-Type', 'application/json');
     $request->headers->set('Idempotency-Key', 'fixed-key-123');
 
-    // Asumsikan service punya metode resolve(Request): string (fallback: getKey)
-    $method = method_exists($service, 'resolve') ? 'resolve' : 'getKey';
-    $key = $service->$method($request);
+    $key = $service->resolveKey($request);
 
     expect($key)->toBe('fixed-key-123');
 });
@@ -34,12 +32,11 @@ it('generates stable key for identical requests when header is missing', functio
     $r2 = Request::create('/api/v1/payments', 'POST', [], [], [], [], json_encode($payload));
     $r2->headers->set('Content-Type', 'application/json');
 
-    $method = method_exists($service, 'resolve') ? 'resolve' : 'getKey';
+    $k1 = $service->resolveKey($r1);
+    $k2 = $service->resolveKey($r2);
 
-    $k1 = $service->$method($r1);
-    $k2 = $service->$method($r2);
-
-    expect($k1)->toBeString()->not->toBeEmpty();
+    expect($k1)->toBeString();
+    expect($k1 === '')->toBeFalse();
     expect($k1)->toBe($k2);
 });
 
@@ -53,32 +50,27 @@ it('produces different keys for different request bodies (no header)', function 
     $rB = Request::create('/api/v1/payments', 'POST', [], [], [], [], json_encode(['provider' => 'mock', 'amount' => 200]));
     $rB->headers->set('Content-Type', 'application/json');
 
-    $method = method_exists($service, 'resolve') ? 'resolve' : 'getKey';
+    $kA = $service->resolveKey($rA);
+    $kB = $service->resolveKey($rB);
 
-    $kA = $service->$method($rA);
-    $kB = $service->$method($rB);
-
-    expect($kA)->not->toBe($kB);
+    expect($kA === $kB)->toBeFalse();
 });
 
 it('is compatible with RequestFingerprint if used under the hood', function () {
-    // Test ini hanya memastikan RequestFingerprint tersedia dan menghasilkan hash string.
     /** @var RequestFingerprint $fp */
     $fp = app(RequestFingerprint::class);
 
     $req = Request::create('/api/v1/payments?foo=bar', 'POST', [], [], [], [], json_encode(['x' => 1]));
     $req->headers->set('Content-Type', 'application/json');
 
-    // Nama method bisa bervariasi, coba beberapa kemungkinan umum:
-    $method = null;
-    foreach (['make', 'hash', 'fingerprint', '__invoke'] as $candidate) {
-        if (method_exists($fp, $candidate)) {
-            $method = $candidate;
-            break;
-        }
-    }
-    expect($method)->not->toBeNull();
+    // Cek method yang paling mungkin dipakai (punya kamu: hash(Request): string)
+    $method = method_exists($fp, 'hash') ? 'hash' : null;
 
+    expect($method === null)->toBeFalse();
+
+    /** @var string $method */
     $hash = $fp->$method($req);
-    expect($hash)->toBeString()->not->toBeEmpty();
+
+    expect($hash)->toBeString();
+    expect($hash === '')->toBeFalse();
 });

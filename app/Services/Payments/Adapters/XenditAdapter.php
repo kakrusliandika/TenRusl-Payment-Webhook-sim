@@ -23,14 +23,17 @@ final class XenditAdapter implements PaymentAdapter
      */
     public function create(array $input): array
     {
-        $ref = 'sim_xendit_'.Str::ulid()->toBase32();
+        $ref = 'sim_xendit_' . Str::ulid()->toBase32();
+
+        // amount wajib ada sesuai array-shape PHPDoc, jadi tidak perlu ??.
+        $amount = (string) $input['amount'];
 
         return [
             'provider' => $this->provider(),
             'provider_ref' => $ref,
             'status' => 'pending',
             'snapshot' => [
-                'amount' => (string) ($input['amount'] ?? '0'),
+                'amount' => $amount,
                 'currency' => strtoupper((string) ($input['currency'] ?? 'IDR')),
                 'description' => (string) ($input['description'] ?? ''),
                 'metadata' => (array) ($input['metadata'] ?? []),

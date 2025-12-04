@@ -15,16 +15,24 @@ class PaymentResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Jangan cast $this->status (bisa jadi ValueObject/Enum) ke string.
+        // Ambil raw value dari DB (bypass casts/mutators).
+        $statusRaw = $this->resource->getRawOriginal('status');
+
+        $status = match (true) {
+            is_string($statusRaw) => $statusRaw,
+            is_int($statusRaw) => (string) $statusRaw,
+            default => '',
+        };
+
         return [
             'id' => (string) $this->id,
             'provider' => (string) $this->provider,
             'provider_ref' => (string) $this->provider_ref,
-            // amount diretur sebagai number (integer) agar konsisten dengan skema DB & casts
             'amount' => (int) $this->amount,
             'currency' => (string) $this->currency,
-            // enum PaymentStatus dipaksa string agar stabil di API
-            'status' => (string) $this->status,
-            // meta hanya ditampilkan bila ada
+            'status' => $status,
+
             'meta' => $this->when($this->meta !== null, (array) $this->meta),
 
             'created_at' => optional($this->created_at)->toISOString(),

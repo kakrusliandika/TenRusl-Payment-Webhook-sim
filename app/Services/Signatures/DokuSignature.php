@@ -1,62 +1,80 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Signatures;
 
 use Illuminate\Http\Request;
 
-class DokuSignature
+final class DokuSignature
 {
     /**
      * Verify DOKU HTTP Notification Signature.
      *
-     * Komponen yang dicat (per baris):
+     * Komponen (per baris) mengikuti pola dokumentasi DOKU:
      *  Client-Id:{clientId}
      *  Request-Id:{requestId}
      *  Request-Timestamp:{timestamp}
      *  Request-Target:{requestTarget}
      *  [opsional] Digest:{base64(sha256(body))}
      *
-     * Lalu: Signature = "HMACSHA256=" + base64( HMAC_SHA256(secretKey, components) )
+     * Signature:
+     *  "HMACSHA256=" + base64( HMAC_SHA256(secretKey, components) )
      */
     public static function verify(string $rawBody, Request $request): bool
     {
-        $clientId = (string) $request->header('Client-Id');
-        $reqId = (string) $request->header('Request-Id');
-        $timestamp = (string) $request->header('Request-Timestamp');
-        $headerSig = (string) $request->header('Signature');
-
-        $secretKey = (string) config('tenrusl.doku_secret_key');
-        if ($secretKey === '' || $secretKey === null) {
+        $secretKey = config('tenrusl.doku_secret_key');
+        if (!is_string($secretKey) || $secretKey === '') {
             return false;
         }
 
-        // Tentukan Request-Target: pakai config simulasi bila ada, fallback ke URI request
-        $target = (string) config('tenrusl.doku_request_target', '/');
-        if ($target === '/' || $target === '') {
-            $uri = $request->getRequestUri();
-            $target = ($uri && str_starts_with($uri, '/')) ? $uri : '/'.ltrim((string) $uri, '/');
-        }
+        $clientId = self::headerString($request, 'Client-Id');
+        $reqId = self::headerString($request, 'Request-Id');
+        $timestamp = self::headerString($request, 'Request-Timestamp');
+        $headerSig = self::headerString($request, 'Signature');
 
-        if ($clientId === '' || $reqId === '' || $timestamp === '' || $headerSig === '') {
+        if ($clientId === null || $reqId === null || $timestamp === null || $headerSig === null) {
             return false;
         }
 
-        // Digest hanya diperlukan bila ada body & method bukan GET/DELETE
-        $method = strtoupper($request->getMethod());
-        $includeDigest = ! in_array($method, ['GET', 'DELETE'], true);
+        // Tentukan Request-Target:
+        $target = config('tenrusl.doku_request_target', '/');
+        $target = is_string($target) ? trim($target) : '/';
+
+        if ($target === '' || $target === '/') {
+            $uri = (string) $request->getRequestUri();
+            $uri = $uri !== '' ? $uri : '/';
+            $target = str_starts_with($uri, '/') ? $uri : '/' . ltrim($uri, '/');
+        }
+
+        $method = strtoupper((string) $request->getMethod());
+        $includeDigest = !in_array($method, ['GET', 'DELETE'], true);
 
         $components = "Client-Id:{$clientId}\n"
-            ."Request-Id:{$reqId}\n"
-            ."Request-Timestamp:{$timestamp}\n"
-            ."Request-Target:{$target}";
+            . "Request-Id:{$reqId}\n"
+            . "Request-Timestamp:{$timestamp}\n"
+            . "Request-Target:{$target}";
 
         if ($includeDigest) {
             $digestB64 = base64_encode(hash('sha256', $rawBody, true));
             $components .= "\nDigest:{$digestB64}";
         }
 
-        $calc = 'HMACSHA256='.base64_encode(hash_hmac('sha256', $components, $secretKey, true));
+        $calc = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', $components, $secretKey, true));
 
-        return hash_equals((string) $headerSig, (string) $calc);
+        return hash_equals($headerSig, $calc);
+    }
+
+    private static function headerString(Request $request, string $key): ?string
+    {
+        $v = $request->header($key);
+
+        if (!is_string($v)) {
+            return null;
+        }
+
+        $v = trim($v);
+
+        return $v !== '' ? $v : null;
     }
 }

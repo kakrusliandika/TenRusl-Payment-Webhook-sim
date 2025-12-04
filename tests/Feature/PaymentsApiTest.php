@@ -32,7 +32,10 @@ it('create -> get status roundtrip works and fields are consistent', function ()
     $providerRef = (string) $create->json('data.provider_ref');
 
     expect($provider)->toBe('mock');
-    expect($providerRef)->toBeString()->not->toBeEmpty();
+
+    // Replace ->not->toBeEmpty() to satisfy PHPStan
+    expect($providerRef)->toBeString();
+    expect(strlen($providerRef))->toBeGreaterThan(0);
 
     $status = getJson("/api/v1/payments/{$provider}/{$providerRef}/status");
 

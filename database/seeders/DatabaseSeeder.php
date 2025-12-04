@@ -1,21 +1,35 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Payment;
 use App\Models\WebhookEvent;
 use Illuminate\Database\Seeder;
 
-class DatabaseSeeder extends Seeder
+final class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Buat beberapa payment contoh
-        Payment::factory()->count(3)->pending()->create();
-        Payment::factory()->count(2)->paid()->create();
+        // Payments contoh
+        Payment::factory()
+            ->count(3)
+            ->state(['status' => 'pending'])
+            ->create();
 
-        // Buat beberapa event contoh (tidak duplikat provider+event_id)
-        WebhookEvent::factory()->received()->create();
-        WebhookEvent::factory()->processed()->create();
+        Payment::factory()
+            ->count(2)
+            ->state(['status' => 'succeeded'])
+            ->create();
+
+        // Webhook events contoh (hindari panggil state method yang belum tentu ada)
+        WebhookEvent::factory()
+            ->state(['status' => 'received'])
+            ->create();
+
+        WebhookEvent::factory()
+            ->state(['status' => 'processed'])
+            ->create();
     }
 }

@@ -1,7 +1,5 @@
 <?php
 
-// app/Http/Controllers/Api/V1/WebhooksController.php
-
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
@@ -35,41 +33,28 @@ class WebhooksController extends Controller
      */
     public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
-        // Ambil raw body:
-        // - Ideal: WebhookRequest punya method rawBody() yang ambil dari attribute 'tenrusl_raw_body'
-        // - Fallback: Request::getContent()
-        $rawBody = method_exists($request, 'rawBody')
-            ? (string) $request->rawBody()
-            : (string) $request->getContent();
+        // PHPStan: method_exists() selalu true kalau WebhookRequest memang punya rawBody().
+        // Jadi panggil langsung, dan kalau kosong baru fallback getContent().
+        $rawBody = (string) $request->rawBody();
+        if ($rawBody === '') {
+            $rawBody = (string) $request->getContent();
+        }
 
-        // Deteksi content-type
         $contentType = $this->detectContentType($request);
-
-        // Parse payload jadi array (JSON atau form-urlencoded)
         $payload = $this->parsePayload($rawBody, $contentType);
 
-        // Data tervalidasi dari FormRequest (kalau ada field resmi seperti event_id/type)
         $validated = $request->validated();
 
-        // event_id priority:
-        // 1) dari input tervalidasi (kalau disediakan)
-        // 2) dari payload (extract)
-        // 3) generate fallback
         $eventId = $validated['event_id']
             ?? $this->extractEventId($payload)
-            ?? ('evt_'.(string) Str::ulid());
+            ?? ('evt_' . (string) Str::ulid());
 
-        // type priority:
-        // 1) dari input tervalidasi
-        // 2) dari payload
-        // 3) default string kosong (processor boleh handle)
         $type = (string) (
             $validated['type']
             ?? $this->extractType($payload)
             ?? ''
         );
 
-        // Proses domain core (dedup + update payment + retry scheduling)
         $result = $this->processor->process(
             $provider,
             (string) $eventId,
@@ -78,7 +63,6 @@ class WebhooksController extends Controller
             $payload
         );
 
-        // 202 Accepted: diterima dan diproses secara idempotent/retry-aware
         return response()->json([
             'data' => [
                 'event' => [
@@ -102,7 +86,6 @@ class WebhooksController extends Controller
             return $header;
         }
 
-        // Fallback untuk kasus proxy/server tertentu
         return (string) (
             $request->server('CONTENT_TYPE')
             ?? $request->server('HTTP_CONTENT_TYPE')
@@ -114,7 +97,7 @@ class WebhooksController extends Controller
      * Parse payload sesuai content-type:
      * - application/json
      * - application/x-www-form-urlencoded
-     * Selain itu: return [] (payload tidak dikenali / tidak diparsing).
+     * Selain itu: return [].
      */
     private function parsePayload(string $rawBody, ?string $contentType): array
     {
@@ -122,7 +105,6 @@ class WebhooksController extends Controller
 
         if (str_contains($ct, 'application/json')) {
             $arr = json_decode($rawBody, true);
-
             return is_array($arr) ? $arr : [];
         }
 
@@ -130,16 +112,13 @@ class WebhooksController extends Controller
             $out = [];
             parse_str($rawBody, $out);
 
-            return is_array($out) ? $out : [];
+            // PHPStan: $out di sini memang array -> jangan is_array() lagi.
+            return $out;
         }
 
         return [];
     }
 
-    /**
-     * Ekstrak event id dari payload jika provider mengirim id di field tertentu.
-     * (Ini fallback, bukan satu-satunya sumber kebenaran).
-     */
     private function extractEventId(array $p): ?string
     {
         foreach ([
@@ -158,9 +137,6 @@ class WebhooksController extends Controller
         return null;
     }
 
-    /**
-     * Ekstrak type/event name dari payload (fallback).
-     */
     private function extractType(array $p): ?string
     {
         foreach ([

@@ -3,20 +3,24 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 use function Pest\Laravel\postJson;
 
+uses(RefreshDatabase::class);
+
 it('accepts DANA webhook with (bypassed) signature verification and returns 202', function () {
+    /** @var \Tests\TestCase $this */
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
     $payload = [
-        'id' => 'dana_'.now()->timestamp,
+        'id' => 'dana_' . now()->timestamp,
         'event' => 'payment_succeeded',
-        'data' => ['id' => 'pg_'.now()->timestamp],
+        'data' => ['id' => 'pg_' . now()->timestamp],
     ];
 
     $resp = postJson('/api/v1/webhooks/dana', $payload, [
-        'X-SIGNATURE' => 'dummy', // tidak dipakai karena middleware dibypass
+        'X-SIGNATURE' => 'dummy',
     ]);
 
     $resp->assertStatus(202)
@@ -35,7 +39,6 @@ it('rejects DANA webhook with invalid signature and returns 401', function () {
         'event' => 'payment_succeeded',
     ];
 
-    // Tanpa atau dengan signature tidak valid → 401
     $resp = postJson('/api/v1/webhooks/dana', $payload, [
         'X-SIGNATURE' => 'invalid',
     ]);

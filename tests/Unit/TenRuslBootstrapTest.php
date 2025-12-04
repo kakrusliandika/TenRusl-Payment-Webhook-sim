@@ -9,7 +9,7 @@ it('loads tenrusl config with expected defaults and providers allowlist', functi
 
     expect($ttl)->toBeGreaterThan(0);
     expect($max)->toBeGreaterThanOrEqual(1);
-    expect($list)->toBeArray()->not->toBeEmpty();
+    expect(count($list))->toBeGreaterThan(0);
 
     // Pastikan beberapa provider utama tersedia
     $expected = [
@@ -17,6 +17,7 @@ it('loads tenrusl config with expected defaults and providers allowlist', functi
         'lemonsqueezy', 'airwallex', 'tripay', 'doku', 'dana', 'oy',
         'payoneer', 'skrill', 'amazon_bwp',
     ];
+
     foreach ($expected as $p) {
         expect(in_array($p, $list, true))->toBeTrue();
     }
