@@ -2,13 +2,10 @@
 
 declare(strict_types=1);
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
-
-uses(RefreshDatabase::class);
 
 it('create -> get status roundtrip works and fields are consistent', function () {
     $ts = now()->timestamp;
@@ -33,7 +30,7 @@ it('create -> get status roundtrip works and fields are consistent', function ()
 
     expect($provider)->toBe('mock');
 
-    // Replace ->not->toBeEmpty() to satisfy PHPStan
+    // PHPStan-friendly
     expect($providerRef)->toBeString();
     expect(strlen($providerRef))->toBeGreaterThan(0);
 

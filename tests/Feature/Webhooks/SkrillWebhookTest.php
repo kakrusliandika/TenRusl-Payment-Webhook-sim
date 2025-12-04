@@ -3,15 +3,11 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 
 use function Pest\Laravel\post;
 
-uses(TestCase::class, RefreshDatabase::class);
-
 it('accepts Skrill webhook (form-encoded) with (bypassed) signature verification and returns 202', function () {
-    /** @var TestCase $this */
+    /** @var \Tests\TestCase $this */
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
     $form = [

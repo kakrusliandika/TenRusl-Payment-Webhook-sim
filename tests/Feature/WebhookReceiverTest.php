@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Jobs\ProcessWebhookEvent;
 use App\Models\WebhookEvent;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
@@ -14,14 +13,23 @@ use Illuminate\Support\Str;
 use function Pest\Laravel\call;
 use function Pest\Laravel\postJson;
 
-uses(RefreshDatabase::class);
-
 /**
- * Helper: bikin signature mock yang “paling umum” dipakai: HMAC-SHA256(raw body, secret).
+ * Helper: bikin signature mock.
+ * Konsepnya: HMAC-SHA256(raw body, secret).
+ *
+ * Dibuat lebih toleran terhadap variasi key config/env.
  */
-function mockSignature(string $rawBody): string
-{
-    return hash_hmac('sha256', $rawBody, (string) config('tenrusl.mock_secret', 'changeme'));
+if (! function_exists('mockSignature')) {
+    function mockSignature(string $rawBody): string
+    {
+        $secret =
+            config('tenrusl.mock_secret')
+            ?? config('tenrusl.signatures.mock.secret')
+            ?? env('TENRUSL_MOCK_SECRET')
+            ?? 'changeme';
+
+        return hash_hmac('sha256', $rawBody, (string) $secret);
+    }
 }
 
 it('returns 404 for unknown webhook provider (blocked by allowlist)', function () {
@@ -52,7 +60,7 @@ it('rejects invalid signature with 401 (mock provider)', function () {
 
     $resp = call('POST', '/api/v1/webhooks/mock', [], [], [], [
         'CONTENT_TYPE' => 'application/json',
-        // coba set beberapa variasi nama header biar kompatibel dengan implementasi verifier kamu:
+        // beberapa variasi nama header untuk kompatibilitas:
         'HTTP_X_MOCK_SIGNATURE' => $bad,
         'HTTP_X_SIGNATURE' => $bad,
     ], $raw);
@@ -112,11 +120,10 @@ it('retry command: only picks due events and respects --limit (queue mode)', fun
     $now = Carbon::now();
 
     // Event due #1: next_retry_at NULL (diprioritaskan)
-    $id1 = (string) Str::ulid();
+    $eventId1 = 'evt_due_1_'.Str::random(10);
     DB::table('webhook_events')->insert([
-        'id' => $id1,
         'provider' => 'mock',
-        'event_id' => 'evt_due_1_'.Str::random(6),
+        'event_id' => $eventId1,
         'event_type' => 'payment.paid',
         'payload_raw' => '{"id":"x"}',
         'payload' => json_encode(['id' => 'x']),
@@ -134,11 +141,10 @@ it('retry command: only picks due events and respects --limit (queue mode)', fun
     ]);
 
     // Event due #2: next_retry_at di masa lalu
-    $id2 = (string) Str::ulid();
+    $eventId2 = 'evt_due_2_'.Str::random(10);
     DB::table('webhook_events')->insert([
-        'id' => $id2,
         'provider' => 'mock',
-        'event_id' => 'evt_due_2_'.Str::random(6),
+        'event_id' => $eventId2,
         'event_type' => 'payment.paid',
         'payload_raw' => '{"id":"y"}',
         'payload' => json_encode(['id' => 'y']),
@@ -156,11 +162,10 @@ it('retry command: only picks due events and respects --limit (queue mode)', fun
     ]);
 
     // Not due: next_retry_at future
-    $id3 = (string) Str::ulid();
+    $eventId3 = 'evt_not_due_'.Str::random(10);
     DB::table('webhook_events')->insert([
-        'id' => $id3,
         'provider' => 'mock',
-        'event_id' => 'evt_not_due_'.Str::random(6),
+        'event_id' => $eventId3,
         'event_type' => 'payment.paid',
         'payload_raw' => '{"id":"z"}',
         'payload' => json_encode(['id' => 'z']),
@@ -188,10 +193,9 @@ it('retry command: only picks due events and respects --limit (queue mode)', fun
     // hanya 1 job didispatch
     Bus::assertDispatched(ProcessWebhookEvent::class, 1);
 
-    // Reload via model biar gampang cek fields
-    $e1 = WebhookEvent::query()->find($id1);
-    $e2 = WebhookEvent::query()->find($id2);
-    $e3 = WebhookEvent::query()->find($id3);
+    $e1 = WebhookEvent::query()->where('provider', 'mock')->where('event_id', $eventId1)->first();
+    $e2 = WebhookEvent::query()->where('provider', 'mock')->where('event_id', $eventId2)->first();
+    $e3 = WebhookEvent::query()->where('provider', 'mock')->where('event_id', $eventId3)->first();
 
     expect($e1)->not->toBeNull();
     expect($e2)->not->toBeNull();

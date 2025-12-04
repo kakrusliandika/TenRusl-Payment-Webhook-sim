@@ -3,15 +3,11 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\VerifyWebhookSignature;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 
 use function Pest\Laravel\postJson;
 
-uses(TestCase::class, RefreshDatabase::class);
-
 it('accepts Tripay webhook with (bypassed) signature verification and returns 202', function () {
-    /** @var TestCase $this */
+    /** @var \Tests\TestCase $this */
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
     $payload = [
@@ -23,7 +19,6 @@ it('accepts Tripay webhook with (bypassed) signature verification and returns 20
 
     $resp = postJson('/api/v1/webhooks/tripay', $payload, [
         'X-Callback-Signature' => 'dummy', // tidak dipakai karena dibypass
-        'Content-Type' => 'application/json',
     ]);
 
     $resp->assertStatus(202)
@@ -44,7 +39,6 @@ it('rejects Tripay webhook with invalid signature and returns 401', function () 
 
     $resp = postJson('/api/v1/webhooks/tripay', $payload, [
         'X-Callback-Signature' => 'invalid',
-        'Content-Type' => 'application/json',
     ]);
 
     $resp->assertStatus(401);
