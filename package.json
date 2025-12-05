@@ -17,7 +17,7 @@
     "axios": "^1.11.0",
     "concurrently": "^9.0.1",
     "laravel-vite-plugin": "^2.0.0",
-    "openapi-to-postmanv2": "^5.4.1",
+    "openapi-to-postmanv2": "^4.18.0",
     "tailwindcss": "^4.0.0",
     "vite": "^7.0.7",
     "yaml": "^2.8.2"
