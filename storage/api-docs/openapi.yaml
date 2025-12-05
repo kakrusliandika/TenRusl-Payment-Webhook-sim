@@ -10,7 +10,8 @@ info:
     - Semua response membawa header `X-Request-ID` untuk tracing.
     - `POST /payments` mendukung idempotency via header `Idempotency-Key`.
   license:
-    name: UNLICENSED
+    name: MIT
+    identifier: MIT
 servers:
   - url: /
 security: []

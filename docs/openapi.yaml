@@ -10,8 +10,8 @@ info:
     - Semua response membawa header `X-Request-ID` untuk tracing.
     - `POST /payments` mendukung idempotency via header `Idempotency-Key`.
   license:
-    # Wajib ada "name" agar lolos lint.
     name: MIT
+    identifier: MIT
 
 # Redocly rule "security-defined" mengharuskan security didefinisikan per-operation atau root.
 # Untuk API public tanpa auth, set root security ke array kosong.
