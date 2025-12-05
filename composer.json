@@ -60,7 +60,8 @@
     "analyse": "vendor/bin/phpstan analyse",
     "analyse:larastan": "vendor/bin/phpstan analyse -c phpstan.neon",
     "test": "pest",
-    "test:unit": "phpunit",
+    "test:unit": "pest --testsuite Unit",
+    "test:feature": "pest --testsuite Feature",
     "test:prepare": [
       "@php artisan config:clear --ansi",
       "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",

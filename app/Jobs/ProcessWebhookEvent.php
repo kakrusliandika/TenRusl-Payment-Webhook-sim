@@ -29,15 +29,17 @@ class ProcessWebhookEvent implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    /**
-     * Queue khusus webhook.
-     * Untuk driver database, ini akan mengisi kolom `queue` pada tabel jobs.
-     */
-    public string $queue = 'webhooks';
-
     public function __construct(
         public string $webhookEventId
-    ) {}
+    ) {
+        /**
+         * PENTING:
+         * Jangan deklarasikan `public $queue` / `public string $queue` lagi di class ini,
+         * karena trait Queueable sudah mendefinisikan property tersebut.
+         * Set queue gunakan onQueue() (disediakan Queueable).
+         */
+        $this->onQueue('webhooks');
+    }
 
     public function handle(WebhookProcessor $processor): void
     {
