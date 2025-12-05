@@ -14,9 +14,9 @@ it('accepts Airwallex webhook with (bypassed) signature verification and returns
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
     $payload = [
-        'id' => 'aw_' . now()->timestamp,
+        'id' => 'aw_'.now()->timestamp,
         'type' => 'payment_succeeded',
-        'data' => ['id' => 'pay_' . now()->timestamp],
+        'data' => ['id' => 'pay_'.now()->timestamp],
     ];
 
     $ts = (string) now()->getPreciseTimestamp(3);

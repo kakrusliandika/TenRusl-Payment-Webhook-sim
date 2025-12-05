@@ -37,6 +37,7 @@ final class IdempotencyKeyService
 
             if ($acquired) {
                 $this->locks[$key] = $lock;
+
                 return true;
             }
 
@@ -54,6 +55,7 @@ final class IdempotencyKeyService
             } finally {
                 unset($this->locks[$key]);
             }
+
             return;
         }
 
@@ -62,9 +64,6 @@ final class IdempotencyKeyService
 
     /**
      * Simpan response pertama untuk key (untuk replay idempotent).
-     *
-     * Dibuat fleksibel: headers/body boleh tidak ada (sesuai pemakaian `??`),
-     * ini yang menghilangkan error PHPStan "offset headers ... ?? always exists".
      *
      * @param array{
      *   status:int,

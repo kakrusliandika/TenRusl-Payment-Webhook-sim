@@ -39,6 +39,8 @@ final class WebhookEventRepository
      * Insert event baru, atau kalau duplicate key (unique provider+event_id) maka ambil event existing.
      *
      * Return: [WebhookEvent $event, bool $duplicate]
+     *
+     * @return array{0: WebhookEvent, 1: bool}
      */
     public function storeNewOrGetExisting(
         string $provider,
@@ -47,12 +49,12 @@ final class WebhookEventRepository
         string $rawBody,
         array $payload,
         ?DateTimeInterface $receivedAt = null,
-        bool $lockExisting = true
+        bool $lockExisting = true,
     ): array {
-        $now = $this->asCarbon($receivedAt) ?? now(); // now() => Illuminate\Support\Carbon :contentReference[oaicite:2]{index=2}
+        $now = $this->asCarbon($receivedAt) ?? now();
 
         try {
-            $event = new WebhookEvent();
+            $event = new WebhookEvent;
 
             $event->provider = $provider;
             $event->event_id = $eventId;
@@ -79,7 +81,7 @@ final class WebhookEventRepository
             $existing = $this->findByProviderEvent($provider, $eventId, $lockExisting);
 
             if ($existing === null) {
-                $existing = $this->findByProviderEvent($provider, $eventId, false);
+                $existing = $this->findByProviderEvent($provider, $eventId);
             }
 
             if ($existing === null) {
@@ -110,12 +112,12 @@ final class WebhookEventRepository
         WebhookEvent $event,
         ?string $paymentProviderRef,
         PaymentStatus|string|null $status,
-        ?DateTimeInterface $processedAt = null
+        ?DateTimeInterface $processedAt = null,
     ): bool {
         $event->status = 'processed';
         $event->payment_provider_ref = $paymentProviderRef;
 
-        // ✅ Pastikan property bertipe PaymentStatus|null tidak diisi string
+        // Pastikan property bertipe PaymentStatus|null tidak diisi string bebas
         $event->payment_status = $this->normalizePaymentStatus($status);
 
         $event->processed_at = $this->asCarbon($processedAt) ?? now();
@@ -154,12 +156,7 @@ final class WebhookEventRepository
     }
 
     /**
-     * Konversi DateTimeInterface (CarbonImmutable/DateTimeImmutable/etc) => Illuminate\Support\Carbon (mutable).
-     *
-     * Ini yang menghilangkan error:
-     * - "CarbonImmutable does not accept Carbon" / "Cannot implicitly convert CarbonImmutable..."
-     *
-     * Eloquent date casting biasanya memakai Carbon (mutable), atau pakai immutable_datetime kalau mau immutability. :contentReference[oaicite:3]{index=3}
+     * Konversi DateTimeInterface => Illuminate\Support\Carbon (mutable).
      */
     private function asCarbon(?DateTimeInterface $dt): ?Carbon
     {
@@ -171,7 +168,6 @@ final class WebhookEventRepository
             return $dt;
         }
 
-        // Carbon bisa dibuat dari DateTimeInterface. :contentReference[oaicite:4]{index=4}
         return new Carbon($dt);
     }
 
@@ -179,9 +175,9 @@ final class WebhookEventRepository
      * Normalisasi PaymentStatus:
      * - jika sudah PaymentStatus => pakai apa adanya
      * - jika string => coba map ke enum/value-object
-     * - jika invalid => null (biar tidak nabrak type PaymentStatus|null)
+     * - jika invalid => null
      *
-     * Catatan: ini mengasumsikan PaymentStatus adalah backed-enum string (punya tryFrom()).
+     * Catatan: mengasumsikan PaymentStatus adalah backed-enum string (punya tryFrom()).
      */
     private function normalizePaymentStatus(PaymentStatus|string|null $status): ?PaymentStatus
     {
@@ -198,7 +194,6 @@ final class WebhookEventRepository
             return null;
         }
 
-        // Backed enum: aman tanpa throw.
         return PaymentStatus::tryFrom($v);
     }
 

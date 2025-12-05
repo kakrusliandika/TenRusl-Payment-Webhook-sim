@@ -29,9 +29,8 @@ class PaymentsController extends Controller
     public function __construct(
         private readonly PaymentsService $payments,
         private readonly PaymentRepository $paymentsRepo,
-        private readonly IdempotencyKeyService $idemp
-    ) {
-    }
+        private readonly IdempotencyKeyService $idemp,
+    ) {}
 
     /**
      * POST /api/v1/payments
@@ -53,7 +52,7 @@ class PaymentsController extends Controller
         }
 
         // 2) Lock untuk mencegah concurrent execution
-        if (!$this->idemp->acquireLock($key)) {
+        if (! $this->idemp->acquireLock($key)) {
             return response()
                 ->json([
                     'message' => 'Idempotency conflict',
@@ -121,7 +120,7 @@ class PaymentsController extends Controller
     {
         $payment = $this->paymentsRepo->findByProviderRef($provider, $providerRef);
 
-        if (!$payment) {
+        if (! $payment) {
             return response()->json([
                 'message' => 'Payment not found',
                 'code' => 'not_found',

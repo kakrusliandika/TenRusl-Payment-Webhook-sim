@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Webhooks;
 
+use App\Models\WebhookEvent;
 use App\Repositories\PaymentRepository;
 use App\Repositories\WebhookEventRepository;
 use App\ValueObjects\PaymentStatus;
@@ -46,8 +47,16 @@ final class WebhookProcessor
         $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
 
         return DB::transaction(function () use (
-            $provider, $eventId, $type, $rawBody, $payload, $now,
-            $baseMs, $capMs, $mode, $maxAttempts
+            $provider,
+            $eventId,
+            $type,
+            $rawBody,
+            $payload,
+            $now,
+            $baseMs,
+            $capMs,
+            $mode,
+            $maxAttempts
         ): array {
             [$event, $duplicate] = $this->events->storeNewOrGetExisting(
                 provider: $provider,
@@ -59,7 +68,7 @@ final class WebhookProcessor
                 lockExisting: true
             );
 
-            $isInternalRetry = ($type === 'retry');
+            $isInternalRetry = $type === 'retry';
 
             if ($duplicate && ! $isInternalRetry) {
                 $this->events->touchAttempt($event, $now);
@@ -71,7 +80,11 @@ final class WebhookProcessor
 
             // Fast-path: event sudah processed & final
             $existingStatus = strtolower($this->statusToString($event->payment_status ?? null));
-            if (($event->status ?? null) === 'processed' && $existingStatus !== '' && $existingStatus !== 'pending') {
+            if (
+                ($event->status ?? null) === 'processed'
+                && $existingStatus !== ''
+                && $existingStatus !== 'pending'
+            ) {
                 return [
                     'duplicate' => true,
                     'persisted' => true,
@@ -89,6 +102,7 @@ final class WebhookProcessor
             if ($ps !== null) {
                 $event->payment_status = $ps;
             }
+
             if ($providerRef !== null) {
                 $event->payment_provider_ref = $providerRef;
             }
@@ -157,13 +171,11 @@ final class WebhookProcessor
 
             $nextRetryMs = null;
 
-            $shouldRetry =
-                $attempts < $maxAttempts
-                && (
-                    $inferred === 'pending'
-                    || $providerRef === null
-                    || ! $persisted
-                );
+            $shouldRetry = $attempts < $maxAttempts && (
+                $inferred === 'pending'
+                || $providerRef === null
+                || ! $persisted
+            );
 
             if ($shouldRetry) {
                 $nextRetryMs = RetryBackoff::compute(
@@ -203,10 +215,11 @@ final class WebhookProcessor
     private function normalizeBackoffMode(string $mode): string
     {
         $m = strtolower(trim($mode));
+
         return in_array($m, ['full', 'equal', 'decorrelated'], true) ? $m : 'full';
     }
 
-    private function wasClaimedVeryRecently($event, CarbonImmutable $now): bool
+    private function wasClaimedVeryRecently(WebhookEvent $event, CarbonImmutable $now): bool
     {
         $last = $event->last_attempt_at ?? null;
 
@@ -222,7 +235,6 @@ final class WebhookProcessor
      */
     private function statusToString(mixed $status): string
     {
-        // Backed enum: ambil property ->value (bukan method value()).
         if ($status instanceof BackedEnum) {
             return (string) $status->value;
         }
@@ -236,7 +248,6 @@ final class WebhookProcessor
         }
 
         if (is_object($status)) {
-            // Pola VO: public $value
             if (property_exists($status, 'value')) {
                 /** @var mixed $v */
                 $v = $status->{'value'};
@@ -245,7 +256,6 @@ final class WebhookProcessor
                 }
             }
 
-            // Pola VO: method value() (pakai is_callable + call_user_func supaya Intelephense aman)
             if (is_callable([$status, 'value'])) {
                 /** @var mixed $v */
                 $v = \call_user_func([$status, 'value']);
@@ -262,10 +272,6 @@ final class WebhookProcessor
         return '';
     }
 
-    /**
-     * Buat PaymentStatus dari string.
-     * (Tanpa method_exists() supaya PHPStan tidak warning "always true".)
-     */
     private function statusFromString(string $status): ?PaymentStatus
     {
         $status = strtolower(trim($status));
@@ -273,18 +279,19 @@ final class WebhookProcessor
             return null;
         }
 
-        // Untuk backed enum, tryFrom() tersedia dan aman (mengembalikan null kalau invalid).
         return PaymentStatus::tryFrom($status);
     }
 
     private function inferStatus(string $provider, array $p): string
     {
-        $v = strtolower((string) ($p['status']
+        $v = strtolower((string) (
+            $p['status']
             ?? $p['payment_status']
             ?? $p['transaction_status']
             ?? Arr::get($p, 'data.status')
             ?? Arr::get($p, 'resource.status')
-            ?? ''));
+            ?? ''
+        ));
 
         $truthy = [
             'paid', 'succeeded', 'success', 'completed', 'captured',

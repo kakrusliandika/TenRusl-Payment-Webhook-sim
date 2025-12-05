@@ -15,8 +15,8 @@ it('accepts Amazon BWP webhook with (bypassed) signature verification and return
 
     $payload = [
         'detail-type' => 'BuyWithPrime.OrderCompleted',
-        'detail' => ['orderId' => 'amzn_' . now()->timestamp],
-        'id' => 'evt_' . now()->timestamp,
+        'detail' => ['orderId' => 'amzn_'.now()->timestamp],
+        'id' => 'evt_'.now()->timestamp,
     ];
 
     $resp = postJson('/api/v1/webhooks/amazon_bwp', $payload, [

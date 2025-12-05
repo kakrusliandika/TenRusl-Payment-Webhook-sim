@@ -14,9 +14,9 @@ it('accepts DANA webhook with (bypassed) signature verification and returns 202'
     $this->withoutMiddleware(VerifyWebhookSignature::class);
 
     $payload = [
-        'id' => 'dana_' . now()->timestamp,
+        'id' => 'dana_'.now()->timestamp,
         'event' => 'payment_succeeded',
-        'data' => ['id' => 'pg_' . now()->timestamp],
+        'data' => ['id' => 'pg_'.now()->timestamp],
     ];
 
     $resp = postJson('/api/v1/webhooks/dana', $payload, [

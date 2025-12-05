@@ -24,17 +24,14 @@ use Illuminate\Support\Str;
  */
 class WebhooksController extends Controller
 {
-    public function __construct(
-        private readonly WebhookProcessor $processor
-    ) {}
+    public function __construct(private readonly WebhookProcessor $processor) {}
 
     /**
      * POST /api/v1/webhooks/{provider}
      */
     public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
-        // PHPStan: method_exists() selalu true kalau WebhookRequest memang punya rawBody().
-        // Jadi panggil langsung, dan kalau kosong baru fallback getContent().
+        // Ambil raw body secara defensif.
         $rawBody = (string) $request->rawBody();
         if ($rawBody === '') {
             $rawBody = (string) $request->getContent();
@@ -47,7 +44,7 @@ class WebhooksController extends Controller
 
         $eventId = $validated['event_id']
             ?? $this->extractEventId($payload)
-            ?? ('evt_' . (string) Str::ulid());
+            ?? ('evt_'.(string) Str::ulid());
 
         $type = (string) (
             $validated['type']
@@ -105,6 +102,7 @@ class WebhooksController extends Controller
 
         if (str_contains($ct, 'application/json')) {
             $arr = json_decode($rawBody, true);
+
             return is_array($arr) ? $arr : [];
         }
 
@@ -112,7 +110,6 @@ class WebhooksController extends Controller
             $out = [];
             parse_str($rawBody, $out);
 
-            // PHPStan: $out di sini memang array -> jangan is_array() lagi.
             return $out;
         }
 
