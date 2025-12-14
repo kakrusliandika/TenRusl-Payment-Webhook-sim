@@ -1,0 +1,44 @@
+{
+  "resources/css/app.css": {
+    "file": "assets/app-C9DRx5L8.css",
+    "src": "resources/css/app.css",
+    "isEntry": true,
+    "name": "app",
+    "names": [
+      "app.css"
+    ]
+  },
+  "resources/css/main.css": {
+    "file": "assets/main-CeNJk_6U.css",
+    "src": "resources/css/main.css",
+    "isEntry": true,
+    "name": "main",
+    "names": [
+      "main.css"
+    ]
+  },
+  "resources/js/analytics.js": {
+    "file": "assets/analytics-CjnEqdd9.js",
+    "name": "analytics",
+    "src": "resources/js/analytics.js",
+    "isDynamicEntry": true
+  },
+  "resources/js/app.js": {
+    "file": "assets/app-BVCTDHg1.js",
+    "name": "app",
+    "src": "resources/js/app.js",
+    "isEntry": true,
+    "imports": [
+      "resources/js/main.js"
+    ],
+    "dynamicImports": [
+      "resources/js/analytics.js"
+    ]
+  },
+  "resources/js/main.js": {
+    "file": "assets/main-Cnfsa-zf.js",
+    "name": "main",
+    "src": "resources/js/main.js",
+    "isEntry": true
+  }
+}

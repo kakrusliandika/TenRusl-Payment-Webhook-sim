@@ -1,0 +1,1 @@
+function e(){window.addEventListener("track",t=>{const{name:i,...n}=t.detail||{}})}try{"requestIdleCallback"in window?window.requestIdleCallback(()=>e(),{timeout:1500}):setTimeout(()=>e(),0)}catch{setTimeout(()=>e(),0)}
