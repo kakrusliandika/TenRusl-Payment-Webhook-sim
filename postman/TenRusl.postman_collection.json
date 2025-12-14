@@ -1,1418 +1,1168 @@
 {
-    "item": [
+  "item": [
+    {
+      "name": "Payments",
+      "description": "Buat dan cek status pembayaran simulasi",
+      "item": [
         {
-            "name": "Payments",
-            "description": "Buat dan cek status pembayaran simulasi",
-            "item": [
-                {
-                    "id": "c544d56c-24fb-463f-b30f-7ad9b5572eb1",
-                    "name": "Buat pembayaran simulasi (idempotent)",
-                    "request": {
-                        "name": "Buat pembayaran simulasi (idempotent)",
-                        "description": {
-                            "content": "Kirim `Idempotency-Key` pada header untuk memastikan operasi idempotent.\nStatus awal selalu `pending` sampai webhook diterima.\n",
-                            "type": "text/plain"
-                        },
-                        "url": {
-                            "path": [
-                                "api",
-                                "v1",
-                                "payments"
-                            ],
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "query": [],
-                            "variable": []
-                        },
-                        "header": [
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
-                                    "type": "text/plain"
-                                },
-                                "key": "Idempotency-Key",
-                                "value": "<string>"
-                            },
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Correlation / request ID dari client (opsional)",
-                                    "type": "text/plain"
-                                },
-                                "key": "X-Request-ID",
-                                "value": "<string>"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            },
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            }
-                        ],
-                        "method": "POST",
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
-                            "options": {
-                                "raw": {
-                                    "headerFamily": "json",
-                                    "language": "json"
-                                }
-                            }
-                        },
-                        "auth": null
+          "id": "c544d56c-24fb-463f-b30f-7ad9b5572eb1",
+          "name": "Buat pembayaran simulasi (idempotent)",
+          "request": {
+            "name": "Buat pembayaran simulasi (idempotent)",
+            "description": {
+              "content": "Kirim `Idempotency-Key` pada header untuk memastikan operasi idempotent.\nStatus awal selalu `pending` sampai webhook diterima.\n",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": ["api", "v1", "payments"],
+              "host": ["{{baseUrl}}"],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
+                  "type": "text/plain"
+                },
+                "key": "Idempotency-Key",
+                "value": "<string>"
+              },
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Correlation / request ID dari client (opsional)",
+                  "type": "text/plain"
+                },
+                "key": "X-Request-ID",
+                "value": "<string>"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "headerFamily": "json",
+                  "language": "json"
+                }
+              }
+            },
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "36a0a741-4559-4ca0-ac64-0e27e2befcd8",
+              "name": "Created",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "payments"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
+                      "type": "text/plain"
                     },
-                    "response": [
-                        {
-                            "id": "36a0a741-4559-4ca0-ac64-0e27e2befcd8",
-                            "name": "Created",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "payments"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Idempotency-Key",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
-                                    "options": {
-                                        "raw": {
-                                            "headerFamily": "json",
-                                            "language": "json"
-                                        }
-                                    }
-                                }
-                            },
-                            "status": "Created",
-                            "code": 201,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "Idempotency-Key",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"data\": {\n    \"provider\": \"<string>\",\n    \"provider_ref\": \"<string>\",\n    \"status\": \"failed\",\n    \"id\": \"<string>\",\n    \"amount\": \"<integer>\",\n    \"currency\": \"<string>\",\n    \"meta\": {\n      \"veniam_4\": \"velit in \"\n    },\n    \"created_at\": \"<dateTime>\",\n    \"updated_at\": \"<dateTime>\"\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "b7d427b7-5d65-4c49-910e-508494622e39",
-                            "name": "Bad Request (validasi gagal / payload tidak sesuai)",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "payments"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Idempotency-Key",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
-                                    "options": {
-                                        "raw": {
-                                            "headerFamily": "json",
-                                            "language": "json"
-                                        }
-                                    }
-                                }
-                            },
-                            "status": "Bad Request",
-                            "code": 400,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "1259977f-54c1-4bde-a81e-b1d3ec38af41",
-                            "name": "Idempotency conflict (parallel call dengan state berbeda)",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "payments"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Idempotency-Key",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
-                                    "options": {
-                                        "raw": {
-                                            "headerFamily": "json",
-                                            "language": "json"
-                                        }
-                                    }
-                                }
-                            },
-                            "status": "Conflict",
-                            "code": 409,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "937f0234-14a6-46db-ac79-0f7bf27b84fa",
-                            "name": "Terlalu banyak request ke endpoint payments",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "payments"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Idempotency-Key",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "raw",
-                                    "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
-                                    "options": {
-                                        "raw": {
-                                            "headerFamily": "json",
-                                            "language": "json"
-                                        }
-                                    }
-                                }
-                            },
-                            "status": "Too Many Requests",
-                            "code": 429,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "Retry-After",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        }
-                    ],
-                    "event": [],
-                    "protocolProfileBehavior": {
-                        "disableBodyPruning": true
+                    "key": "Idempotency-Key",
+                    "value": "<string>"
+                  },
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "headerFamily": "json",
+                      "language": "json"
                     }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
                 },
                 {
-                    "id": "5dfd51fc-ee65-4319-8f09-b202189e325b",
-                    "name": "Cek status pembayaran simulasi",
-                    "request": {
-                        "name": "Cek status pembayaran simulasi",
-                        "description": {},
-                        "url": {
-                            "path": [
-                                "api",
-                                "v1",
-                                "payments",
-                                ":provider",
-                                ":provider_ref",
-                                "status"
-                            ],
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "query": [],
-                            "variable": [
-                                {
-                                    "type": "any",
-                                    "value": "stripe",
-                                    "key": "provider",
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "(Required) Nama provider (sesuai allowlist)",
-                                        "type": "text/plain"
-                                    }
-                                },
-                                {
-                                    "type": "any",
-                                    "value": "UdjfXngWUQ",
-                                    "key": "provider_ref",
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "(Required) Referensi payment di simulator (provider_ref)",
-                                        "type": "text/plain"
-                                    }
-                                }
-                            ]
-                        },
-                        "header": [
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Correlation / request ID dari client (opsional)",
-                                    "type": "text/plain"
-                                },
-                                "key": "X-Request-ID",
-                                "value": "<string>"
-                            },
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            }
-                        ],
-                        "method": "GET",
-                        "body": {},
-                        "auth": null
-                    },
-                    "response": [
-                        {
-                            "id": "36858ca4-d80d-432f-a39f-7f5d851a52e9",
-                            "name": "OK",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "payments",
-                                        ":provider",
-                                        ":provider_ref",
-                                        "status"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "method": "GET",
-                                "body": {}
-                            },
-                            "status": "OK",
-                            "code": 200,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"data\": {\n    \"provider\": \"<string>\",\n    \"provider_ref\": \"<string>\",\n    \"status\": \"failed\",\n    \"id\": \"<string>\",\n    \"amount\": \"<integer>\",\n    \"currency\": \"<string>\",\n    \"meta\": {\n      \"veniam_4\": \"velit in \"\n    },\n    \"created_at\": \"<dateTime>\",\n    \"updated_at\": \"<dateTime>\"\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "da0dd052-7d03-4979-b342-839c423ffd4e",
-                            "name": "Resource tidak ditemukan",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "payments",
-                                        ":provider",
-                                        ":provider_ref",
-                                        "status"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "method": "GET",
-                                "body": {}
-                            },
-                            "status": "Not Found",
-                            "code": 404,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "a984494c-9fae-42a4-a806-2d228d1827b4",
-                            "name": "Terlalu banyak request ke endpoint payment status",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "payments",
-                                        ":provider",
-                                        ":provider_ref",
-                                        "status"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "method": "GET",
-                                "body": {}
-                            },
-                            "status": "Too Many Requests",
-                            "code": 429,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "Retry-After",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        }
-                    ],
-                    "event": [],
-                    "protocolProfileBehavior": {
-                        "disableBodyPruning": true
-                    }
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "Idempotency-Key",
+                  "value": ""
                 }
-            ]
+              ],
+              "body": "{\n  \"data\": {\n    \"provider\": \"<string>\",\n    \"provider_ref\": \"<string>\",\n    \"status\": \"failed\",\n    \"id\": \"<string>\",\n    \"amount\": \"<integer>\",\n    \"currency\": \"<string>\",\n    \"meta\": {\n      \"veniam_4\": \"velit in \"\n    },\n    \"created_at\": \"<dateTime>\",\n    \"updated_at\": \"<dateTime>\"\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "b7d427b7-5d65-4c49-910e-508494622e39",
+              "name": "Bad Request (validasi gagal / payload tidak sesuai)",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "payments"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
+                      "type": "text/plain"
+                    },
+                    "key": "Idempotency-Key",
+                    "value": "<string>"
+                  },
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "headerFamily": "json",
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "1259977f-54c1-4bde-a81e-b1d3ec38af41",
+              "name": "Idempotency conflict (parallel call dengan state berbeda)",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "payments"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
+                      "type": "text/plain"
+                    },
+                    "key": "Idempotency-Key",
+                    "value": "<string>"
+                  },
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "headerFamily": "json",
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "937f0234-14a6-46db-ac79-0f7bf27b84fa",
+              "name": "Terlalu banyak request ke endpoint payments",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "payments"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Kunci idempotensi untuk POST /payments.\nJika request diulang dengan body yang sama → respon sama.\nJika request paralel dengan state berbeda → 409.\n",
+                      "type": "text/plain"
+                    },
+                    "key": "Idempotency-Key",
+                    "value": "<string>"
+                  },
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"<string>\",\n  \"amount\": \"<integer>\",\n  \"currency\": \"ROX\",\n  \"description\": \"<string>\",\n  \"meta\": {\n    \"in288\": false,\n    \"reprehenderit_fee\": false,\n    \"aliquipc74\": true\n  },\n  \"metadata\": {\n    \"commodoaa0\": 33271756,\n    \"sint_822\": \"mollit veniam amet\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "headerFamily": "json",
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "Retry-After",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
         },
         {
-            "name": "Webhooks",
-            "description": "Endpoint penerima webhook penyedia",
-            "item": [
+          "id": "5dfd51fc-ee65-4319-8f09-b202189e325b",
+          "name": "Cek status pembayaran simulasi",
+          "request": {
+            "name": "Cek status pembayaran simulasi",
+            "description": {},
+            "url": {
+              "path": [
+                "api",
+                "v1",
+                "payments",
+                ":provider",
+                ":provider_ref",
+                "status"
+              ],
+              "host": ["{{baseUrl}}"],
+              "query": [],
+              "variable": [
                 {
-                    "id": "fa01ae1c-0321-4eb5-9ccb-5363cf6f4720",
-                    "name": "Terima webhook dari provider",
-                    "request": {
-                        "name": "Terima webhook dari provider",
-                        "description": {
-                            "content": "Signature diverifikasi per provider.\n\nHeader yang digunakan berbeda per provider, contoh:\n- Xendit: `X-CALLBACK-TOKEN`\n- Midtrans: `signature_key` (sha512(order_id+status_code+gross_amount+server_key))\n- Stripe: `Stripe-Signature`\n- Lemon Squeezy: `X-Signature`\n- Airwallex: `x-timestamp` + `x-signature` (HMAC-SHA256(ts+rawBody))\n- DOKU: `Signature` (berbasis Client-Id, Request-Id, Request-Timestamp, Request-Target, Digest, dll)\n\nJika signature invalid, respon 401.\n",
-                            "type": "text/plain"
-                        },
-                        "url": {
-                            "path": [
-                                "api",
-                                "v1",
-                                "webhooks",
-                                ":provider"
-                            ],
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "query": [],
-                            "variable": [
-                                {
-                                    "type": "any",
-                                    "value": "stripe",
-                                    "key": "provider",
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "(Required) Nama provider (sesuai allowlist)",
-                                        "type": "text/plain"
-                                    }
-                                }
-                            ]
-                        },
-                        "header": [
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Correlation / request ID dari client (opsional)",
-                                    "type": "text/plain"
-                                },
-                                "key": "X-Request-ID",
-                                "value": "<string>"
-                            },
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Stripe signature header",
-                                    "type": "text/plain"
-                                },
-                                "key": "Stripe-Signature",
-                                "value": "<string>"
-                            },
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Xendit callback token header",
-                                    "type": "text/plain"
-                                },
-                                "key": "X-CALLBACK-TOKEN",
-                                "value": "<string>"
-                            },
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Lemon Squeezy signature header",
-                                    "type": "text/plain"
-                                },
-                                "key": "X-Signature",
-                                "value": "<string>"
-                            },
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Airwallex timestamp header",
-                                    "type": "text/plain"
-                                },
-                                "key": "x-timestamp",
-                                "value": "<string>"
-                            },
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "Airwallex signature header",
-                                    "type": "text/plain"
-                                },
-                                "key": "x-signature",
-                                "value": "<string>"
-                            },
-                            {
-                                "disabled": false,
-                                "description": {
-                                    "content": "DOKU signature header",
-                                    "type": "text/plain"
-                                },
-                                "key": "Signature",
-                                "value": "<string>"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/x-www-form-urlencoded"
-                            },
-                            {
-                                "key": "Accept",
-                                "value": "application/json"
-                            }
-                        ],
-                        "method": "POST",
-                        "body": {
-                            "mode": "urlencoded",
-                            "urlencoded": [
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "in_d2",
-                                    "value": "89774503"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "nulla_b",
-                                    "value": "false"
-                                }
-                            ]
-                        },
-                        "auth": {
-                            "type": "apikey",
-                            "apikey": [
-                                {
-                                    "key": "key",
-                                    "value": "X-Webhook-Signature"
-                                },
-                                {
-                                    "key": "value",
-                                    "value": "{{apiKey}}"
-                                },
-                                {
-                                    "key": "in",
-                                    "value": "header"
-                                }
-                            ]
-                        }
-                    },
-                    "response": [
-                        {
-                            "id": "19a76ceb-41a3-4223-9ec2-8567daccd97a",
-                            "name": "Accepted (diproses idempotent & retry-aware)",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "webhooks",
-                                        ":provider"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Stripe signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Stripe-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Xendit callback token header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-CALLBACK-TOKEN",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Lemon Squeezy signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex timestamp header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-timestamp",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "DOKU signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/x-www-form-urlencoded"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "description": {
-                                            "content": "Added as a part of security scheme: apikey",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Webhook-Signature",
-                                        "value": "<API Key>"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "urlencoded",
-                                    "urlencoded": [
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "in_d2",
-                                            "value": "89774503"
-                                        },
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "nulla_b",
-                                            "value": "false"
-                                        }
-                                    ]
-                                }
-                            },
-                            "status": "Accepted",
-                            "code": 202,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"data\": {\n    \"event\": {\n      \"provider\": \"<string>\",\n      \"event_id\": \"<string>\",\n      \"type\": \"<string,null>\"\n    },\n    \"result\": {\n      \"duplicate\": \"<boolean>\",\n      \"persisted\": \"<boolean>\",\n      \"status\": \"failed\",\n      \"payment_provider_ref\": \"<string,null>\",\n      \"next_retry_ms\": \"<integer,null>\"\n    }\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "6ccd0da4-2735-49c4-b01c-9c5b2dc840b1",
-                            "name": "Bad Request (validasi gagal / payload tidak sesuai)",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "webhooks",
-                                        ":provider"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Stripe signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Stripe-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Xendit callback token header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-CALLBACK-TOKEN",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Lemon Squeezy signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex timestamp header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-timestamp",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "DOKU signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/x-www-form-urlencoded"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "description": {
-                                            "content": "Added as a part of security scheme: apikey",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Webhook-Signature",
-                                        "value": "<API Key>"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "urlencoded",
-                                    "urlencoded": [
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "in_d2",
-                                            "value": "89774503"
-                                        },
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "nulla_b",
-                                            "value": "false"
-                                        }
-                                    ]
-                                }
-                            },
-                            "status": "Bad Request",
-                            "code": 400,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "7d3a9217-14b5-4192-a6cf-8ed69d7468bb",
-                            "name": "Signature webhook tidak valid / tidak lolos auth",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "webhooks",
-                                        ":provider"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Stripe signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Stripe-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Xendit callback token header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-CALLBACK-TOKEN",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Lemon Squeezy signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex timestamp header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-timestamp",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "DOKU signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/x-www-form-urlencoded"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "description": {
-                                            "content": "Added as a part of security scheme: apikey",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Webhook-Signature",
-                                        "value": "<API Key>"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "urlencoded",
-                                    "urlencoded": [
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "in_d2",
-                                            "value": "89774503"
-                                        },
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "nulla_b",
-                                            "value": "false"
-                                        }
-                                    ]
-                                }
-                            },
-                            "status": "Unauthorized",
-                            "code": 401,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        },
-                        {
-                            "id": "5ba6dbfb-68ae-4b77-aab4-9e99cfa0c25f",
-                            "name": "Terlalu banyak webhook ke endpoint ini (rate limited)",
-                            "originalRequest": {
-                                "url": {
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "webhooks",
-                                        ":provider"
-                                    ],
-                                    "host": [
-                                        "{{baseUrl}}"
-                                    ],
-                                    "query": [],
-                                    "variable": []
-                                },
-                                "header": [
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Correlation / request ID dari client (opsional)",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Request-ID",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Stripe signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Stripe-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Xendit callback token header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-CALLBACK-TOKEN",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Lemon Squeezy signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex timestamp header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-timestamp",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "Airwallex signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "x-signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "disabled": false,
-                                        "description": {
-                                            "content": "DOKU signature header",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "Signature",
-                                        "value": "<string>"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/x-www-form-urlencoded"
-                                    },
-                                    {
-                                        "key": "Accept",
-                                        "value": "application/json"
-                                    },
-                                    {
-                                        "description": {
-                                            "content": "Added as a part of security scheme: apikey",
-                                            "type": "text/plain"
-                                        },
-                                        "key": "X-Webhook-Signature",
-                                        "value": "<API Key>"
-                                    }
-                                ],
-                                "method": "POST",
-                                "body": {
-                                    "mode": "urlencoded",
-                                    "urlencoded": [
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "in_d2",
-                                            "value": "89774503"
-                                        },
-                                        {
-                                            "disabled": false,
-                                            "description": {
-                                                "content": "",
-                                                "type": "text/plain"
-                                            },
-                                            "key": "nulla_b",
-                                            "value": "false"
-                                        }
-                                    ]
-                                }
-                            },
-                            "status": "Too Many Requests",
-                            "code": 429,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "X-Request-ID",
-                                    "value": ""
-                                },
-                                {
-                                    "disabled": false,
-                                    "description": {
-                                        "content": "",
-                                        "type": "text/plain"
-                                    },
-                                    "key": "Retry-After",
-                                    "value": ""
-                                }
-                            ],
-                            "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
-                            "cookie": [],
-                            "_postman_previewlanguage": "json"
-                        }
-                    ],
-                    "event": [],
-                    "protocolProfileBehavior": {
-                        "disableBodyPruning": true
-                    }
+                  "type": "any",
+                  "value": "stripe",
+                  "key": "provider",
+                  "disabled": false,
+                  "description": {
+                    "content": "(Required) Nama provider (sesuai allowlist)",
+                    "type": "text/plain"
+                  }
+                },
+                {
+                  "type": "any",
+                  "value": "UdjfXngWUQ",
+                  "key": "provider_ref",
+                  "disabled": false,
+                  "description": {
+                    "content": "(Required) Referensi payment di simulator (provider_ref)",
+                    "type": "text/plain"
+                  }
                 }
-            ]
-        }
-    ],
-    "event": [],
-    "variable": [
+              ]
+            },
+            "header": [
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Correlation / request ID dari client (opsional)",
+                  "type": "text/plain"
+                },
+                "key": "X-Request-ID",
+                "value": "<string>"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "body": {},
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "36858ca4-d80d-432f-a39f-7f5d851a52e9",
+              "name": "OK",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments",
+                    ":provider",
+                    ":provider_ref",
+                    "status"
+                  ],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"provider\": \"<string>\",\n    \"provider_ref\": \"<string>\",\n    \"status\": \"failed\",\n    \"id\": \"<string>\",\n    \"amount\": \"<integer>\",\n    \"currency\": \"<string>\",\n    \"meta\": {\n      \"veniam_4\": \"velit in \"\n    },\n    \"created_at\": \"<dateTime>\",\n    \"updated_at\": \"<dateTime>\"\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "da0dd052-7d03-4979-b342-839c423ffd4e",
+              "name": "Resource tidak ditemukan",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments",
+                    ":provider",
+                    ":provider_ref",
+                    "status"
+                  ],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "a984494c-9fae-42a4-a806-2d228d1827b4",
+              "name": "Terlalu banyak request ke endpoint payment status",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "api",
+                    "v1",
+                    "payments",
+                    ":provider",
+                    ":provider_ref",
+                    "status"
+                  ],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "Retry-After",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"message\": \"<string>\",\n  \"error\": \"<string>\",\n  \"code\": \"<string>\",\n  \"provider\": \"<string>\",\n  \"trace_id\": \"<string>\",\n  \"details\": {\n    \"sit_22\": -29661065.932356983\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
         {
-            "key": "baseUrl",
-            "value": "/"
+          "id": "f7c4a3b1-9d0a-4ce6-9bf1-2b0aa9b0c111",
+          "name": "Ambil pembayaran (by id) — GET /api/v1/payments/:id",
+          "request": {
+            "name": "Ambil pembayaran (by id)",
+            "description": {
+              "content": "Ambil detail pembayaran berdasarkan `id` (dipakai FE admin untuk detail/refresh).\n",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": ["api", "v1", "payments", ":id"],
+              "host": ["{{baseUrl}}"],
+              "query": [],
+              "variable": [
+                {
+                  "type": "any",
+                  "value": "{{paymentId}}",
+                  "key": "id",
+                  "disabled": false,
+                  "description": {
+                    "content": "(Required) Payment id (ULID)",
+                    "type": "text/plain"
+                  }
+                }
+              ]
+            },
+            "header": [
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Correlation / request ID dari client (opsional)",
+                  "type": "text/plain"
+                },
+                "key": "X-Request-ID",
+                "value": "<string>"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "body": {},
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "d2a8c1f0-5f7a-4c2d-bd12-0b0b0c0b0c0b",
+              "name": "OK",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "payments", ":id"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"data\": {\n    \"id\": \"<string>\",\n    \"provider\": \"<string>\",\n    \"provider_ref\": \"<string>\",\n    \"status\": \"pending\",\n    \"amount\": \"<integer>\",\n    \"currency\": \"<string>\",\n    \"meta\": {},\n    \"created_at\": \"<dateTime>\",\n    \"updated_at\": \"<dateTime>\"\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "e3b7d2f9-1111-4bde-a39f-7f5d851a52e9",
+              "name": "Not Found",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "payments", ":id"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"message\": \"Payment not found\",\n  \"code\": \"not_found\",\n  \"trace_id\": \"<string>\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
         }
-    ],
-    "info": {
-        "_postman_id": "0b598027-fe59-4ae2-be3d-0be6b9e13d4c",
-        "name": "TenRusl Payment Webhook Simulator API",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-        "description": {
-            "content": "API untuk membuat pembayaran simulasi (idempotent) dan menerima webhook\ndari berbagai penyedia pembayaran. Status final ditentukan oleh webhook.\n\nCatatan desain:\n- Semua response membawa header `X-Request-ID` untuk tracing.\n- `POST /payments` mendukung idempotency via header `Idempotency-Key`.\n",
-            "type": "text/plain"
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Endpoint admin untuk list/monitor payments (butuh admin key/token)",
+      "item": [
+        {
+          "id": "a9a9a9a9-aaaa-4bbb-cccc-111111111111",
+          "name": "Admin — List Payments (GET /api/v1/admin/payments)",
+          "request": {
+            "name": "Admin — List Payments",
+            "description": {
+              "content": "List pembayaran (pagination + filter). Wajib mengirim `X-Admin-Key` atau `Authorization: Bearer ...` sesuai implementasi demo.\n",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": ["api", "v1", "admin", "payments"],
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "{{adminPerPage}}"
+                },
+                {
+                  "key": "page",
+                  "value": "{{adminPage}}"
+                },
+                {
+                  "key": "provider",
+                  "value": "{{adminProvider}}"
+                },
+                {
+                  "key": "status",
+                  "value": "{{adminStatus}}"
+                },
+                {
+                  "key": "q",
+                  "value": "{{adminQuery}}"
+                },
+                {
+                  "key": "from",
+                  "value": "{{adminFrom}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{adminTo}}"
+                }
+              ],
+              "variable": []
+            },
+            "header": [
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Correlation / request ID dari client (opsional)",
+                  "type": "text/plain"
+                },
+                "key": "X-Request-ID",
+                "value": "<string>"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{adminKey}}"
+              },
+              {
+                "disabled": true,
+                "key": "Authorization",
+                "value": "Bearer {{adminBearerToken}}"
+              }
+            ],
+            "method": "GET",
+            "body": {},
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "b0b0b0b0-1111-4bde-a39f-7f5d851a52e9",
+              "name": "OK",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "admin", "payments"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Key",
+                    "value": "{{adminKey}}"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"<string>\",\n      \"provider\": \"<string>\",\n      \"provider_ref\": \"<string>\",\n      \"amount\": \"<integer>\",\n      \"currency\": \"<string>\",\n      \"status\": \"pending\",\n      \"created_at\": \"<dateTime>\",\n      \"updated_at\": \"<dateTime>\"\n    }\n  ],\n  \"meta\": {\n    \"page\": 1,\n    \"per_page\": 20,\n    \"total\": 1\n  }\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "c1c1c1c1-1111-4bde-a39f-7f5d851a52e9",
+              "name": "Unauthorized / Forbidden",
+              "originalRequest": {
+                "url": {
+                  "path": ["api", "v1", "admin", "payments"],
+                  "host": ["{{baseUrl}}"],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "disabled": false,
+                    "description": {
+                      "content": "Correlation / request ID dari client (opsional)",
+                      "type": "text/plain"
+                    },
+                    "key": "X-Request-ID",
+                    "value": "<string>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "X-Admin-Key",
+                    "value": "{{adminKey}}"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "X-Request-ID",
+                  "value": ""
+                }
+              ],
+              "body": "{\n  \"message\": \"Unauthorized\",\n  \"code\": \"unauthorized\",\n  \"trace_id\": \"<string>\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
         }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "description": "Endpoint penerima webhook penyedia",
+      "item": [
+        {
+          "id": "fa01ae1c-0321-4eb5-9ccb-5363cf6f4720",
+          "name": "Terima webhook dari provider",
+          "request": {
+            "name": "Terima webhook dari provider",
+            "description": {
+              "content": "Signature diverifikasi per provider.\n\nHeader yang digunakan berbeda per provider, contoh:\n- Xendit: `X-CALLBACK-TOKEN`\n- Midtrans: `signature_key` (sha512(order_id+status_code+gross_amount+server_key))\n- Stripe: `Stripe-Signature`\n- Lemon Squeezy: `X-Signature`\n- Airwallex: `x-timestamp` + `x-signature` (HMAC-SHA256(ts+rawBody))\n- DOKU: `Signature` (berbasis Client-Id, Request-Id, Request-Timestamp, Request-Target, Digest, dll)\n\nJika signature invalid, respon 401.\n",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": ["api", "v1", "webhooks", ":provider"],
+              "host": ["{{baseUrl}}"],
+              "query": [],
+              "variable": [
+                {
+                  "type": "any",
+                  "value": "stripe",
+                  "key": "provider",
+                  "disabled": false,
+                  "description": {
+                    "content": "(Required) Nama provider (sesuai allowlist)",
+                    "type": "text/plain"
+                  }
+                }
+              ]
+            },
+            "header": [
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Correlation / request ID dari client (opsional)",
+                  "type": "text/plain"
+                },
+                "key": "X-Request-ID",
+                "value": "<string>"
+              },
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Stripe signature header",
+                  "type": "text/plain"
+                },
+                "key": "Stripe-Signature",
+                "value": "<string>"
+              },
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Xendit callback token header",
+                  "type": "text/plain"
+                },
+                "key": "X-CALLBACK-TOKEN",
+                "value": "<string>"
+              },
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Lemon Squeezy signature header",
+                  "type": "text/plain"
+                },
+                "key": "X-Signature",
+                "value": "<string>"
+              },
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Airwallex timestamp header",
+                  "type": "text/plain"
+                },
+                "key": "x-timestamp",
+                "value": "<string>"
+              },
+              {
+                "disabled": false,
+                "description": {
+                  "content": "Airwallex signature header",
+                  "type": "text/plain"
+                },
+                "key": "x-signature",
+                "value": "<string>"
+              },
+              {
+                "disabled": false,
+                "description": {
+                  "content": "DOKU signature header",
+                  "type": "text/plain"
+                },
+                "key": "Signature",
+                "value": "<string>"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "in_d2",
+                  "value": "89774503"
+                },
+                {
+                  "disabled": false,
+                  "description": {
+                    "content": "",
+                    "type": "text/plain"
+                  },
+                  "key": "nulla_b",
+                  "value": "false"
+                }
+              ]
+            },
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "key",
+                  "value": "X-Webhook-Signature"
+                },
+                {
+                  "key": "value",
+                  "value": "{{apiKey}}"
+                },
+                {
+                  "key": "in",
+                  "value": "header"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ]
     }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "/"
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "adminKey",
+      "value": ""
+    },
+    {
+      "key": "adminBearerToken",
+      "value": ""
+    },
+    {
+      "key": "adminPerPage",
+      "value": "20"
+    },
+    {
+      "key": "adminPage",
+      "value": "1"
+    },
+    {
+      "key": "adminProvider",
+      "value": ""
+    },
+    {
+      "key": "adminStatus",
+      "value": ""
+    },
+    {
+      "key": "adminQuery",
+      "value": ""
+    },
+    {
+      "key": "adminFrom",
+      "value": ""
+    },
+    {
+      "key": "adminTo",
+      "value": ""
+    }
+  ],
+  "info": {
+    "_postman_id": "0b598027-fe59-4ae2-be3d-0be6b9e13d4c",
+    "name": "TenRusl Payment Webhook Simulator API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": {
+      "content": "API untuk membuat pembayaran simulasi (idempotent) dan menerima webhook\ndari berbagai penyedia pembayaran. Status final ditentukan oleh webhook.\n\nCatatan desain:\n- Semua response membawa header `X-Request-ID` untuk tracing.\n- `POST /payments` mendukung idempotency via header `Idempotency-Key`.\n",
+      "type": "text/plain"
+    }
+  }
 }

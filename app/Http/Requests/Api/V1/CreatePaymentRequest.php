@@ -11,27 +11,22 @@ use Illuminate\Validation\Rule;
  * FormRequest untuk:
  * - POST /api/v1/payments
  *
- * Tujuan:
- * - Validasi input sesuai dokumentasi (provider allowlist, amount, currency, dsb).
+ * Fokus:
+ * - Validasi input FE (provider, amount, currency, meta/metadata, description).
  * - Normalisasi input sebelum validasi:
- *   - "metadata" (client) -> "meta" (internal)
- *   - currency uppercase
- *   - default currency ke IDR
+ *   - "metadata" (alias/legacy) -> "meta" (internal)
+ *   - provider -> lowercase
+ *   - currency -> uppercase dan default IDR
+ *   - amount -> integer jika numeric-string (mis. "10000")
  *
- * Catatan tooling:
- * - Docblock @mixin + @method membantu static analyzer (Intelephense, PHPStan, Psalm).
- *
- * @mixin \Illuminate\Http\Request
- *
- * @method bool has(string|array $key)
- * @method mixed input(string $key = null, mixed $default = null)
- * @method void merge(array $input)
+ * Catatan:
+ * - validated() di FormRequest Laravel mengembalikan mixed bila $key diisi,
+ *   jadi override tetap mengikuti signature aslinya. :contentReference[oaicite:1]{index=1}
  */
 class CreatePaymentRequest extends FormRequest
 {
     /**
-     * Endpoint ini public (simulator).
-     * Kalau nanti ada auth, ubah jadi cek token/guard di sini.
+     * Endpoint simulator (public).
      */
     public function authorize(): bool
     {
@@ -39,35 +34,41 @@ class CreatePaymentRequest extends FormRequest
     }
 
     /**
-     * Normalisasi input sebelum rules() dijalankan.
+     * Normalisasi input sebelum rules() dipakai.
      *
-     * - Jika client kirim "metadata" tapi tidak kirim "meta", kita map ke "meta".
-     * - Currency kita uppercase (IDR, USD, dst).
-     * - Jika currency kosong/tidak ada, kita default ke IDR.
-     *
-     * Ini membuat rule 'currency' tetap "required", tapi request tanpa currency tetap lolos
-     * karena di-inject IDR di tahap ini.
+     * prepareForValidation adalah hook resmi FormRequest untuk menyiapkan data sebelum validasi. :contentReference[oaicite:2]{index=2}
      */
     protected function prepareForValidation(): void
     {
         $merge = [];
 
-        // Map metadata -> meta agar konsisten dengan internal field yang dipakai service/model
+        // Normalisasi provider -> lowercase agar cocok dengan allowlist config (umumnya lowercase)
+        $provider = $this->input('provider');
+        if (is_string($provider) && $provider !== '') {
+            $merge['provider'] = strtolower($provider);
+        }
+
+        // Normalisasi amount: jika numeric-string integer, cast ke int
+        $amount = $this->input('amount');
+        if (is_string($amount) && $amount !== '' && preg_match('/^\d+$/', $amount) === 1) {
+            $merge['amount'] = (int) $amount;
+        }
+
+        // Map metadata -> meta (hanya jika meta belum ada)
         if ($this->has('metadata') && ! $this->has('meta')) {
-            /** @var mixed $metadata */
             $metadata = $this->input('metadata');
             if (is_array($metadata)) {
                 $merge['meta'] = $metadata;
             }
         }
 
-        // Uppercase currency bila dikirim
+        // Currency uppercase bila dikirim
         $currency = $this->input('currency');
         if (is_string($currency) && $currency !== '') {
             $merge['currency'] = strtoupper($currency);
         }
 
-        // Default currency saat tidak ada / kosong
+        // Default currency jika tidak ada / kosong
         if (! $this->has('currency') || $this->input('currency') === null || $this->input('currency') === '') {
             $merge['currency'] = 'IDR';
         }
@@ -78,56 +79,61 @@ class CreatePaymentRequest extends FormRequest
     }
 
     /**
-     * Rules validasi request create payment.
-     *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
-        // Allowlist provider diambil dari config/tenrusl.php
-        // (fallback default agar dev experience tetap enak kalau config belum ke-load)
+        // Allowlist provider dari config/tenrusl.php
         $allowlist = (array) config('tenrusl.providers_allowlist', ['mock', 'xendit', 'midtrans']);
 
         return [
-            // Provider wajib sesuai allowlist (route & signature service juga memakai allowlist yang sama)
             'provider' => ['required', 'string', Rule::in($allowlist)],
 
-            // amount wajib integer (minor unit), minimal 1
+            // minor unit (integer), minimal 1
             'amount' => ['required', 'integer', 'min:1'],
 
-            // currency 3 huruf ISO (uppercase), default IDR jika tidak dikirim
+            // ISO-4217 3 huruf uppercase, default disuntik IDR di prepareForValidation
             'currency' => ['required', 'string', 'size:3', 'regex:/^[A-Z]{3}$/'],
 
             'description' => ['nullable', 'string', 'max:255'],
 
-            // Terima kedua-duanya: metadata (legacy/client) atau meta (internal)
+            // Alias/legacy support: terima dua-duanya
             'metadata' => ['nullable', 'array'],
             'meta' => ['nullable', 'array'],
         ];
     }
 
     /**
-     * Pastikan output validated() selalu mengandung "meta" (internal),
-     * dan tidak mengekspose "metadata" (alias).
+     * Pastikan output validated() saat dipanggil tanpa parameter selalu:
+     * - punya "meta" (array)
+     * - tidak menyisakan "metadata"
      *
      * @param  array|int|string|null  $key
      * @param  mixed  $default
-     * @return array<string, mixed>
+     * @return mixed
      */
-    public function validated($key = null, $default = null)
+    public function validated($key = null, $default = null): mixed
     {
-        /** @var array<string, mixed> $data */
-        $data = parent::validated($key, $default);
+        $validated = parent::validated($key, $default);
 
-        // Jika meta belum ada tapi metadata ada, map ke meta.
-        if (! array_key_exists('meta', $data) && array_key_exists('metadata', $data)) {
+        // Bila $key diisi, ikuti perilaku bawaan (mixed).
+        if ($key !== null) {
+            return $validated;
+        }
+
+        /** @var array<string, mixed> $data */
+        $data = is_array($validated) ? $validated : [];
+
+        if (
+            ! array_key_exists('meta', $data)
+            && array_key_exists('metadata', $data)
+            && is_array($data['metadata'])
+        ) {
             $data['meta'] = $data['metadata'];
         }
 
-        // Bersihkan alias agar downstream tidak bingung
         unset($data['metadata']);
 
-        // Default meta ke array kosong biar downstream simple
         if (! array_key_exists('meta', $data) || ! is_array($data['meta'])) {
             $data['meta'] = [];
         }
@@ -136,9 +142,7 @@ class CreatePaymentRequest extends FormRequest
     }
 
     /**
-     * Label attribute agar message validasi lebih rapi.
-     *
-     * @return array<string,string>
+     * @return array<string, string>
      */
     public function attributes(): array
     {
@@ -146,9 +150,21 @@ class CreatePaymentRequest extends FormRequest
             'provider' => 'payment provider',
             'amount' => 'amount',
             'currency' => 'currency (ISO-4217)',
-            // Label konsisten untuk keduanya
             'metadata' => 'metadata',
             'meta' => 'metadata',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'provider.in' => 'Provider tidak dikenali / tidak ada di allowlist.',
+            'amount.integer' => 'Amount harus integer (minor unit).',
+            'amount.min' => 'Amount minimal 1.',
+            'currency.regex' => 'Currency harus 3 huruf uppercase (contoh: IDR).',
         ];
     }
 }

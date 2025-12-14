@@ -14,6 +14,28 @@ class PaymentFactory extends Factory
     {
         $provider = $this->faker->randomElement(['mock', 'xendit', 'midtrans']);
 
+        $amount = $this->faker->numberBetween(1_000, 250_000);
+        $currency = 'IDR';
+        $description = $this->faker->sentence(3);
+
+        // Tabel memiliki kolom unik idempotency_key → isi untuk kemudahan test/seed
+        $idemKey = (string) Str::uuid();
+
+        /**
+         * (Opsional) fingerprint payload untuk mendeteksi konflik idempotency:
+         * - kalau request datang dengan Idempotency-Key sama tapi body berbeda,
+         *   service bisa respon 409 dan tetap tercatat rapi di DB.
+         *
+         * Di demo seed, kita isi hash yang “stabil” berdasarkan field utama.
+         */
+        $requestHash = hash('sha256', implode('|', [
+            'provider='.$provider,
+            'amount='.$amount,
+            'currency='.$currency,
+            'description='.$description,
+            'idempotency_key='.$idemKey,
+        ]));
+
         return [
             // Set id ULID agar konsisten dengan HasUlid
             'id' => (string) Str::ulid(),
@@ -22,9 +44,9 @@ class PaymentFactory extends Factory
             'provider' => $provider,
             'provider_ref' => 'sim_'.$provider.'_'.Str::ulid()->toBase32(),
 
-            'amount' => $this->faker->numberBetween(1_000, 250_000),
-            'currency' => 'IDR',
-            'description' => $this->faker->sentence(3),
+            'amount' => $amount,
+            'currency' => $currency,
+            'description' => $description,
 
             // Gunakan "meta" (bukan "metadata") agar konsisten dengan model & resource
             'meta' => [
@@ -34,8 +56,9 @@ class PaymentFactory extends Factory
             // Konsisten dengan enum PaymentStatus
             'status' => $this->faker->randomElement(['pending', 'succeeded', 'failed']),
 
-            // Tabel memiliki kolom unik idempotency_key → isi untuk kemudahan test/seed
-            'idempotency_key' => (string) Str::uuid(),
+            // Idempotency fields (support admin/debug)
+            'idempotency_key' => $idemKey,
+            'idempotency_request_hash' => $requestHash,
         ];
     }
 

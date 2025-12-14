@@ -50,8 +50,9 @@ return new class extends Migration
              * - nullable: supaya flow non-idempotent tetap bisa
              * - unique: satu key mengacu ke satu payment
              *
-             * Catatan: MySQL mengizinkan banyak NULL dalam UNIQUE index. :contentReference[oaicite:2]{index=2}
-             * SQLite juga memperlakukan NULL sebagai distinct untuk UNIQUE. :contentReference[oaicite:3]{index=3}
+             * Catatan:
+             * - MySQL mengizinkan multiple NULL dalam UNIQUE index.
+             * - SQLite memperlakukan NULL sebagai distinct untuk UNIQUE.
              */
             $table->string('idempotency_key', 255)->nullable();
             $table->unique('idempotency_key', 'payments_idempotency_key_unique');
@@ -70,6 +71,20 @@ return new class extends Migration
              * Bisa unique (lebih aman) jika provider_ref memang unik per provider.
              */
             $table->unique(['provider', 'provider_ref'], 'payments_provider_provider_ref_unique');
+
+            /*
+             * Index tambahan untuk Admin List:
+             * - Umumnya admin list filter by status dan sort by created_at desc.
+             * - Composite index membantu query tetap cepat saat data mulai besar.
+             */
+            $table->index(['status', 'created_at'], 'payments_status_created_at_idx');
+
+            /*
+             * Index tambahan opsional:
+             * - Filter by provider dan sort by created_at.
+             * - Berguna untuk admin list per provider / tab.
+             */
+            $table->index(['provider', 'created_at'], 'payments_provider_created_at_idx');
         });
     }
 

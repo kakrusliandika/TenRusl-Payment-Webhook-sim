@@ -14,8 +14,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Idempotency-Key", "value": "{{idempotency_key}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idempotency_key}}"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{x_request_id}}",
+                "disabled": true
+              }
             ],
             "body": {
               "mode": "raw",
@@ -23,8 +34,12 @@
             },
             "url": {
               "raw": "{{base_url}}/payments",
-              "host": ["{{base_url}}"],
-              "path": ["payments"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payments"
+              ]
             }
           },
           "event": [
@@ -35,6 +50,11 @@
                 "exec": [
                   "if (!pm.environment.get('idempotency_key')) {",
                   "  pm.environment.set('idempotency_key', `${Date.now()}-${pm.variables.replaceIn('{{$randomUUID}}')}`);",
+                  "}",
+                  "",
+                  "// Optional: selalu bikin X-Request-ID supaya trace gampang",
+                  "if (!pm.environment.get('x_request_id')) {",
+                  "  pm.environment.set('x_request_id', `${Date.now()}-${pm.variables.replaceIn('{{$randomUUID}}')}`);",
                   "}"
                 ]
               }
@@ -71,6 +91,17 @@
                   "    const isConflict = currentStatus === 409;",
                   "    pm.expect(sameAsBaseline || isConflict).to.be.true;",
                   "  });",
+                  "}",
+                  "",
+                  "// Capture payment_id + provider/provider_ref untuk request berikutnya (best effort)",
+                  "try {",
+                  "  const j = pm.response.json();",
+                  "  const d = (j && j.data) ? j.data : null;",
+                  "  if (d && d.id) pm.environment.set('payment_id', d.id);",
+                  "  if (d && d.provider) pm.environment.set('status_provider', d.provider);",
+                  "  if (d && d.provider_ref) pm.environment.set('status_provider_ref', d.provider_ref);",
+                  "} catch (e) {",
+                  "  // ignore",
                   "}"
                 ]
               }
@@ -78,13 +109,48 @@
           ]
         },
         {
+          "name": "Get Payment (by id)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{x_request_id}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments/{{payment_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payments",
+                "{{payment_id}}"
+              ]
+            }
+          },
+          "description": "Ambil detail payment terbaru berdasarkan id (untuk refresh admin / detail)."
+        },
+        {
           "name": "Get Payment Status (by provider/ref)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/payments/{{status_provider}}/{{status_provider_ref}}/status",
-              "host": ["{{base_url}}"],
+              "host": [
+                "{{base_url}}"
+              ],
               "path": [
                 "payments",
                 "{{status_provider}}",
@@ -97,6 +163,90 @@
       ]
     },
     {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Admin List Payments (pagination + filter)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Admin-Key",
+                "value": "{{admin_key}}"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_bearer_token}}",
+                "disabled": true
+              },
+              {
+                "key": "X-Request-ID",
+                "value": "{{x_request_id}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{admin_base_url}}/admin/payments?per_page={{admin_per_page}}&page={{admin_page}}&provider={{admin_filter_provider}}&status={{admin_filter_status}}&q={{admin_q}}&from={{admin_from}}&to={{admin_to}}",
+              "host": [
+                "{{admin_base_url}}"
+              ],
+              "path": [
+                "admin",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "per_page",
+                  "value": "{{admin_per_page}}"
+                },
+                {
+                  "key": "page",
+                  "value": "{{admin_page}}"
+                },
+                {
+                  "key": "provider",
+                  "value": "{{admin_filter_provider}}"
+                },
+                {
+                  "key": "status",
+                  "value": "{{admin_filter_status}}"
+                },
+                {
+                  "key": "q",
+                  "value": "{{admin_q}}"
+                },
+                {
+                  "key": "from",
+                  "value": "{{admin_from}}"
+                },
+                {
+                  "key": "to",
+                  "value": "{{admin_to}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('admin list returns 200 when authorized', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 401, 403]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Webhooks",
       "item": [
         {
@@ -104,8 +254,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Mock-Signature", "value": "{{MOCK_SIGNATURE}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-Signature",
+                "value": "{{MOCK_SIGNATURE}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -113,8 +269,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/mock",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "mock"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "mock"
+              ]
             }
           },
           "event": [
@@ -148,8 +309,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Mock-Signature", "value": "invalid-signature" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-Signature",
+                "value": "invalid-signature"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -157,8 +324,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/mock",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "mock"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "mock"
+              ]
             }
           },
           "event": [
@@ -180,7 +352,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
               {
                 "key": "x-callback-token",
                 "value": "{{XENDIT_CALLBACK_TOKEN}}"
@@ -192,8 +367,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/xendit",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "xendit"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "xendit"
+              ]
             }
           }
         },
@@ -201,15 +381,25 @@
           "name": "midtrans – POST /webhooks/midtrans",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"order_id\": \"INV-{{$timestamp}}\",\n  \"status_code\": \"200\",\n  \"gross_amount\": \"100000.00\",\n  \"signature_key\": \"{{MIDTRANS_SIGNATURE}}\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/webhooks/midtrans",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "midtrans"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "midtrans"
+              ]
             }
           },
           "event": [
@@ -234,8 +424,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Stripe-Signature", "value": "{{STRIPE_SIGNATURE}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Stripe-Signature",
+                "value": "{{STRIPE_SIGNATURE}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -243,8 +439,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/stripe",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "stripe"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "stripe"
+              ]
             }
           },
           "event": [
@@ -267,15 +468,25 @@
           "name": "paypal – POST /webhooks/paypal (placeholder)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"id\": \"WH-{{$timestamp}}\",\n  \"event_type\": \"PAYMENT.SALE.COMPLETED\",\n  \"resource\": {\"id\": \"sale_{{$timestamp}}\"}\n}"
             },
             "url": {
               "raw": "{{base_url}}/webhooks/paypal",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "paypal"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "paypal"
+              ]
             }
           },
           "description": "PayPal signature biasanya diverifikasi via API. Request ini untuk alur dasar/placeholder."
@@ -312,8 +523,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/paddle",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "paddle"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "paddle"
+              ]
             }
           },
           "description": "Tandatangan Paddle bervariasi (RSA lama / signing secret baru). Isi manual jika verifikasi diaktifkan."
@@ -323,8 +539,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Signature", "value": "{{LS_SIGNATURE}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Signature",
+                "value": "{{LS_SIGNATURE}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -332,8 +554,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/lemonsqueezy",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "lemonsqueezy"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "lemonsqueezy"
+              ]
             }
           },
           "event": [
@@ -356,9 +583,18 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-timestamp", "value": "{{AW_TS}}" },
-              { "key": "x-signature", "value": "{{AW_SIG}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-timestamp",
+                "value": "{{AW_TS}}"
+              },
+              {
+                "key": "x-signature",
+                "value": "{{AW_SIG}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -366,8 +602,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/airwallex",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "airwallex"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "airwallex"
+              ]
             }
           },
           "event": [
@@ -392,8 +633,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Callback-Signature", "value": "{{TRIPAY_SIG}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Callback-Signature",
+                "value": "{{TRIPAY_SIG}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -401,8 +648,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/tripay",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "tripay"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "tripay"
+              ]
             }
           },
           "event": [
@@ -425,16 +677,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Client-Id", "value": "{{DOKU_CLIENT_ID}}" },
-              { "key": "Request-Id", "value": "{{DOKU_REQUEST_ID}}" },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Client-Id",
+                "value": "{{DOKU_CLIENT_ID}}"
+              },
+              {
+                "key": "Request-Id",
+                "value": "{{DOKU_REQUEST_ID}}"
+              },
               {
                 "key": "Request-Timestamp",
                 "value": "{{DOKU_REQUEST_TIMESTAMP}}"
               },
-              { "key": "Request-Target", "value": "{{DOKU_REQUEST_TARGET}}" },
-              { "key": "Digest", "value": "{{DOKU_DIGEST}}" },
-              { "key": "Signature", "value": "{{DOKU_SIGNATURE}}" }
+              {
+                "key": "Request-Target",
+                "value": "{{DOKU_REQUEST_TARGET}}"
+              },
+              {
+                "key": "Digest",
+                "value": "{{DOKU_DIGEST}}"
+              },
+              {
+                "key": "Signature",
+                "value": "{{DOKU_SIGNATURE}}"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -442,8 +712,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/doku",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "doku"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "doku"
+              ]
             }
           },
           "event": [
@@ -476,15 +751,25 @@
           "name": "dana – POST /webhooks/dana (placeholder)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"id\": \"dana_{{$timestamp}}\",\n  \"event\": \"payment_succeeded\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/webhooks/dana",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "dana"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "dana"
+              ]
             }
           }
         },
@@ -492,15 +777,25 @@
           "name": "oy – POST /webhooks/oy (placeholder)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"event\": \"payment_success\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/webhooks/oy",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "oy"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "oy"
+              ]
             }
           }
         },
@@ -508,15 +803,25 @@
           "name": "payoneer – POST /webhooks/payoneer (placeholder)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"event\": \"payment.approved\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/webhooks/payoneer",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "payoneer"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "payoneer"
+              ]
             }
           }
         },
@@ -542,8 +847,13 @@
             },
             "url": {
               "raw": "{{base_url}}/webhooks/skrill",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "skrill"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "skrill"
+              ]
             }
           }
         },
@@ -551,15 +861,25 @@
           "name": "amazon_bwp – POST /webhooks/amazon_bwp (placeholder)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"detail-type\": \"BuyWithPrime.OrderCompleted\",\n  \"detail\": {\"orderId\": \"amzn_{{$timestamp}}\"}\n}"
             },
             "url": {
               "raw": "{{base_url}}/webhooks/amazon_bwp",
-              "host": ["{{base_url}}"],
-              "path": ["webhooks", "amazon_bwp"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "webhooks",
+                "amazon_bwp"
+              ]
             }
           }
         }

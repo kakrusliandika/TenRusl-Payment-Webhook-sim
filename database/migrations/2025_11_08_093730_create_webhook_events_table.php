@@ -83,7 +83,7 @@ return new class extends Migration
 
             /*
              * Dedup kuat (enforced):
-             * Laravel mendukung multi-column unique index seperti ini. :contentReference[oaicite:1]{index=1}
+             * Laravel mendukung multi-column unique index seperti ini.
              */
             $table->unique(['provider', 'event_id'], 'webhook_events_provider_event_unique');
 
@@ -92,8 +92,31 @@ return new class extends Migration
              * Jika query retry sering pakai filter provider + next_retry_at:
              */
             $table->index(['provider', 'next_retry_at'], 'webhook_events_provider_next_retry_idx');
-            // Bisa juga dipertimbangkan:
-            // $table->index(['payment_status', 'next_retry_at'], 'webhook_events_paystatus_next_retry_idx');
+
+            /*
+             * Index tambahan untuk Admin List + Retry Dashboard:
+             * - Banyak UI admin akan filter berdasarkan status/pending/fail dan sort by created_at.
+             * - Banyak query retry engine pakai status + payment_status + next_retry_at.
+             */
+            $table->index(['status', 'created_at'], 'webhook_events_status_created_at_idx');
+            $table->index(['payment_status', 'created_at'], 'webhook_events_paystatus_created_at_idx');
+
+            /*
+             * Composite index untuk pemilihan event yang eligible di-retry:
+             * - status != processed (biasanya via where)
+             * - payment_status pending
+             * - next_retry_at due/null
+             *
+             * Catatan: meski query bisa memanfaatkan index single-column yang sudah ada,
+             * index gabungan ini menjaga performa saat row bertambah banyak.
+             */
+            $table->index(
+                ['status', 'payment_status', 'next_retry_at'],
+                'webhook_events_status_paystatus_next_retry_idx'
+            );
+
+            // Bisa juga dipertimbangkan (kalau perlu):
+            // $table->index(['payment_provider_ref', 'created_at'], 'webhook_events_payref_created_at_idx');
         });
     }
 

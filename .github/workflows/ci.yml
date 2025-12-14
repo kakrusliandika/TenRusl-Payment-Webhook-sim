@@ -17,6 +17,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    # Tambahan: env diseragamkan supaya hasil CI konsisten di semua step.
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      LOG_CHANNEL: stderr
+
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+
+      QUEUE_CONNECTION: sync
+      CACHE_STORE: database
+      SESSION_DRIVER: array
+      MAIL_MAILER: log
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +42,12 @@ jobs:
           coverage: none
           tools: composer
           extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
+
+      # Tambahan: info versi tooling untuk debugging kalau CI merah.
+      - name: Show tool versions
+        run: |
+          php -v
+          composer -V
 
       - name: Validate composer.json
         run: composer validate --no-check-publish

@@ -20,30 +20,50 @@ class WebhookEventFactory extends Factory
         // Status event webhook: received | processed | failed
         $status = $this->faker->randomElement(['received', 'processed', 'failed']);
 
+        // Type event (untuk audit / filter admin)
+        $eventType = $this->faker->randomElement([
+            'payment.succeeded',
+            'payment.failed',
+            'charge.succeeded',
+            'charge.failed',
+            'invoice.paid',
+        ]);
+
+        $payload = [
+            'event_id' => $eventId,
+            'type' => $eventType,
+            'data' => [
+                'provider' => $provider,
+                'ref' => $payRef,
+                'amount' => $this->faker->numberBetween(1_000, 250_000),
+                'currency' => 'IDR',
+            ],
+            'sent_at' => $sentAtIso,
+        ];
+
+        // Simpan raw untuk audit/verifikasi signature (yang butuh raw body)
+        $raw = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($raw === false) {
+            $raw = '{}';
+        }
+
         return [
             'id' => (string) Str::ulid(),
             'provider' => $provider,
             'event_id' => $eventId,
+
+            // Optional: tipe event untuk audit / debugging (selaras dengan migration)
+            'event_type' => $eventType,
+
+            // Referensi payment di simulator (untuk tracing)
             'payment_provider_ref' => $payRef,
 
+            // Jejak verifikasi signature (opsional)
             'signature_hash' => $this->faker->sha256(),
 
-            'payload' => [
-                'event_id' => $eventId,
-                'type' => $this->faker->randomElement([
-                    'payment.succeeded',
-                    'payment.failed',
-                    'charge.succeeded',
-                    'charge.failed',
-                ]),
-                'data' => [
-                    'provider' => $provider,
-                    'ref' => $payRef,
-                    'amount' => $this->faker->numberBetween(1_000, 250_000),
-                    'currency' => 'IDR',
-                ],
-                'sent_at' => $sentAtIso,
-            ],
+            // Raw + parsed payload (selaras dengan migration)
+            'payload_raw' => $raw,
+            'payload' => $payload,
 
             // Status pipeline webhook (bukan status pembayaran)
             'status' => $status,

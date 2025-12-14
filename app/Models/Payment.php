@@ -6,9 +6,18 @@ namespace App\Models;
 
 use App\Traits\HasUlid;
 use App\ValueObjects\PaymentStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Model Payment
+ *
+ * - meta di-cast ke array agar stabil di API response. :contentReference[oaicite:3]{index=3}
+ * - status di-cast ke Enum/Cast class (PaymentStatus) sesuai dukungan Enum casting Eloquent. :contentReference[oaicite:4]{index=4}
+ * - relasi webhookEvents untuk kebutuhan GET /payments/{id} (include associated events). :contentReference[oaicite:5]{index=5}
+ */
 class Payment extends Model
 {
     use HasFactory;
@@ -21,8 +30,9 @@ class Payment extends Model
     protected $keyType = 'string';
 
     /**
-     * Kolom yang boleh diisi mass-assignment.
-     * Pastikan ini match dengan migrasi payments kamu.
+     * Kolom mass-assignable (sesuaikan dengan migrasi).
+     *
+     * @var array<int, string>
      */
     protected $fillable = [
         'provider',
@@ -32,37 +42,49 @@ class Payment extends Model
         'currency',
         'description',
 
-        // metadata bebas untuk simulator (di OpenAPI pakai "meta")
         'meta',
 
-        // pending | succeeded | failed
         'status',
 
-        // idempotency (kalau dipakai oleh CreatePaymentRequest/controller)
         'idempotency_key',
         'idempotency_request_hash',
     ];
 
     /**
-     * Casting:
-     * - JSON meta => array
-     * - status => enum/cast PaymentStatus (jika implemented sebagai enum cast) :contentReference[oaicite:5]{index=5}
+     * Casting attributes.
+     *
+     * @return array<string, string>
      */
-    protected $casts = [
-        'amount' => 'integer',
-        'meta' => 'array',
-        'status' => PaymentStatus::class,
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'amount' => 'integer',
+            'meta' => 'array',
+            'status' => PaymentStatus::class,
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
 
     /**
-     * Scope bantu untuk lookup payment berdasarkan provider & provider_ref.
+     * Scope: filter berdasarkan provider + provider_ref.
      */
-    public function scopeByProviderRef($query, string $provider, string $providerRef)
+    public function scopeByProviderRef(Builder $query, string $provider, string $providerRef): Builder
     {
         return $query
             ->where('provider', $provider)
             ->where('provider_ref', $providerRef);
+    }
+
+    /**
+     * Relasi: Payment punya banyak WebhookEvent.
+     *
+     * Asumsi default:
+     * - tabel webhook_events punya kolom payment_id yang mengarah ke payments.id
+     * Jika skema kamu beda, ganti foreign key / local key di sini.
+     */
+    public function webhookEvents(): HasMany
+    {
+        return $this->hasMany(\App\Models\WebhookEvent::class, 'payment_id', $this->getKeyName());
     }
 }

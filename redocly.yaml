@@ -1,4 +1,6 @@
 # Redocly CLI config (root project)
+# Dipakai untuk lint/bundle/preview oleh Redocly tooling. :contentReference[oaicite:3]{index=3}
+
 apis:
   tenrusl:
     root: docs/openapi.yaml
@@ -7,6 +9,11 @@ extends:
   - recommended
 
 rules:
-  # Biar lebih rapih dan konsisten
+  # Biar rapih dan konsisten
   operation-operationId: error
+  operation-operationId-unique: error
   no-unused-components: warn
+
+  # Kalau kamu ingin lebih ketat untuk endpoint admin yang butuh security,
+  # recommended biasanya sudah mencakup banyak rules, tapi ini bisa kamu set eksplisit:
+  # security-defined: error

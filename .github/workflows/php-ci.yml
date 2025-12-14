@@ -40,6 +40,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Tambahan: samakan env dengan CI utama.
+    env:
+      APP_ENV: testing
+      APP_DEBUG: true
+      LOG_CHANNEL: stderr
+
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+
+      QUEUE_CONNECTION: sync
+      CACHE_STORE: database
+      SESSION_DRIVER: array
+      MAIL_MAILER: log
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,6 +66,10 @@ jobs:
           tools: composer
           extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
 
+      # Tambahan: validate biar error composer kebaca cepat.
+      - name: Validate composer.json
+        run: composer validate --no-check-publish
+
       - name: Cache Composer
         uses: actions/cache@v4
         with:
@@ -63,11 +81,12 @@ jobs:
       - name: Install Dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      # Perubahan: hilangkan "|| true" supaya kalau setup env/key gagal, workflow fail jelas.
       - name: Prepare App + SQLite
         run: |
           cp .env.example .env || true
-          php artisan key:generate --force || true
-          php artisan config:clear || true
+          php artisan key:generate --force
+          php artisan config:clear
           mkdir -p database
           touch database/database.sqlite
 

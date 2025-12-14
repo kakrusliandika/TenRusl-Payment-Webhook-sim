@@ -6,6 +6,8 @@ namespace App\Repositories;
 
 use App\Models\Payment;
 use App\ValueObjects\PaymentStatus;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 final class PaymentRepository
@@ -27,7 +29,6 @@ final class PaymentRepository
      */
     public function create(array $attributes): Payment
     {
-        // Jika status diisi enum, Eloquent akan handle casting. :contentReference[oaicite:6]{index=6}
         return Payment::query()->create($attributes);
     }
 
@@ -35,6 +36,32 @@ final class PaymentRepository
     {
         /** @var Payment|null $p */
         $p = Payment::query()->find($id);
+
+        return $p;
+    }
+
+    /**
+     * Find by id + eager load relasi yang relevan (jika relasinya ada).
+     * Ini dipakai oleh GET /payments/{id}.
+     */
+    public function findByIdWithRelations(string $id): ?Payment
+    {
+        $query = Payment::query();
+
+        // Eager-load hanya jika relationship method memang ada di model (safe).
+        $relations = [];
+        foreach (['webhookEvents', 'statusTransitions'] as $rel) {
+            if (method_exists(Payment::class, $rel)) {
+                $relations[] = $rel;
+            }
+        }
+
+        if ($relations !== []) {
+            $query->with($relations);
+        }
+
+        /** @var Payment|null $p */
+        $p = $query->find($id);
 
         return $p;
     }
@@ -48,6 +75,53 @@ final class PaymentRepository
             ->first();
 
         return $p;
+    }
+
+    /**
+     * List payments untuk Admin UI (pagination + filter).
+     *
+     * Filters supported:
+     * - provider
+     * - status
+     * - q (search: id atau provider_ref)
+     * - created_from (YYYY-MM-DD atau ISO string)
+     * - created_to   (YYYY-MM-DD atau ISO string)
+     */
+    public function paginateAdmin(array $filters, int $perPage = 20): LengthAwarePaginator
+    {
+        $query = Payment::query()->orderByDesc('created_at');
+
+        $provider = $filters['provider'] ?? null;
+        if (is_string($provider) && $provider !== '') {
+            $query->where('provider', $provider);
+        }
+
+        $status = $filters['status'] ?? null;
+        if (is_string($status) && $status !== '') {
+            $query->where('status', strtolower($status));
+        }
+
+        $q = $filters['q'] ?? null;
+        if (is_string($q) && $q !== '') {
+            $query->where(function (Builder $sub) use ($q) {
+                // search by id OR provider_ref (yang paling umum dipakai di admin)
+                $sub->where('id', 'like', "%{$q}%")
+                    ->orWhere('provider_ref', 'like', "%{$q}%");
+            });
+        }
+
+        $from = $filters['created_from'] ?? null;
+        if (is_string($from) && $from !== '') {
+            // gunakan whereDate agar aman untuk input YYYY-MM-DD
+            $query->whereDate('created_at', '>=', $from);
+        }
+
+        $to = $filters['created_to'] ?? null;
+        if (is_string($to) && $to !== '') {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
+        return $query->paginate($perPage);
     }
 
     /**
@@ -80,7 +154,6 @@ final class PaymentRepository
 
         $finals = ['succeeded', 'failed'];
 
-        // Payload update minimal
         $payload = [
             'status' => $status,
             'updated_at' => now(),

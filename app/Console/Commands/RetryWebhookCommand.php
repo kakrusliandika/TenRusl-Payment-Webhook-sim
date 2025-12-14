@@ -17,25 +17,28 @@ use Throwable;
 
 /**
  * Retry engine:
- * - pilih event webhook yg "due" (next_retry_at <= now atau null)
+ * - pilih event webhook yg "eligible" (pending + belum processed)
  * - lakukan claiming atomik (lockForUpdate + update attempts/last_attempt_at/next_retry_at)
  * - proses inline atau dispatch job ke queue
  *
  * Kenapa harus ada claiming?
  * - supaya scheduler multi-run / multi-worker tidak memproses event yg sama bersamaan.
- * - next_retry_at berperan sebagai "lease" sekaligus jadwal retry berikutnya.
+ * - next_retry_at berperan sebagai "lease" (mencegah re-pick) dan jadwal retry berikutnya.
  *
  * Catatan:
- * - lockForUpdate wajib di dalam transaction agar benar-benar mengunci row. :contentReference[oaicite:2]{index=2}
+ * - lockForUpdate wajib di dalam transaction agar benar-benar mengunci row.
  */
 class RetryWebhookCommand extends Command
 {
     protected $signature = 'tenrusl:webhooks:retry
         {--provider= : Filter provider tertentu}
-        {--limit=100 : Maksimal event yang diproses per run}
+        {--id= : Proses satu webhook_events.id (ULID/UUID) saja}
+        {--force : Abaikan constraint next_retry_at (retry now), tetap hormati final status}
+        {--limit=100 : Maksimal event yang diproses per run (abaikan jika --id dipakai)}
         {--max-attempts=5 : Batas attempt sebelum berhenti retry}
         {--mode=full : Mode backoff (full|equal|decorrelated)}
         {--queue : Dispatch ke queue (bukan proses inline)}
+        {--queue-name=webhooks : Nama queue (default webhooks)}
     ';
 
     protected $description = 'Retry webhooks yang due (next_retry_at) dengan locking + exponential backoff + jitter.';
@@ -43,10 +46,14 @@ class RetryWebhookCommand extends Command
     public function handle(WebhookProcessor $processor): int
     {
         $provider = trim((string) $this->option('provider'));
+        $specificId = trim((string) $this->option('id'));
+        $force = (bool) $this->option('force');
+
         $limit = (int) $this->option('limit');
         $maxAttempts = (int) $this->option('max-attempts');
         $mode = RetryBackoff::normalizeMode((string) $this->option('mode'));
         $useQueue = (bool) $this->option('queue');
+        $queueName = trim((string) $this->option('queue-name')) !== '' ? trim((string) $this->option('queue-name')) : 'webhooks';
 
         // Sanitasi input
         $limit = $limit <= 0 ? 100 : min($limit, 2000);
@@ -61,88 +68,37 @@ class RetryWebhookCommand extends Command
 
         $now = CarbonImmutable::now();
 
-        /**
-         * Ambil batch event "due" + claim atomik:
-         * - lock row (FOR UPDATE)
-         * - increment attempts
-         * - update last_attempt_at
-         * - set next_retry_at = now + delay (delay = backoff berdasar attempt)
-         *
-         * Ini bikin retry periodik tidak “mandek” dan tidak double-process.
-         */
+        // -------------------------
+        // Claim event (single atau batch)
+        // -------------------------
         /** @var Collection<int, WebhookEvent> $events */
-        $events = DB::transaction(function () use (
-            $provider,
-            $limit,
-            $maxAttempts,
-            $mode,
-            $now,
-            $baseMs,
-            $capMs,
-            $minLeaseMs
-        ): Collection {
-            $q = WebhookEvent::query()
-                // Jangan sentuh yang sudah final processed
-                ->where('status', '!=', 'processed')
-                // Yang masih pending / belum punya status inferred
-                ->where(function ($qq) {
-                    $qq->whereNull('payment_status')
-                        ->orWhere('payment_status', 'pending');
-                })
-                // Due sekarang atau belum pernah dischedule
-                ->where(function ($qq) use ($now) {
-                    $qq->whereNull('next_retry_at')
-                        ->orWhere('next_retry_at', '<=', $now);
-                })
-                // Batasi retry
-                ->where('attempts', '<', $maxAttempts)
-                // Prioritas: yang belum pernah dischedule (NULL) dulu, lalu yang paling cepat due
-                ->orderByRaw('CASE WHEN next_retry_at IS NULL THEN 0 ELSE 1 END ASC, next_retry_at ASC')
-                ->limit($limit)
-                ->lockForUpdate();
+        if ($specificId !== '') {
+            $claimed = $this->claimOne(
+                id: $specificId,
+                provider: $provider,
+                maxAttempts: $maxAttempts,
+                mode: $mode,
+                now: $now,
+                baseMs: $baseMs,
+                capMs: $capMs,
+                minLeaseMs: $minLeaseMs,
+                force: $force
+            );
 
-            if ($provider !== '') {
-                $q->where('provider', $provider);
-            }
-
-            /** @var Collection<int, WebhookEvent> $picked */
-            $picked = $q->get();
-
-            if ($picked->isEmpty()) {
-                return $picked;
-            }
-
-            foreach ($picked as $event) {
-                $currentAttempts = (int) ($event->attempts ?? 0);
-                $nextAttempt = $currentAttempts + 1;
-
-                // Safety: jangan lewat batas
-                if ($nextAttempt > $maxAttempts) {
-                    continue;
-                }
-
-                // Delay untuk "setelah attempt ini" (attempt number = nextAttempt)
-                $delayMs = RetryBackoff::compute(
-                    attempt: $nextAttempt,
-                    baseMs: $baseMs,
-                    capMs: $capMs,
-                    mode: $mode,
-                    maxAttempts: $maxAttempts
-                );
-
-                // Lease minimum untuk menghindari kepilih ulang instan
-                $leaseMs = max($minLeaseMs, $delayMs);
-
-                // Claim row: update attempts + last_attempt_at + next_retry_at (lease/jadwal)
-                $event->forceFill([
-                    'attempts' => $nextAttempt,
-                    'last_attempt_at' => $now,
-                    'next_retry_at' => $now->addMilliseconds($leaseMs),
-                ])->save();
-            }
-
-            return $picked;
-        }, 3); // attempts=3 -> auto retry transaction jika deadlock :contentReference[oaicite:3]{index=3}
+            $events = $claimed ? collect([$claimed]) : collect();
+        } else {
+            $events = $this->claimBatch(
+                provider: $provider,
+                limit: $limit,
+                maxAttempts: $maxAttempts,
+                mode: $mode,
+                now: $now,
+                baseMs: $baseMs,
+                capMs: $capMs,
+                minLeaseMs: $minLeaseMs,
+                force: $force
+            );
+        }
 
         if ($events->isEmpty()) {
             $this->info('Tidak ada event yang perlu di-retry.');
@@ -151,13 +107,13 @@ class RetryWebhookCommand extends Command
         }
 
         $this->info(sprintf(
-            'Memproses %d event (mode=%s, max_attempts=%d, limit=%d%s%s)...',
+            'Memproses %d event (mode=%s, max_attempts=%d%s%s%s)...',
             $events->count(),
             $mode,
             $maxAttempts,
-            $limit,
             $provider !== '' ? ", provider={$provider}" : '',
-            $useQueue ? ', via queue' : ', inline'
+            $specificId !== '' ? ", id={$specificId}" : '',
+            $useQueue ? ", via queue={$queueName}" : ', inline'
         ));
 
         $bar = $this->output->createProgressBar($events->count());
@@ -171,16 +127,22 @@ class RetryWebhookCommand extends Command
                 if ($useQueue) {
                     /**
                      * Jalur queue:
-                     * - Pastikan worker jalan: `php artisan queue:work --queue=webhooks`
                      * - Event sudah di-claim (attempts/next_retry_at sudah diupdate)
+                     * - Job idempotent dan punya guard (unique + overlap + db claim)
                      */
-                    ProcessWebhookEvent::dispatch($event->id);
+                    ProcessWebhookEvent::dispatch($event->id, 'retry', $force)
+                        ->onQueue($queueName);
+
+                    // Optional: tandai status queued supaya UI admin bisa bedain
+                    $event->forceFill([
+                        'status' => 'queued',
+                    ])->save();
+
                     $ok++;
                 } else {
                     /**
                      * Jalur inline (sinkron):
-                     * - Kirim type='retry' agar processor tidak menaikkan attempts lagi.
-                     * - attempts sudah dinaikkan saat claim.
+                     * - Kirim type='retry' agar processor tidak menaikkan attempts lagi (attempts sudah dinaikkan saat claim).
                      */
                     $processor->process(
                         $event->provider,
@@ -190,16 +152,20 @@ class RetryWebhookCommand extends Command
                         (array) ($event->payload ?? [])
                     );
 
-                    // Kalau sudah final, idealnya processor sudah set status=processed & next_retry_at=null.
-                    // Tapi kita defensif: kalau sudah bukan pending, bersihkan next_retry_at.
+                    // Defensif finalize bila sudah final
                     $event->refresh();
-                    $final = (string) ($event->payment_status ?? '');
+                    $final = strtolower((string) ($event->payment_status ?? ''));
                     if ($final !== '' && $final !== 'pending') {
                         $event->forceFill([
                             'status' => 'processed',
                             'processed_at' => $event->processed_at ?? CarbonImmutable::now(),
                             'next_retry_at' => null,
                             'error_message' => null,
+                        ])->save();
+                    } else {
+                        // masih pending => biarkan next_retry_at (lease/jadwal) tetap ada
+                        $event->forceFill([
+                            'status' => 'received',
                         ])->save();
                     }
 
@@ -215,6 +181,7 @@ class RetryWebhookCommand extends Command
                     'attempts' => $event->attempts,
                     'next_retry_at' => $event->next_retry_at,
                     'mode' => $mode,
+                    'useQueue' => $useQueue,
                     'exception' => $e,
                 ]);
 
@@ -237,5 +204,209 @@ class RetryWebhookCommand extends Command
         $this->info(sprintf('Selesai. OK=%d, FAIL=%d', $ok, $fail));
 
         return $fail > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Claim batch event "eligible" + update attempts/lease/jadwal atomik.
+     *
+     * @return Collection<int, WebhookEvent>
+     */
+    protected function claimBatch(
+        string $provider,
+        int $limit,
+        int $maxAttempts,
+        string $mode,
+        CarbonImmutable $now,
+        int $baseMs,
+        int $capMs,
+        int $minLeaseMs,
+        bool $force
+    ): Collection {
+        /** @var Collection<int, WebhookEvent> $events */
+        $events = DB::transaction(function () use (
+            $provider,
+            $limit,
+            $maxAttempts,
+            $mode,
+            $now,
+            $baseMs,
+            $capMs,
+            $minLeaseMs,
+            $force
+        ): Collection {
+            $q = WebhookEvent::query()
+                // Jangan sentuh yang sudah final processed
+                ->where('status', '!=', 'processed')
+                // Yang masih pending / belum punya status inferred
+                ->where(function ($qq) {
+                    $qq->whereNull('payment_status')
+                        ->orWhere('payment_status', 'pending');
+                })
+                // Batasi retry
+                ->where('attempts', '<', $maxAttempts);
+
+            // Due constraint (kecuali force)
+            if (! $force) {
+                $q->where(function ($qq) use ($now) {
+                    $qq->whereNull('next_retry_at')
+                        ->orWhere('next_retry_at', '<=', $now);
+                });
+            }
+
+            if ($provider !== '') {
+                $q->where('provider', $provider);
+            }
+
+            /** @var Collection<int, WebhookEvent> $picked */
+            $picked = $q
+                // Prioritas: yang belum pernah dischedule (NULL) dulu, lalu yang paling cepat due
+                ->orderByRaw('CASE WHEN next_retry_at IS NULL THEN 0 ELSE 1 END ASC, next_retry_at ASC')
+                ->limit($limit)
+                ->lockForUpdate()
+                ->get();
+
+            if ($picked->isEmpty()) {
+                return $picked;
+            }
+
+            foreach ($picked as $event) {
+                $this->claimMutateRow(
+                    event: $event,
+                    now: $now,
+                    maxAttempts: $maxAttempts,
+                    mode: $mode,
+                    baseMs: $baseMs,
+                    capMs: $capMs,
+                    minLeaseMs: $minLeaseMs
+                );
+            }
+
+            return $picked;
+        }, 3);
+
+        return $events;
+    }
+
+    /**
+     * Claim 1 event by primary key (untuk admin "retry now").
+     */
+    protected function claimOne(
+        string $id,
+        string $provider,
+        int $maxAttempts,
+        string $mode,
+        CarbonImmutable $now,
+        int $baseMs,
+        int $capMs,
+        int $minLeaseMs,
+        bool $force
+    ): ?WebhookEvent {
+        /** @var WebhookEvent|null $event */
+        $event = DB::transaction(function () use (
+            $id,
+            $provider,
+            $maxAttempts,
+            $mode,
+            $now,
+            $baseMs,
+            $capMs,
+            $minLeaseMs,
+            $force
+        ): ?WebhookEvent {
+            $q = WebhookEvent::query()
+                ->whereKey($id)
+                ->lockForUpdate();
+
+            if ($provider !== '') {
+                $q->where('provider', $provider);
+            }
+
+            /** @var WebhookEvent|null $row */
+            $row = $q->first();
+            if (! $row) {
+                return null;
+            }
+
+            // Jangan retry yang sudah final
+            $ps = strtolower((string) ($row->payment_status ?? ''));
+            if ($ps !== '' && $ps !== 'pending') {
+                return null;
+            }
+
+            if (($row->status ?? null) === 'processed') {
+                return null;
+            }
+
+            if ((int) ($row->attempts ?? 0) >= $maxAttempts && ! $force) {
+                return null;
+            }
+
+            // Due constraint (kecuali force)
+            if (! $force) {
+                $next = $row->next_retry_at;
+                if ($next instanceof \Carbon\CarbonInterface && $next->greaterThan($now)) {
+                    return null;
+                }
+            }
+
+            $this->claimMutateRow(
+                event: $row,
+                now: $now,
+                maxAttempts: $maxAttempts,
+                mode: $mode,
+                baseMs: $baseMs,
+                capMs: $capMs,
+                minLeaseMs: $minLeaseMs
+            );
+
+            return $row;
+        }, 3);
+
+        return $event;
+    }
+
+    /**
+     * Mutasi row saat claim:
+     * - attempts++ (dibatasi maxAttempts)
+     * - last_attempt_at = now
+     * - next_retry_at = now + leaseMs (backoff+jitter, minimal minLeaseMs)
+     * - status = received (reset dari failed) + clear error_message
+     */
+    protected function claimMutateRow(
+        WebhookEvent $event,
+        CarbonImmutable $now,
+        int $maxAttempts,
+        string $mode,
+        int $baseMs,
+        int $capMs,
+        int $minLeaseMs
+    ): void {
+        $currentAttempts = (int) ($event->attempts ?? 0);
+        $nextAttempt = $currentAttempts + 1;
+
+        // Safety: jangan lewat batas
+        if ($nextAttempt > $maxAttempts) {
+            return;
+        }
+
+        // Delay untuk "setelah attempt ini" (attempt number = nextAttempt)
+        $delayMs = RetryBackoff::compute(
+            attempt: $nextAttempt,
+            baseMs: $baseMs,
+            capMs: $capMs,
+            mode: $mode,
+            maxAttempts: $maxAttempts
+        );
+
+        // Lease minimum untuk menghindari kepilih ulang instan
+        $leaseMs = max($minLeaseMs, $delayMs);
+
+        $event->forceFill([
+            'attempts' => $nextAttempt,
+            'last_attempt_at' => $now,
+            'next_retry_at' => $now->addMilliseconds($leaseMs),
+            'status' => 'received',
+            'error_message' => null,
+        ])->save();
     }
 }

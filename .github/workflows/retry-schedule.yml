@@ -41,6 +41,12 @@ jobs:
       DB_CONNECTION: sqlite
       DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
 
+      # Tambahan: konsisten & aman untuk artisan runtime.
+      LOG_CHANNEL: stderr
+      QUEUE_CONNECTION: sync
+      CACHE_STORE: database
+      SESSION_DRIVER: array
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +59,10 @@ jobs:
           tools: composer
           extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
 
+      # Tambahan: validate composer supaya gagal cepat kalau lock rusak.
+      - name: Validate composer.json
+        run: composer validate --no-check-publish
+
       - name: Cache Composer
         uses: actions/cache@v4
         with:
@@ -64,13 +74,14 @@ jobs:
       - name: Install Dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      # Perubahan: hilangkan "|| true" untuk key/config; kalau gagal harus kelihatan.
       - name: Prepare App + SQLite
         run: |
           mkdir -p database
           touch database/database.sqlite
           cp .env.example .env || true
-          php artisan key:generate --force || true
-          php artisan config:clear || true
+          php artisan key:generate --force
+          php artisan config:clear
 
       - name: Run Migrations
         env:

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Models\Payment;
 use App\Models\WebhookEvent;
 use App\ValueObjects\PaymentStatus;
 use DateTimeInterface;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 
@@ -54,19 +57,18 @@ final class WebhookEventRepository
         $now = $this->asCarbon($receivedAt) ?? now();
 
         try {
-            $event = new WebhookEvent;
+            $event = new WebhookEvent();
 
             $event->provider = $provider;
             $event->event_id = $eventId;
-
             $event->event_type = $eventType;
 
             $event->payload_raw = $rawBody;
             $event->payload = $payload;
 
             $event->status = 'received';
-
             $event->attempts = 1;
+
             $event->received_at = $now;
             $event->last_attempt_at = $now;
 
@@ -85,11 +87,22 @@ final class WebhookEventRepository
             }
 
             if ($existing === null) {
+                // Kalau benar-benar tidak ketemu tapi error duplicate, biarkan error aslinya naik
                 throw $e;
             }
 
             return [$existing, true];
         }
+    }
+
+    /**
+     * Kaitkan event ke Payment (untuk admin monitoring per payment).
+     */
+    public function attachToPayment(WebhookEvent $event, Payment $payment): bool
+    {
+        $event->payment_id = $payment->getKey();
+
+        return $event->save();
     }
 
     /**
@@ -116,8 +129,6 @@ final class WebhookEventRepository
     ): bool {
         $event->status = 'processed';
         $event->payment_provider_ref = $paymentProviderRef;
-
-        // Pastikan property bertipe PaymentStatus|null tidak diisi string bebas
         $event->payment_status = $this->normalizePaymentStatus($status);
 
         $event->processed_at = $this->asCarbon($processedAt) ?? now();
@@ -156,18 +167,119 @@ final class WebhookEventRepository
     }
 
     /**
-     * Konversi DateTimeInterface => Illuminate\Support\Carbon (mutable).
+     * Helper demo admin: paksa retry segera (next_retry_at=now, status=received).
+     */
+    public function retryNow(WebhookEvent $event, ?string $message = null): bool
+    {
+        $event->status = 'received';
+        $event->next_retry_at = now();
+
+        if ($message !== null) {
+            $event->error_message = $message;
+        }
+
+        return $event->save();
+    }
+
+    /**
+     * Admin list untuk UI monitoring (pagination + filter).
+     *
+     * Filters supported:
+     * - provider
+     * - status
+     * - min_attempts
+     * - max_attempts
+     * - due_only (bool-ish: 1/true)
+     * - q (search event_id)
+     *
+     * Default ordering: terbaru dulu.
+     */
+    public function paginateAdmin(array $filters, int $perPage = 20): LengthAwarePaginator
+    {
+        $query = WebhookEvent::query()
+            ->with(['payment'])
+            ->orderByDesc('created_at');
+
+        $provider = $filters['provider'] ?? null;
+        if (is_string($provider) && $provider !== '') {
+            $query->where('provider', $provider);
+        }
+
+        $status = $filters['status'] ?? null;
+        if (is_string($status) && $status !== '') {
+            $query->where('status', $status);
+        }
+
+        $minAttempts = $filters['min_attempts'] ?? null;
+        if (is_numeric($minAttempts)) {
+            $query->where('attempts', '>=', (int) $minAttempts);
+        }
+
+        $maxAttempts = $filters['max_attempts'] ?? null;
+        if (is_numeric($maxAttempts)) {
+            $query->where('attempts', '<=', (int) $maxAttempts);
+        }
+
+        $q = $filters['q'] ?? null;
+        if (is_string($q) && $q !== '') {
+            $query->where(function (Builder $sub) use ($q) {
+                $sub->where('event_id', 'like', "%{$q}%");
+            });
+        }
+
+        $dueOnly = $filters['due_only'] ?? null;
+        if ($this->truthy($dueOnly)) {
+            $query->where(function (Builder $sub) {
+                $sub->whereNull('next_retry_at')
+                    ->orWhere('next_retry_at', '<=', now());
+            });
+        }
+
+        return $query->paginate($perPage);
+    }
+
+    /**
+     * Ambil event yang sudah jatuh tempo untuk retry (untuk command/scheduler).
+     */
+    public function findDueRetries(int $limit = 50, ?DateTimeInterface $now = null): iterable
+    {
+        $now = $this->asCarbon($now) ?? now();
+
+        return WebhookEvent::query()
+            ->where('status', 'received')
+            ->whereNotNull('next_retry_at')
+            ->where('next_retry_at', '<=', $now)
+            ->orderBy('next_retry_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    private function truthy(mixed $v): bool
+    {
+        if (is_bool($v)) {
+            return $v;
+        }
+        if (is_int($v)) {
+            return $v === 1;
+        }
+        if (is_string($v)) {
+            $t = strtolower(trim($v));
+            return in_array($t, ['1', 'true', 'yes', 'y', 'on'], true);
+        }
+        return false;
+    }
+
+    /**
+     * Konversi DateTimeInterface => Carbon.
      */
     private function asCarbon(?DateTimeInterface $dt): ?Carbon
     {
         if ($dt === null) {
             return null;
         }
-
         if ($dt instanceof Carbon) {
             return $dt;
         }
-
         return new Carbon($dt);
     }
 

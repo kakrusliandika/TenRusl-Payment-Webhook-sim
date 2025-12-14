@@ -10,48 +10,80 @@ use App\Services\Webhooks\WebhookProcessor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
- * WebhooksController (API v1)
- * --------------------------
+ * WebhooksController (API)
+ * -----------------------
  * Endpoint:
+ * - POST /api/webhooks/{provider}
  * - POST /api/v1/webhooks/{provider}
  *
- * Penting:
- * - receive() WAJIB type-hint WebhookRequest supaya validasi benar-benar dipakai.
- * - Signature verification SUDAH dicegat oleh middleware 'verify.webhook.signature'
- *   di routes/api.php (jadi yang masuk ke sini harus sudah lolos signature).
+ * Catatan:
+ * - Signature verification seharusnya dicegat oleh middleware 'verify.webhook.signature'
+ *   di routes/api.php.
+ * - Controller ini fokus:
+ *   1) bentuk payload (raw + parsed)
+ *   2) tentukan event_id + type
+ *   3) delegasikan ke WebhookProcessor (dedup + enqueue/process)
  */
 class WebhooksController extends Controller
 {
     public function __construct(private readonly WebhookProcessor $processor) {}
 
     /**
-     * POST /api/v1/webhooks/{provider}
+     * POST /api/webhooks/{provider}
      */
     public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
-        // Ambil raw body secara defensif.
-        $rawBody = (string) $request->rawBody();
+        // Ambil raw body secara defensif (prioritas: request attribute raw body -> getContent()).
+        $rawBody = '';
+
+        if (method_exists($request, 'rawBody')) {
+            /** @var mixed $rb */
+            $rb = $request->rawBody();
+            $rawBody = is_string($rb) ? $rb : '';
+        }
+
+        if ($rawBody === '') {
+            /** @var mixed $attr */
+            $attr = $request->attributes->get('tenrusl_raw_body', '');
+            $rawBody = is_string($attr) ? $attr : '';
+        }
+
         if ($rawBody === '') {
             $rawBody = (string) $request->getContent();
         }
 
         $contentType = $this->detectContentType($request);
-        $payload = $this->parsePayload($rawBody, $contentType);
 
+        [$payload, $parseError] = $this->parsePayload($rawBody, $contentType);
+
+        if ($parseError !== null) {
+            return response()->json([
+                'error' => [
+                    'code' => 'invalid_payload',
+                    'message' => $parseError,
+                ],
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Dari FormRequest (jika rule ada) - tetap aman walau kosong.
         $validated = $request->validated();
 
-        $eventId = $validated['event_id']
-            ?? $this->extractEventId($payload)
-            ?? ('evt_'.(string) Str::ulid());
-
-        $type = (string) (
-            $validated['type']
-            ?? $this->extractType($payload)
-            ?? ''
+        $eventId = $this->firstNonEmptyString(
+            $validated['event_id'] ?? null,
+            $this->extractEventId($payload),
+            'evt_' . (string) Str::ulid()
         );
 
+        $type = $this->firstNonEmptyString(
+            $validated['type'] ?? null,
+            $this->extractType($payload),
+            null
+        );
+
+        // Proses (dedup + enqueue) tetap di service
         $result = $this->processor->process(
             $provider,
             (string) $eventId,
@@ -65,11 +97,11 @@ class WebhooksController extends Controller
                 'event' => [
                     'provider' => $provider,
                     'event_id' => (string) $eventId,
-                    'type' => $type !== '' ? $type : null,
+                    'type' => $type,
                 ],
                 'result' => $result,
             ],
-        ], 202);
+        ], Response::HTTP_ACCEPTED);
     }
 
     /**
@@ -92,28 +124,40 @@ class WebhooksController extends Controller
 
     /**
      * Parse payload sesuai content-type:
-     * - application/json
-     * - application/x-www-form-urlencoded
-     * Selain itu: return [].
+     * - application/json                  => decode json (error kalau invalid)
+     * - application/x-www-form-urlencoded => parse_str
+     * - lainnya                           => []
+     *
+     * @return array{0: array, 1: string|null} [payload, parseError]
      */
     private function parsePayload(string $rawBody, ?string $contentType): array
     {
         $ct = strtolower((string) $contentType);
 
-        if (str_contains($ct, 'application/json')) {
-            $arr = json_decode($rawBody, true);
+        // Jika body kosong, anggap payload kosong (bukan error).
+        if (trim($rawBody) === '') {
+            return [[], null];
+        }
 
-            return is_array($arr) ? $arr : [];
+        if (str_contains($ct, 'application/json')) {
+            $decoded = json_decode($rawBody, true);
+
+            if (! is_array($decoded)) {
+                return [[], 'Invalid JSON payload'];
+            }
+
+            return [$decoded, null];
         }
 
         if (str_contains($ct, 'application/x-www-form-urlencoded')) {
             $out = [];
             parse_str($rawBody, $out);
 
-            return $out;
+            return [is_array($out) ? $out : [], null];
         }
 
-        return [];
+        // Unknown content-type: biarkan payload kosong (tetap boleh diproses).
+        return [[], null];
     }
 
     private function extractEventId(array $p): ?string
@@ -126,7 +170,7 @@ class WebhooksController extends Controller
             Arr::get($p, 'object.id'),
             Arr::get($p, 'data.object.id'),
         ] as $v) {
-            if (is_string($v) && $v !== '') {
+            if (is_string($v) && trim($v) !== '') {
                 return $v;
             }
         }
@@ -142,8 +186,22 @@ class WebhooksController extends Controller
             Arr::get($p, 'event_type'),
             Arr::get($p, 'data.type'),
         ] as $v) {
-            if (is_string($v) && $v !== '') {
+            if (is_string($v) && trim($v) !== '') {
                 return $v;
+            }
+        }
+
+        return null;
+    }
+
+    private function firstNonEmptyString(mixed ...$values): ?string
+    {
+        foreach ($values as $v) {
+            if (is_string($v)) {
+                $t = trim($v);
+                if ($t !== '') {
+                    return $t;
+                }
             }
         }
 

@@ -13,22 +13,25 @@ info:
     name: MIT
     identifier: MIT
 
-# Redocly rule "security-defined" mengharuskan security didefinisikan per-operation atau root.
-# Untuk API public tanpa auth, set root security ke array kosong.
+# API public tidak butuh auth di root, tapi endpoint admin akan mendefinisikan security per-operation.
 security: []
 
 servers:
-  # Relative base; cocok untuk deploy di domain yang sama.
-  - url: /
+  - url: /api
+    description: Canonical base (disarankan untuk frontend/admin)
+  - url: /api/v1
+    description: Compat base (alias versi v1; endpoint sama seperti canonical)
 
 tags:
   - name: Payments
     description: Buat dan cek status pembayaran simulasi
+  - name: Admin
+    description: Endpoint untuk Admin UI (butuh admin key / bearer)
   - name: Webhooks
     description: Endpoint penerima webhook penyedia
 
 paths:
-  /api/v1/payments:
+  /payments:
     post:
       tags: [Payments]
       operationId: createPayment
@@ -69,16 +72,45 @@ paths:
                       updated_at: "2025-12-01T09:00:00Z"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "409":
           $ref: "#/components/responses/IdempotencyConflict"
         "429":
           $ref: "#/components/responses/RateLimitedPayments"
 
-  /api/v1/payments/{provider}/{provider_ref}/status:
+  /payments/{id}:
     get:
       tags: [Payments]
-      operationId: getPaymentStatus
-      summary: Cek status pembayaran simulasi
+      operationId: getPaymentById
+      summary: Ambil payment berdasarkan ID (refresh by id)
+      description: |
+        Mengembalikan state payment terkini berdasarkan `id`.
+        Untuk kebutuhan landing demo / admin refresh by id.
+        (Bisa mengandung webhook events terkait bila server meng-include relasi.)
+      parameters:
+        - $ref: "#/components/parameters/PaymentId"
+        - $ref: "#/components/parameters/XRequestIdRequest"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentDetailEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimitedStatus"
+
+  /payments/{provider}/{provider_ref}/status:
+    get:
+      tags: [Payments]
+      operationId: getPaymentStatusLegacy
+      summary: Cek status pembayaran simulasi (legacy by provider_ref)
       parameters:
         - $ref: "#/components/parameters/Provider"
         - $ref: "#/components/parameters/ProviderRef"
@@ -98,7 +130,63 @@ paths:
         "429":
           $ref: "#/components/responses/RateLimitedStatus"
 
-  /api/v1/webhooks/{provider}:
+  /admin/payments:
+    get:
+      tags: [Admin]
+      operationId: adminListPayments
+      summary: List payments untuk Admin UI (pagination + filter)
+      description: |
+        Endpoint admin untuk table/listing pembayaran.
+        Proteksi: kirim salah satu:
+        - Header `X-Admin-Key: <key>`
+        - Authorization `Bearer <token>`
+      security:
+        # OR: boleh pakai salah satu
+        - adminApiKey: []
+        - adminBearer: []
+      parameters:
+        - $ref: "#/components/parameters/XRequestIdRequest"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - $ref: "#/components/parameters/FilterProvider"
+        - $ref: "#/components/parameters/FilterStatus"
+        - $ref: "#/components/parameters/FilterQuery"
+        - $ref: "#/components/parameters/FilterCreatedFrom"
+        - $ref: "#/components/parameters/FilterCreatedTo"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentListEnvelope"
+              examples:
+                ok:
+                  value:
+                    data:
+                      - id: 01JCDZQ2F1G8W3X1R7SZM3KZ2S
+                        provider: xendit
+                        provider_ref: sim_xendit_01JCDZQ2F1G8W3X1R7SZM3KZ2S
+                        amount: 100000
+                        currency: IDR
+                        status: pending
+                        meta: {}
+                        created_at: "2025-12-01T09:00:00Z"
+                        updated_at: "2025-12-01T09:00:00Z"
+                    meta:
+                      current_page: 1
+                      per_page: 20
+                      total: 1
+                      last_page: 1
+        "401":
+          $ref: "#/components/responses/AdminUnauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimitedPayments"
+
+  /webhooks/{provider}:
     post:
       tags: [Webhooks]
       operationId: receiveWebhook
@@ -106,24 +194,17 @@ paths:
       description: |
         Signature diverifikasi per provider.
 
-        Header yang digunakan berbeda per provider, contoh:
-        - Xendit: `X-CALLBACK-TOKEN`
-        - Midtrans: `signature_key` (sha512(order_id+status_code+gross_amount+server_key))
-        - Stripe: `Stripe-Signature`
-        - Lemon Squeezy: `X-Signature`
-        - Airwallex: `x-timestamp` + `x-signature` (HMAC-SHA256(ts+rawBody))
-        - DOKU: `Signature` (berbasis Client-Id, Request-Id, Request-Timestamp, Request-Target, Digest, dll)
-
+        Header signature berbeda-beda per provider (Stripe-Signature, X-CALLBACK-TOKEN, dll).
+        Implementasi simulator memverifikasi signature berdasarkan RAW body.
         Jika signature invalid, respon 401.
 
-      # Secara docs, endpoint webhook “secured by signature”.
       security:
         - webhookSignature: []
 
       parameters:
         - $ref: "#/components/parameters/Provider"
         - $ref: "#/components/parameters/XRequestIdRequest"
-        # Header signature contoh (opsional; yang wajib tergantung provider)
+        # contoh header signature (opsional, tergantung provider)
         - $ref: "#/components/parameters/StripeSignature"
         - $ref: "#/components/parameters/XenditCallbackToken"
         - $ref: "#/components/parameters/LemonSignature"
@@ -164,10 +245,20 @@ paths:
           $ref: "#/components/responses/RateLimitedWebhooks"
 
 components:
-  # -------------------------
-  # Security Schemes
-  # -------------------------
   securitySchemes:
+    # Admin security (documented): API key header OR Bearer token. :contentReference[oaicite:1]{index=1}
+    adminApiKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+      description: Admin demo key (header-based)
+
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token (Authorization: Bearer <token>)
+
     webhookSignature:
       type: apiKey
       in: header
@@ -176,10 +267,16 @@ components:
         Skema generic untuk signature webhook. Di implementasi nyata, tiap provider
         menggunakan header yang berbeda (Stripe-Signature, X-CALLBACK-TOKEN, dll).
 
-  # -------------------------
-  # Reusable Parameters
-  # -------------------------
   parameters:
+    PaymentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 10
+      description: ID payment (ULID string)
+
     Provider:
       name: provider
       in: path
@@ -226,7 +323,6 @@ components:
         Jika request diulang dengan body yang sama → respon sama.
         Jika request paralel dengan state berbeda → 409.
 
-    # Client boleh kirim X-Request-ID; kalau tidak, server generate.
     XRequestIdRequest:
       name: X-Request-ID
       in: header
@@ -236,7 +332,72 @@ components:
         maxLength: 128
       description: Correlation / request ID dari client (opsional)
 
-    # --- contoh header signature (opsional) ---
+    # Admin pagination + filter
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Halaman (pagination)
+
+    PerPage:
+      name: per_page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Jumlah item per halaman
+
+    FilterProvider:
+      name: provider
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Filter provider (exact match)
+
+    FilterStatus:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [pending, succeeded, failed]
+      description: Filter status payment
+
+    FilterQuery:
+      name: q
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Search sederhana (mis. provider_ref)
+
+    FilterCreatedFrom:
+      name: created_from
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Filter tanggal mulai (YYYY-MM-DD)
+
+    FilterCreatedTo:
+      name: created_to
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+      description: Filter tanggal akhir (YYYY-MM-DD)
+
+    # contoh header signature (opsional)
     StripeSignature:
       name: Stripe-Signature
       in: header
@@ -285,9 +446,6 @@ components:
         type: string
       description: DOKU signature header
 
-  # -------------------------
-  # Reusable Headers
-  # -------------------------
   headers:
     XRequestId:
       schema:
@@ -304,9 +462,6 @@ components:
         type: integer
       description: Detik sampai klien boleh mencoba kembali
 
-  # -------------------------
-  # Reusable Request Bodies
-  # -------------------------
   requestBodies:
     CreatePaymentBody:
       required: true
@@ -344,9 +499,6 @@ components:
             type: object
             additionalProperties: true
 
-  # -------------------------
-  # Reusable Responses
-  # -------------------------
   responses:
     BadRequest:
       description: Bad Request (validasi gagal / payload tidak sesuai)
@@ -356,7 +508,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
           examples:
             bad_request:
               value:
@@ -374,14 +526,29 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
           examples:
             invalid_signature:
               value:
-                message: "Invalid webhook signature."
-                provider: "xendit"
+                error:
+                  code: "unauthorized"
+                  message: "Invalid webhook signature."
+                  provider: "xendit"
+
+    AdminUnauthorized:
+      description: Unauthorized (admin key/bearer tidak valid)
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          examples:
+            unauthorized:
+              value:
+                message: "Unauthorized"
                 code: "unauthorized"
-                trace_id: "01JCDZQ2F1G8W3X1R7SZM3KZ2S"
 
     NotFound:
       description: Resource tidak ditemukan
@@ -391,13 +558,12 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
           examples:
             not_found:
               value:
                 message: "Payment not found"
                 code: "not_found"
-                trace_id: "01JCDZQ2F1G8W3X1R7SZM3KZ2S"
 
     IdempotencyConflict:
       description: Idempotency conflict (parallel call dengan state berbeda)
@@ -407,13 +573,12 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
           examples:
             conflict:
               value:
                 message: "Idempotency conflict"
                 code: "idempotency_conflict"
-                trace_id: "01JCDZQ2F1G8W3X1R7SZM3KZ2S"
 
     RateLimitedPayments:
       description: Terlalu banyak request ke endpoint payments
@@ -425,7 +590,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
 
     RateLimitedStatus:
       description: Terlalu banyak request ke endpoint payment status
@@ -437,7 +602,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
 
     RateLimitedWebhooks:
       description: Terlalu banyak webhook ke endpoint ini (rate limited)
@@ -449,40 +614,42 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            $ref: "#/components/schemas/ErrorEnvelope"
 
-  # -------------------------
-  # Schemas
-  # -------------------------
   schemas:
-    ErrorResponse:
-      type: object
-      additionalProperties: true
-      properties:
-        error:
-          type: string
-          description: Kode error singkat (opsional)
-          examples: ["not_found"]
-        code:
-          type: string
-          description: Kode error singkat (opsional)
-          examples: ["validation_error"]
-        message:
-          type: string
-          description: Pesan error yang dapat dibaca manusia
-          examples: ["Invalid payload"]
-        provider:
-          type: string
-          description: Provider terkait (opsional)
-        trace_id:
-          type: string
-          description: ID tracing internal (X-Request-ID) untuk debugging/log (opsional)
-        details:
-          type: object
+    # Error shape bisa 2 gaya (legacy vs envelope error), biar doc tahan perubahan minor.
+    ErrorEnvelope:
+      oneOf:
+        - type: object
           additionalProperties: true
-          description: Informasi tambahan (mis. field error)
-      required:
-        - message
+          properties:
+            message:
+              type: string
+            code:
+              type: string
+            provider:
+              type: string
+            trace_id:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+          required: [message]
+        - type: object
+          additionalProperties: true
+          properties:
+            error:
+              type: object
+              additionalProperties: true
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+                provider:
+                  type: string
+              required: [code, message]
+          required: [error]
 
     CreatePaymentRequest:
       type: object
@@ -495,7 +662,7 @@ components:
         amount:
           type: integer
           minimum: 1
-          description: Satuan terkecil (mis. IDR)
+          description: Satuan terkecil (minor unit)
         currency:
           type: string
           example: IDR
@@ -516,7 +683,7 @@ components:
     Payment:
       type: object
       additionalProperties: true
-      required: [provider, provider_ref, status]
+      required: [id, provider, provider_ref, status]
       properties:
         id:
           type: string
@@ -530,7 +697,6 @@ components:
         amount:
           type: integer
           example: 100000
-          description: Satuan terkecil
         currency:
           type: string
           example: IDR
@@ -548,6 +714,64 @@ components:
           type: string
           format: date-time
 
+    WebhookEvent:
+      type: object
+      additionalProperties: true
+      required: [id, provider, event_id, status, attempts]
+      properties:
+        id:
+          type: string
+          description: ID event (ULID)
+        payment_id:
+          type: string
+          description: Relasi payment (ULID)
+        provider:
+          type: string
+        event_id:
+          type: string
+          description: Dedup key per provider
+        event_type:
+          type: string
+        status:
+          type: string
+          enum: [received, processed, failed]
+        attempts:
+          type: integer
+          minimum: 0
+        received_at:
+          type: string
+          format: date-time
+        last_attempt_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: string
+          format: date-time
+        next_retry_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+        payment_provider_ref:
+          type: string
+        payment_status:
+          type: string
+          enum: [pending, succeeded, failed]
+        payload:
+          type: object
+          additionalProperties: true
+
+    PaymentDetail:
+      allOf:
+        - $ref: "#/components/schemas/Payment"
+        - type: object
+          additionalProperties: true
+          properties:
+            webhook_events:
+              type: array
+              items:
+                $ref: "#/components/schemas/WebhookEvent"
+
     PaymentEnvelope:
       type: object
       additionalProperties: true
@@ -555,6 +779,44 @@ components:
         data:
           $ref: "#/components/schemas/Payment"
       required: [data]
+
+    PaymentDetailEnvelope:
+      type: object
+      additionalProperties: true
+      properties:
+        data:
+          $ref: "#/components/schemas/PaymentDetail"
+      required: [data]
+
+    PaginationMeta:
+      type: object
+      additionalProperties: true
+      required: [current_page, per_page, total, last_page]
+      properties:
+        current_page:
+          type: integer
+          minimum: 1
+        per_page:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        last_page:
+          type: integer
+          minimum: 1
+
+    PaymentListEnvelope:
+      type: object
+      additionalProperties: true
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
 
     WebhookAnyPayload:
       type: object
@@ -566,6 +828,7 @@ components:
     WebhookReceiveResult:
       type: object
       additionalProperties: true
+      required: [duplicate, persisted, status]
       properties:
         duplicate:
           type: boolean
@@ -575,37 +838,42 @@ components:
           type: string
           enum: [pending, succeeded, failed]
         payment_provider_ref:
-          type: [string, "null"]
+          oneOf:
+            - type: string
+            - type: "null"
         next_retry_ms:
-          type: [integer, "null"]
-      required: [duplicate, persisted, status, payment_provider_ref, next_retry_ms]
+          oneOf:
+            - type: integer
+            - type: "null"
 
     WebhookReceiveEvent:
       type: object
       additionalProperties: true
+      required: [provider, event_id]
       properties:
         provider:
           type: string
         event_id:
           type: string
         type:
-          type: [string, "null"]
-      required: [provider, event_id, type]
+          oneOf:
+            - type: string
+            - type: "null"
 
     WebhookReceiveData:
       type: object
       additionalProperties: true
+      required: [event, result]
       properties:
         event:
           $ref: "#/components/schemas/WebhookReceiveEvent"
         result:
           $ref: "#/components/schemas/WebhookReceiveResult"
-      required: [event, result]
 
     WebhookReceiveEnvelope:
       type: object
       additionalProperties: true
+      required: [data]
       properties:
         data:
           $ref: "#/components/schemas/WebhookReceiveData"
-      required: [data]
