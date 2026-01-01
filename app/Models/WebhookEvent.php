@@ -14,12 +14,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Model WebhookEvent
  *
- * Umumnya menyimpan:
+ * Menyimpan event webhook yang masuk:
  * - provider, event_id, event_type
- * - payload_raw (string), payload (json)
- * - status (received|processed|failed)
+ * - signature_hash, source_ip, request_id, headers
+ * - payload_raw (string), payload (json/array)
+ * - status (received|processing|processed|failed|dead)
  * - attempts, received_at, last_attempt_at, processed_at, next_retry_at
- * - error_message
+ * - payment_status, payment_provider_ref, error_message
  * - relasi ke Payment (payment_id)
  */
 class WebhookEvent extends Model
@@ -34,7 +35,7 @@ class WebhookEvent extends Model
     protected $keyType = 'string';
 
     /**
-     * Lebih aman pakai $fillable (demo-friendly tapi tidak "terlalu longgar").
+     * Demo-friendly: mass-assign aman tapi tetap eksplisit.
      *
      * @var array<int, string>
      */
@@ -44,6 +45,11 @@ class WebhookEvent extends Model
         'provider',
         'event_id',
         'event_type',
+
+        'signature_hash',
+        'source_ip',
+        'request_id',
+        'headers',
 
         'payload_raw',
         'payload',
@@ -63,15 +69,24 @@ class WebhookEvent extends Model
     ];
 
     /**
-     * Casting attributes (Laravel 12 mendukung method casts()). :contentReference[oaicite:1]{index=1}
+     * Casting attributes (Laravel 11+ mendukung casts() method).
      *
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
+            'headers' => 'array',
             'payload' => 'array',
             'payload_raw' => 'string',
+
+            'signature_hash' => 'string',
+            'source_ip' => 'string',
+            'request_id' => 'string',
+
+            'status' => 'string',
+            'event_type' => 'string',
+            'payment_provider_ref' => 'string',
 
             'attempts' => 'integer',
 
@@ -80,7 +95,7 @@ class WebhookEvent extends Model
             'processed_at' => 'datetime',
             'next_retry_at' => 'datetime',
 
-            // optional: audit status payment (pending|succeeded|failed)
+            // audit status payment (pending|succeeded|failed) - custom cast/VO
             'payment_status' => PaymentStatus::class,
 
             'created_at' => 'datetime',
@@ -90,7 +105,6 @@ class WebhookEvent extends Model
 
     /**
      * Relasi balik ke Payment (belongsTo).
-     *
      * Asumsi: webhook_events.payment_id -> payments.id
      */
     public function payment(): BelongsTo
