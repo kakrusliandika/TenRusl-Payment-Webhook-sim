@@ -22,9 +22,6 @@ use Symfony\Component\HttpFoundation\Response;
  * - GET    /api/payments/{id}
  * - GET    /api/payments/{provider}/{provider_ref}/status (legacy)
  * - GET    /api/admin/payments (protected)
- *
- * Plus compat surface:
- * - /api/v1/... (same handlers)
  */
 class PaymentsController extends Controller
 {
@@ -36,23 +33,81 @@ class PaymentsController extends Controller
 
     /**
      * POST /api/payments  (alias: /api/v1/payments)
-     * Buat pembayaran simulasi (idempotent).
+     * Buat pembayaran simulasi (idempotent, production-grade semantics):
+     * - Key sama + request sama => replay
+     * - Key sama + request beda => 409 konflik (mismatch)
      */
     public function store(CreatePaymentRequest $request): JsonResponse
     {
+        $data = $request->validated();
+
+        // Normalisasi metadata:
+        // - spec menerima 'meta' dan 'metadata' (alias)
+        $meta = $data['meta'] ?? $data['metadata'] ?? [];
+        if (! is_array($meta)) {
+            $meta = [];
+        }
+
         $key = $this->idemp->resolveKey($request);
 
-        // 1) Idempotent replay jika response sudah tersimpan
+        // Fingerprint request untuk mismatch detection (stabil, berbasis payload ter-normalisasi)
+        $requestHash = $this->computeIdempotencyRequestHash([
+            'provider' => (string) $data['provider'],
+            'amount' => (int) $data['amount'],
+            'currency' => (string) ($data['currency'] ?? 'IDR'),
+            'description' => $data['description'] ?? null,
+            'meta' => $meta,
+        ]);
+
+        // 0) Jika DB sudah punya payment dengan key ini -> replay / mismatch
+        $existing = $this->paymentsRepo->findByIdempotencyKey($key);
+        if ($existing) {
+            $storedHash = (string) ($existing->idempotency_request_hash ?? '');
+
+            if ($storedHash !== '' && ! hash_equals($storedHash, $requestHash)) {
+                logger()->warning('Idempotency key mismatch (db)', [
+                    'idempotency_key' => $key,
+                    'payment_id' => (string) $existing->getKey(),
+                    'stored_hash' => $storedHash,
+                    'incoming_hash' => $requestHash,
+                ]);
+
+                return response()
+                    ->json([
+                        'message' => 'Idempotency-Key already used with different request parameters',
+                        'code' => 'idempotency_mismatch',
+                    ], Response::HTTP_CONFLICT)
+                    ->withHeaders(['Idempotency-Key' => $key]);
+            }
+
+            // Backfill hash jika belum tersimpan (best-effort)
+            if ($storedHash === '') {
+                $existing->idempotency_request_hash = $requestHash;
+                $existing->save();
+            }
+
+            return response()
+                ->json([
+                    'data' => (new PaymentResource($existing))->toArray($request),
+                ], Response::HTTP_CREATED)
+                ->withHeaders([
+                    'Idempotency-Key' => $key,
+                    'Idempotency-Replayed' => 'true',
+                ]);
+        }
+
+        // 1) Idempotent replay dari cache jika ada (opsional, untuk kecepatan)
         if ($stored = $this->idemp->getStoredResponse($key)) {
             $headers = $stored['headers'];
             $headers['Idempotency-Key'] = $key;
+            $headers['Idempotency-Replayed'] = 'true';
 
             return response()
                 ->json($stored['body'], (int) $stored['status'])
                 ->withHeaders($headers);
         }
 
-        // 2) Lock untuk mencegah concurrent execution
+        // 2) Lock untuk mencegah concurrent execution (idealnya Redis atomic lock)
         if (! $this->idemp->acquireLock($key)) {
             return response()
                 ->json([
@@ -63,11 +118,41 @@ class PaymentsController extends Controller
         }
 
         try {
-            $data = $request->validated();
+            // Re-check setelah lock (race guard)
+            $existing = $this->paymentsRepo->findByIdempotencyKey($key);
+            if ($existing) {
+                $storedHash = (string) ($existing->idempotency_request_hash ?? '');
 
-            // Normalisasi metadata:
-            // - spec menerima 'meta' dan 'metadata' (alias)
-            $meta = $data['meta'] ?? $data['metadata'] ?? [];
+                if ($storedHash !== '' && ! hash_equals($storedHash, $requestHash)) {
+                    logger()->warning('Idempotency key mismatch (db-after-lock)', [
+                        'idempotency_key' => $key,
+                        'payment_id' => (string) $existing->getKey(),
+                        'stored_hash' => $storedHash,
+                        'incoming_hash' => $requestHash,
+                    ]);
+
+                    return response()
+                        ->json([
+                            'message' => 'Idempotency-Key already used with different request parameters',
+                            'code' => 'idempotency_mismatch',
+                        ], Response::HTTP_CONFLICT)
+                        ->withHeaders(['Idempotency-Key' => $key]);
+                }
+
+                if ($storedHash === '') {
+                    $existing->idempotency_request_hash = $requestHash;
+                    $existing->save();
+                }
+
+                return response()
+                    ->json([
+                        'data' => (new PaymentResource($existing))->toArray($request),
+                    ], Response::HTTP_CREATED)
+                    ->withHeaders([
+                        'Idempotency-Key' => $key,
+                        'Idempotency-Replayed' => 'true',
+                    ]);
+            }
 
             // 3) Buat intent/simulasi via PaymentsService
             $created = $this->payments->create((string) $data['provider'], [
@@ -77,12 +162,12 @@ class PaymentsController extends Controller
                 'meta' => $meta,
             ]);
 
-            $status = trim((string) $created['status']);
+            $status = trim((string) ($created['status'] ?? ''));
             if ($status === '') {
                 $status = 'pending';
             }
 
-            // 4) Persist ke DB
+            // 4) Persist ke DB + sambungkan idempotency fields
             $payment = $this->paymentsRepo->create([
                 'provider' => (string) $created['provider'],
                 'provider_ref' => (string) $created['provider_ref'],
@@ -90,14 +175,18 @@ class PaymentsController extends Controller
                 'currency' => (string) ($created['snapshot']['currency'] ?? ($data['currency'] ?? 'IDR')),
                 'status' => strtolower($status),
                 'meta' => $meta,
-                // 'idempotency_key' => $key, // aktifkan jika kolomnya ada di DB
+
+                // production-grade: simpan idempotency fields
+                'idempotency_key' => $key,
+                'idempotency_request_hash' => $requestHash,
             ]);
 
             // 5) Response resource
-            $resource = new PaymentResource($payment);
-            $body = ['data' => $resource->toArray($request)];
+            $body = [
+                'data' => (new PaymentResource($payment))->toArray($request),
+            ];
 
-            // 6) Simpan untuk idempotent replay
+            // 6) Simpan untuk idempotent replay (cache)
             $resp = [
                 'status' => Response::HTTP_CREATED,
                 'headers' => ['Idempotency-Key' => $key],
@@ -113,10 +202,6 @@ class PaymentsController extends Controller
         }
     }
 
-    /**
-     * GET /api/payments/{id}  (alias: /api/v1/payments/{id})
-     * Ambil payment by id dengan relasi yang relevan (untuk state terbaru).
-     */
     public function show(Request $request, string $id): JsonResponse
     {
         $payment = $this->paymentsRepo->findByIdWithRelations($id);
@@ -133,10 +218,6 @@ class PaymentsController extends Controller
         ]);
     }
 
-    /**
-     * GET /api/payments/{provider}/{provider_ref}/status (alias: /api/v1/...)
-     * Endpoint legacy untuk kompatibilitas.
-     */
     public function status(Request $request, string $provider, string $providerRef): JsonResponse
     {
         $payment = $this->paymentsRepo->findByProviderRef($provider, $providerRef);
@@ -153,14 +234,6 @@ class PaymentsController extends Controller
         ]);
     }
 
-    /**
-     * GET /api/admin/payments (alias: /api/v1/admin/payments)
-     * List payments untuk Admin UI:
-     * - pagination + filter + search + date range
-     *
-     * Proteksi:
-     * - wajib header X-Admin-Key cocok dengan env/config yang diset.
-     */
     public function adminIndex(Request $request): JsonResponse
     {
         if ($denied = $this->denyIfNotAdmin($request)) {
@@ -175,7 +248,6 @@ class PaymentsController extends Controller
             'created_to' => $this->cleanString($request->query('created_to')),
         ];
 
-        // Pagination (Laravel 12: pakai integer() untuk numeric query param) :contentReference[oaicite:2]{index=2}
         $perPage = $request->integer('per_page', 20);
         if ($perPage <= 0) {
             $perPage = 20;
@@ -186,7 +258,6 @@ class PaymentsController extends Controller
 
         $paginator = $this->paymentsRepo->paginateAdmin($filters, $perPage);
 
-        // Jangan pakai getCollection() karena type analyzer melihat interface contract.
         $items = collect($paginator->items());
 
         $data = $items
@@ -204,18 +275,6 @@ class PaymentsController extends Controller
         ]);
     }
 
-    /**
-     * Admin protection (demo-friendly):
-     * - Header: X-Admin-Key: <key>
-     *
-     * Sumber key (ambil yang tersedia pertama):
-     * - config('tenrusl.admin_demo_key')
-     * - config('tenrusl.admin_key')
-     * - env('TENRUSL_ADMIN_DEMO_KEY')
-     * - env('ADMIN_DEMO_KEY')
-     *
-     * Default: jika key tidak diset sama sekali, endpoint admin ditolak (fail-closed).
-     */
     private function denyIfNotAdmin(Request $request): ?JsonResponse
     {
         $expected = (string) (
@@ -235,7 +294,6 @@ class PaymentsController extends Controller
 
         $provided = (string) $request->header('X-Admin-Key', '');
 
-        // Optional: support Authorization: Bearer <key>
         if ($provided === '') {
             $auth = (string) $request->header('Authorization', '');
             if (stripos($auth, 'bearer ') === 0) {
@@ -262,5 +320,42 @@ class PaymentsController extends Controller
         $v = trim($value);
 
         return $v === '' ? null : $v;
+    }
+
+    /**
+     * Hash stabil untuk mismatch idempotency:
+     * - sort keys rekursif (biar order JSON tidak bikin mismatch palsu)
+     */
+    private function computeIdempotencyRequestHash(array $normalized): string
+    {
+        $stable = $this->stableSortRecursive($normalized);
+
+        $json = json_encode($stable, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if ($json === false) {
+            // Fallback defensif
+            $json = serialize($stable);
+        }
+
+        return hash('sha256', $json);
+    }
+
+    private function stableSortRecursive(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            $isAssoc = array_keys($value) !== range(0, count($value) - 1);
+
+            foreach ($value as $k => $v) {
+                $value[$k] = $this->stableSortRecursive($v);
+            }
+
+            if ($isAssoc) {
+                ksort($value);
+            }
+
+            return $value;
+        }
+
+        return $value;
     }
 }

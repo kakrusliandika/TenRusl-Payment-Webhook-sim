@@ -1,5 +1,7 @@
 <?php
 
+// app/Services/Idempotency/RequestFingerprint.php
+
 declare(strict_types=1);
 
 namespace App\Services\Idempotency;
@@ -8,8 +10,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
- * Membuat fingerprint stabil dari isi request (method+path+headers penting+payload).
+ * Membuat fingerprint stabil dari isi request (method + path + headers penting + payload).
  * Dipakai saat client tidak mengirim "Idempotency-Key".
+ *
+ * Tujuan:
+ * - Konsisten untuk request "yang sama" (secara semantik),
+ * - Mismatch parameter terdeteksi via hash yang berbeda.
  */
 final class RequestFingerprint
 {
@@ -18,59 +24,95 @@ final class RequestFingerprint
      */
     public function hash(Request $request): string
     {
-        $canonical = $this->canonical($request);
-
-        return hash('sha256', $canonical);
+        return hash('sha256', $this->canonical($request));
     }
 
     /**
      * Bentuk string kanonik yang stabil:
-     *   METHOD \n PATH \n content-type \n accept \n body-json-terurut|raw
+     *   METHOD \n URI \n content-type \n accept \n body(json-kanonik|raw)
      */
     public function canonical(Request $request): string
     {
-        $method = strtoupper($request->getMethod());
-        $path = '/'.ltrim($request->getRequestUri() ?: '/', '/');
+        $method = strtoupper((string) $request->getMethod());
+
+        // getRequestUri() termasuk query string (kalau ada) => semantik bisa beda
+        $uri = (string) ($request->getRequestUri() ?: '/');
+        $uri = '/' . ltrim($uri, '/');
 
         $ct = strtolower((string) $request->header('content-type', ''));
         $accept = strtolower((string) $request->header('accept', ''));
 
         $raw = (string) $request->getContent();
 
-        $body = $this->canonicalizeJson($raw, $ct);
+        $body = $this->canonicalizeBody($raw, $ct);
 
-        return implode("\n", [$method, $path, $ct, $accept, $body]);
+        return implode("\n", [$method, $uri, $ct, $accept, $body]);
     }
 
     /**
-     * Jika content-type JSON, urutkan key secara rekursif lalu encode tanpa whitespace;
-     * jika bukan, kembalikan raw body apa adanya (agar cocok skema signature sebagian provider).
+     * Jika JSON: urutkan key object secara rekursif dan encode tanpa whitespace.
+     * Jika bukan JSON: kembalikan raw body apa adanya.
      */
-    private function canonicalizeJson(string $rawBody, string $ct): string
+    private function canonicalizeBody(string $rawBody, string $contentType): string
     {
-        if (! Str::contains($ct, 'application/json')) {
+        if ($rawBody === '') {
+            return '';
+        }
+
+        if (! Str::contains($contentType, 'application/json')) {
             return $rawBody;
         }
 
         $decoded = json_decode($rawBody, true);
-        if ($decoded === null || ! is_array($decoded)) {
-            return $rawBody; // bukan JSON valid, pakai raw
+        if (! is_array($decoded)) {
+            return $rawBody; // bukan JSON valid -> pakai raw
         }
 
-        $sorted = $this->ksortRecursive($decoded);
+        $sorted = $this->sortJson($decoded);
 
-        return json_encode($sorted, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $json = json_encode(
+            $sorted,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION
+        );
+
+        return is_string($json) ? $json : $rawBody;
     }
 
-    private function ksortRecursive(array $arr): array
+    /**
+     * Sort JSON "object" keys recursively. Keep list-array order intact.
+     *
+     * @param array<mixed> $value
+     * @return array<mixed>
+     */
+    private function sortJson(array $value): array
     {
-        ksort($arr);
-        foreach ($arr as $k => $v) {
+        if ($this->isAssoc($value)) {
+            ksort($value);
+        }
+
+        foreach ($value as $k => $v) {
             if (is_array($v)) {
-                $arr[$k] = $this->ksortRecursive($v);
+                $value[$k] = $this->sortJson($v);
             }
         }
 
-        return $arr;
+        return $value;
+    }
+
+    /**
+     * @param array<mixed> $arr
+     */
+    private function isAssoc(array $arr): bool
+    {
+        $keys = array_keys($arr);
+        $n = count($keys);
+
+        for ($i = 0; $i < $n; $i++) {
+            if ($keys[$i] !== $i) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

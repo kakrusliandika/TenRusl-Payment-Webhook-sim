@@ -2,27 +2,53 @@
 
 declare(strict_types=1);
 
-$csv = static function (?string $value, array $fallback = []): array {
+$csv = static function (?string $value): array {
     if ($value === null) {
-        return $fallback;
+        return [];
     }
 
     $value = trim($value);
     if ($value === '') {
-        return $fallback;
+        return [];
     }
 
     $parts = array_map('trim', explode(',', $value));
     $parts = array_values(array_filter($parts, static fn ($v) => $v !== ''));
 
-    return $parts !== [] ? $parts : $fallback;
+    return $parts;
 };
 
-$providersDefault = [
-    'mock', 'xendit', 'midtrans',
-    'stripe', 'paypal', 'paddle', 'lemonsqueezy', 'airwallex', 'tripay',
-    'doku', 'dana', 'oy', 'payoneer', 'skrill', 'amazon_bwp',
+$appEnv = (string) env('APP_ENV', 'production');
+$isProduction = strtolower($appEnv) === 'production';
+
+$providersCatalog = [
+    'mock',
+    'xendit',
+    'midtrans',
+    'stripe',
+    'paypal',
+    'paddle',
+    'lemonsqueezy',
+    'airwallex',
+    'tripay',
+    'doku',
+    'dana',
+    'oy',
+    'payoneer',
+    'skrill',
+    'amazon_bwp',
 ];
+
+// Fail-safe default:
+// - production: deny-by-default (allowlist kosong sampai Anda set env TENRUSL_PROVIDERS_ALLOWLIST)
+// - non-production: default ke seluruh catalog agar gampang untuk demo/dev
+$providersAllowlist = $csv(env('TENRUSL_PROVIDERS_ALLOWLIST'));
+if ($providersAllowlist === []) {
+    $providersAllowlist = $isProduction ? [] : $providersCatalog;
+}
+
+// Demo secrets: jangan pernah punya default "changeme" di production.
+$demoSecretDefault = $isProduction ? '' : 'changeme';
 
 return [
     /*
@@ -30,9 +56,9 @@ return [
     | Demo secrets (read from .env)
     |--------------------------------------------------------------------------
     */
-    'mock_secret' => env('MOCK_SECRET', 'changeme'),
-    'xendit_callback_token' => env('XENDIT_CALLBACK_TOKEN', 'changeme'),
-    'midtrans_server_key' => env('MIDTRANS_SERVER_KEY', 'changeme'),
+    'mock_secret' => env('TENRUSL_MOCK_SECRET', env('MOCK_SECRET', $demoSecretDefault)),
+    'xendit_callback_token' => env('TENRUSL_XENDIT_CALLBACK_TOKEN', env('XENDIT_CALLBACK_TOKEN', $demoSecretDefault)),
+    'midtrans_server_key' => env('TENRUSL_MIDTRANS_SERVER_KEY', env('MIDTRANS_SERVER_KEY', $demoSecretDefault)),
 
     /*
     |--------------------------------------------------------------------------
@@ -40,7 +66,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'stripe_webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
-    'paypal_env' => env('PAYPAL_ENV', 'sandbox'),
+    'paypal_env' => env('PAYPAL_ENV', $isProduction ? 'live' : 'sandbox'),
     'paypal_webhook_id' => env('PAYPAL_WEBHOOK_ID'),
     'paypal_client_id' => env('PAYPAL_CLIENT_ID'),
     'paypal_client_secret' => env('PAYPAL_CLIENT_SECRET'),
@@ -66,79 +92,52 @@ return [
     |--------------------------------------------------------------------------
     | Provider allowlist
     |--------------------------------------------------------------------------
-    | Bisa override via env:
+    | Set via env:
     | TENRUSL_PROVIDERS_ALLOWLIST=mock,xendit,midtrans
+    |
+    | Notes:
+    | - production default = deny-by-default (kosong) sampai env diset.
+    | - non-production default = semua provider di catalog.
     */
-    'providers_allowlist' => $csv(env('TENRUSL_PROVIDERS_ALLOWLIST'), $providersDefault),
+    'providers_allowlist' => $providersAllowlist,
 
     /*
     |--------------------------------------------------------------------------
-    | Admin demo knobs
+    | Admin access knobs
     |--------------------------------------------------------------------------
-    | Dipakai oleh PaymentsController::adminIndex() (header X-Admin-Key / bearer).
+    | Dipakai oleh PaymentsController::adminIndex() (header-based).
     | Fail-closed: kalau key kosong, endpoint admin ditolak.
     */
-    'admin_demo_enabled' => (bool) env('TENRUSL_ADMIN_DEMO_ENABLED', true),
-
-    // Sumber key utama (controller juga fallback ke env ADMIN_DEMO_KEY)
     'admin_demo_key' => env('TENRUSL_ADMIN_DEMO_KEY', env('ADMIN_DEMO_KEY', '')),
-
-    // Alias kalau Anda ingin pakai nama lain
     'admin_key' => env('TENRUSL_ADMIN_KEY', ''),
 
-    // Nama header admin (default sesuai controller: X-Admin-Key)
-    'admin_header' => env('TENRUSL_ADMIN_HEADER', 'X-Admin-Key'),
+    /*
+    |--------------------------------------------------------------------------
+    | Processing lease / retry knobs
+    |--------------------------------------------------------------------------
+    */
+    // Lease untuk job processing lock (mencegah double-process di worker berbeda).
+    'processing_lease_seconds' => (int) env('TENRUSL_PROCESSING_LEASE_SECONDS', $isProduction ? 120 : 60),
+
+    // Minimal lease antar eksekusi retry command (mencegah spam retry loop).
+    'retry_min_lease_ms' => (int) env('TENRUSL_RETRY_MIN_LEASE_MS', 250),
+
+    // Retry policy
+    'max_retry_attempts' => (int) env('TENRUSL_MAX_RETRY_ATTEMPTS', $isProduction ? 8 : 5),
+    'retry_base_ms' => (int) env('TENRUSL_RETRY_BASE_MS', $isProduction ? 1000 : 500),
+    'retry_cap_ms' => (int) env('TENRUSL_RETRY_CAP_MS', $isProduction ? 60000 : 30000),
 
     /*
     |--------------------------------------------------------------------------
-    | API surface knobs (optional, single source-of-truth)
-    |--------------------------------------------------------------------------
-    | Catatan: routes/api.php sekarang expose /api/... dan /api/v1/... sekaligus.
-    | Knob ini untuk kebutuhan future/cleanup (misalnya disable alias v1).
-    */
-    'api' => [
-        'enable_v1_alias' => (bool) env('TENRUSL_API_ENABLE_V1_ALIAS', true),
-        'canonical_prefix' => env('TENRUSL_API_CANONICAL_PREFIX', ''), // '' => /api/...
-        'v1_prefix' => env('TENRUSL_API_V1_PREFIX', 'v1'),             // 'v1' => /api/v1/...
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | CORS knobs (optional)
-    |--------------------------------------------------------------------------
-    | CORS yang aktif tetap dibaca dari config/cors.php,
-    | tapi ini disediakan jika Anda mau pakai 1 sumber konfigurasi.
-    */
-    'cors' => [
-        'allowed_origins' => $csv(
-            env('TENRUSL_CORS_ALLOWED_ORIGINS', env('CORS_ALLOWED_ORIGINS', '')),
-            ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:4173']
-        ),
-        'supports_credentials' => (bool) env(
-            'TENRUSL_CORS_SUPPORTS_CREDENTIALS',
-            env('CORS_SUPPORTS_CREDENTIALS', false)
-        ),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Retry knobs
+    | Scheduler knobs
     |--------------------------------------------------------------------------
     */
-    'max_retry_attempts' => (int) env('TENRUSL_MAX_RETRY_ATTEMPTS', 5),
-    'retry_base_ms' => (int) env('TENRUSL_RETRY_BASE_MS', 500),
-    'retry_cap_ms' => (int) env('TENRUSL_RETRY_CAP_MS', 30000),
-
-    /*
-    |--------------------------------------------------------------------------
-    | TTL / scheduler knobs
-    |--------------------------------------------------------------------------
-    */
-    'idempotency_ttl' => (int) env('TENRUSL_IDEMPOTENCY_TTL', 3600),
-
     'scheduler_provider' => env('TENRUSL_SCHEDULER_PROVIDER', ''),
     'scheduler_backoff_mode' => env('TENRUSL_SCHEDULER_BACKOFF_MODE', 'full'), // full|equal|decorrelated
     'scheduler_limit' => (int) env('TENRUSL_SCHEDULER_LIMIT', 200),
+
+    // Jika true, scheduler jalan via queue (worker). Jika false, jalan langsung di process scheduler.
+    'scheduler_queue' => (bool) env('TENRUSL_SCHEDULER_QUEUE', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -165,28 +164,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Idempotency config (dipakai oleh IdempotencyKeyService)
+    | Idempotency (dipakai oleh IdempotencyKeyService)
     |--------------------------------------------------------------------------
     */
+    // TTL cache untuk menyimpan response idempotent.
+    'idempotency_ttl' => (int) env('TENRUSL_IDEMPOTENCY_TTL', 3600),
+
     'idempotency' => [
         'ttl_seconds' => (int) env(
             'TENRUSL_IDEMPOTENCY_TTL_SECONDS',
             env('IDEMPOTENCY_TTL_SECONDS', 7200)
         ),
-        'storage' => env('IDEMPOTENCY_STORAGE', 'cache'), // cache|database
-        'lock_seconds' => (int) env('IDEMPOTENCY_LOCK_SECONDS', 30),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Webhook dedup config
-    |--------------------------------------------------------------------------
-    */
-    'webhook' => [
-        'dedup_ttl_seconds' => (int) env(
-            'TENRUSL_WEBHOOK_DEDUP_TTL_SECONDS',
-            env('WEBHOOK_DEDUP_TTL_SECONDS', 86400)
-        ),
+        'lock_seconds' => (int) env('TENRUSL_IDEMPOTENCY_LOCK_SECONDS', env('IDEMPOTENCY_LOCK_SECONDS', 30)),
     ],
 
     /*
@@ -196,8 +185,8 @@ return [
     */
     'signature' => [
         'timestamp_leeway_seconds' => (int) env(
-            'TENRUSL_SIG_TS_LEEWAY',
-            env('SIG_TS_LEEWAY', 300)
+            'TENRUSL_SIG_TS_LEEWAY_SECONDS',
+            (int) env('TENRUSL_SIG_TS_LEEWAY', env('SIG_TS_LEEWAY', 300))
         ),
     ],
 ];

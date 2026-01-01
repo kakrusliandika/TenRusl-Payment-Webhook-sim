@@ -11,17 +11,22 @@ use Illuminate\Support\Facades\Route;
 | API Routes
 |--------------------------------------------------------------------------
 | Catatan:
-| - routes/api.php secara default sudah diprefix "/api" oleh Laravel.
+| - routes/api.php otomatis diprefix "/api" oleh Laravel.
 | - Di file ini kita expose 2 surface sekaligus:
-|   1) /api/...      (surface demo publik, canonical)
-|   2) /api/v1/...   (compat dengan README / versi v1)
-|
-| Tujuan:
-| - Frontend cukup ganti base URL saja (mis. .../api atau .../api/v1),
-|   tanpa endpoint pecah.
+|   1) /api/...      (canonical)
+|   2) /api/v1/...   (compat)
 */
 
-$providers = array_values((array) config('tenrusl.providers_allowlist', ['mock']));
+$providers = (array) config('tenrusl.providers_allowlist', []);
+$providers = array_values(array_unique(array_filter(array_map(
+    static fn ($p) => strtolower(trim((string) $p)),
+    $providers
+), static fn ($p) => $p !== '')));
+
+// Fail-closed: jika allowlist kosong, jangan match provider apa pun.
+if ($providers === []) {
+    $providers = ['__disabled__'];
+}
 
 /**
  * Register route-set untuk 1 prefix.
@@ -43,22 +48,10 @@ $register = function (string $prefix, string $namePrefix) use ($providers): void
         Route::post('/payments', [PaymentsController::class, 'store'])
             ->name('payments.store');
 
-        /*
-         * Fetch payment by id (refresh by id) — cocok untuk Admin UI & demo publik.
-         * Endpoint:
-         * - /api/payments/{id}
-         * - /api/v1/payments/{id}
-         */
         Route::get('/payments/{id}', [PaymentsController::class, 'show'])
             ->where('id', '[A-Za-z0-9\-]+')
             ->name('payments.show');
 
-        /*
-         * Legacy: status by provider/provider_ref
-         * Endpoint:
-         * - /api/payments/{provider}/{provider_ref}/status
-         * - /api/v1/payments/{provider}/{provider_ref}/status
-         */
         Route::get('/payments/{provider}/{provider_ref}/status', [PaymentsController::class, 'status'])
             ->whereIn('provider', $providers)
             ->where('provider_ref', '[A-Za-z0-9\-\._]+')
@@ -69,25 +62,19 @@ $register = function (string $prefix, string $namePrefix) use ($providers): void
         // =========================
         Route::post('/webhooks/{provider}', [WebhooksController::class, 'receive'])
             ->whereIn('provider', $providers)
-            ->middleware('verify.webhook.signature')
+            // throttle dulu supaya request burst ditahan sebelum kerja berat (signature parsing, dsb.)
+            ->middleware(['throttle:webhooks', 'verify.webhook.signature'])
             ->name('webhooks.receive');
 
-        // Preflight CORS untuk webhook (ikut allowlist agar provider unknown -> 404, bukan 405)
+        // Preflight CORS untuk webhook (tanpa signature middleware)
         Route::options('/webhooks/{provider}', fn () => response()->noContent(204))
             ->whereIn('provider', $providers)
+            ->middleware(['throttle:webhooks'])
             ->name('webhooks.options');
 
         // =========================
         // ADMIN (PROTECTED)
         // =========================
-        /*
-         * Proteksi admin key dilakukan di controller (agar tidak tergantung registrasi middleware baru),
-         * tapi tetap dipisahkan path-nya agar jelas.
-         *
-         * Endpoint:
-         * - /api/admin/payments
-         * - /api/v1/admin/payments
-         */
         Route::prefix('admin')
             ->name('admin.')
             ->group(function () {
@@ -97,17 +84,12 @@ $register = function (string $prefix, string $namePrefix) use ($providers): void
     });
 };
 
-// Canonical demo surface: /api/...
+// Canonical: /api/...
 $register('', 'api.');
 
-// Compat v1 surface: /api/v1/...
+// Compat: /api/v1/...
 $register('v1', 'api.v1.');
 
-/*
-|--------------------------------------------------------------------------
-| Fallback JSON 404 utk endpoint API yang tidak dikenali
-|--------------------------------------------------------------------------
-*/
 Route::fallback(function () {
     return response()->json([
         'error' => 'not_found',

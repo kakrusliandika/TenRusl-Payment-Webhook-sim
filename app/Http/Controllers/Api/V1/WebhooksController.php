@@ -20,23 +20,93 @@ use Symfony\Component\HttpFoundation\Response;
  * - POST /api/v1/webhooks/{provider}
  *
  * Catatan:
- * - Signature verification seharusnya dicegat oleh middleware 'verify.webhook.signature'
- *   di routes/api.php.
+ * - Signature verification dicegat oleh middleware 'verify.webhook.signature'.
  * - Controller ini fokus:
- *   1) bentuk payload (raw + parsed)
- *   2) tentukan event_id + type
- *   3) delegasikan ke WebhookProcessor (dedup + enqueue/process)
+ *   1) raw body (untuk signature) tetap original
+ *   2) parse payload (untuk pemrosesan)
+ *   3) normalisasi event_id + event_type
+ *   4) delegasi ke WebhookProcessor (dedup + enqueue/process)
  */
 class WebhooksController extends Controller
 {
     public function __construct(private readonly WebhookProcessor $processor) {}
 
-    /**
-     * POST /api/webhooks/{provider}
-     */
     public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
-        // Ambil raw body secara defensif (prioritas: request attribute raw body -> getContent()).
+        $provider = strtolower(trim($provider));
+
+        // 1) Raw body HARUS original (untuk signature). Jangan pernah json_encode ulang untuk signature.
+        $rawBody = $this->resolveRawBody($request);
+
+        // 2) Parse payload tanpa mengubah raw body
+        $contentType = $this->detectContentType($request);
+        [$payload, $parseError] = $this->parsePayload($rawBody, $contentType);
+
+        if ($parseError !== null) {
+            return response()->json([
+                'error' => [
+                    'code' => 'invalid_payload',
+                    'message' => $parseError,
+                ],
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $validated = $request->validated();
+
+        // 3) event_id & type: provider-first rules (baru generic fallback)
+        [$eventId, $eventIdSource, $generated] = $this->resolveEventId($provider, $payload, $request, $rawBody);
+
+        $type = $this->firstNonEmptyString(
+            $validated['type'] ?? null,
+            $this->resolveEventType($provider, $payload, $request),
+            $this->extractTypeGeneric($payload),
+            null
+        );
+
+        // Tandai bila event_id hasil generate/fallback agar audit jelas (raw tetap tersimpan di payload_raw)
+        if ($generated) {
+            $payload['_tenrusl'] = array_merge(
+                is_array($payload['_tenrusl'] ?? null) ? $payload['_tenrusl'] : [],
+                [
+                    'event_id_source' => $eventIdSource,
+                    'event_id_generated' => true,
+                ]
+            );
+        } else {
+            $payload['_tenrusl'] = array_merge(
+                is_array($payload['_tenrusl'] ?? null) ? $payload['_tenrusl'] : [],
+                [
+                    'event_id_source' => $eventIdSource,
+                    'event_id_generated' => false,
+                ]
+            );
+        }
+
+        // 4) Proses (dedup + enqueue/process)
+        $result = $this->processor->process(
+            $provider,
+            $eventId,
+            $type,
+            $rawBody,
+            $payload
+        );
+
+        return response()->json([
+            'data' => [
+                'event' => [
+                    'provider' => $provider,
+                    'event_id' => $eventId,
+                    'type' => $type,
+                    'event_id_source' => $eventIdSource,
+                    'event_id_generated' => $generated,
+                ],
+                'result' => $result,
+            ],
+        ], Response::HTTP_ACCEPTED);
+    }
+
+    private function resolveRawBody(WebhookRequest $request): string
+    {
         $rawBody = '';
 
         if (method_exists($request, 'rawBody')) {
@@ -55,58 +125,9 @@ class WebhooksController extends Controller
             $rawBody = (string) $request->getContent();
         }
 
-        $contentType = $this->detectContentType($request);
-
-        [$payload, $parseError] = $this->parsePayload($rawBody, $contentType);
-
-        if ($parseError !== null) {
-            return response()->json([
-                'error' => [
-                    'code' => 'invalid_payload',
-                    'message' => $parseError,
-                ],
-            ], Response::HTTP_BAD_REQUEST);
-        }
-
-        // Dari FormRequest (jika rule ada) - tetap aman walau kosong.
-        $validated = $request->validated();
-
-        $eventId = $this->firstNonEmptyString(
-            $validated['event_id'] ?? null,
-            $this->extractEventId($payload),
-            'evt_' . (string) Str::ulid()
-        );
-
-        $type = $this->firstNonEmptyString(
-            $validated['type'] ?? null,
-            $this->extractType($payload),
-            null
-        );
-
-        // Proses (dedup + enqueue) tetap di service
-        $result = $this->processor->process(
-            $provider,
-            (string) $eventId,
-            $type,
-            $rawBody,
-            $payload
-        );
-
-        return response()->json([
-            'data' => [
-                'event' => [
-                    'provider' => $provider,
-                    'event_id' => (string) $eventId,
-                    'type' => $type,
-                ],
-                'result' => $result,
-            ],
-        ], Response::HTTP_ACCEPTED);
+        return $rawBody;
     }
 
-    /**
-     * Ambil Content-Type dari Request secara defensif.
-     */
     private function detectContentType(WebhookRequest $request): string
     {
         $header = $request->header('Content-Type');
@@ -123,23 +144,21 @@ class WebhooksController extends Controller
     }
 
     /**
-     * Parse payload sesuai content-type:
-     * - application/json                  => decode json (error kalau invalid)
-     * - application/x-www-form-urlencoded => parse_str
-     * - lainnya                           => []
-     *
      * @return array{0: array, 1: string|null} [payload, parseError]
      */
     private function parsePayload(string $rawBody, ?string $contentType): array
     {
         $ct = strtolower((string) $contentType);
+        $trim = trim($rawBody);
 
-        // Jika body kosong, anggap payload kosong (bukan error).
-        if (trim($rawBody) === '') {
+        if ($trim === '') {
             return [[], null];
         }
 
-        if (str_contains($ct, 'application/json')) {
+        // Jika header Content-Type kosong/tidak akurat tapi body terlihat JSON
+        $looksJson = str_starts_with($trim, '{') || str_starts_with($trim, '[');
+
+        if (str_contains($ct, 'application/json') || $looksJson) {
             $decoded = json_decode($rawBody, true);
 
             if (! is_array($decoded)) {
@@ -156,29 +175,129 @@ class WebhooksController extends Controller
             return [is_array($out) ? $out : [], null];
         }
 
-        // Unknown content-type: biarkan payload kosong (tetap boleh diproses).
         return [[], null];
     }
 
-    private function extractEventId(array $p): ?string
+    /**
+     * Resolve event_id:
+     * - Utamakan field resmi per provider.
+     * - Kalau tidak ada, fallback deterministik pakai hash(rawBody) agar retry body yang sama tetap dedup.
+     *
+     * @return array{0: string, 1: string, 2: bool} [eventId, source, generated]
+     */
+    private function resolveEventId(string $provider, array $payload, WebhookRequest $request, string $rawBody): array
     {
+        // Provider-specific primary sources
+        $candidates = match ($provider) {
+            // Stripe Event: id
+            'stripe' => [
+                Arr::get($payload, 'id'),
+            ],
+
+            // PayPal Webhook: id
+            'paypal' => [
+                Arr::get($payload, 'id'),
+            ],
+
+            // Paddle Billing: event_id/id (variasi)
+            'paddle' => [
+                Arr::get($payload, 'event_id'),
+                Arr::get($payload, 'id'),
+            ],
+
+            // Midtrans: tidak selalu punya event id; transaksi biasanya unik
+            'midtrans' => [
+                Arr::get($payload, 'transaction_id'),
+                Arr::get($payload, 'order_id'),
+            ],
+
+            // Xendit: umumnya id
+            'xendit' => [
+                Arr::get($payload, 'id'),
+                Arr::get($payload, 'event_id'),
+            ],
+
+            default => [
+                Arr::get($payload, 'id'),
+                Arr::get($payload, 'event_id'),
+            ],
+        };
+
+        foreach ($candidates as $v) {
+            if (is_string($v) && trim($v) !== '') {
+                return [trim($v), 'payload', false];
+            }
+        }
+
+        // Generic deep fallback (nested ids)
         foreach ([
-            Arr::get($p, 'id'),
-            Arr::get($p, 'event_id'),
-            Arr::get($p, 'data.id'),
-            Arr::get($p, 'resource.id'),
-            Arr::get($p, 'object.id'),
-            Arr::get($p, 'data.object.id'),
+            Arr::get($payload, 'data.id'),
+            Arr::get($payload, 'resource.id'),
+            Arr::get($payload, 'object.id'),
+            Arr::get($payload, 'data.object.id'),
+            Arr::get($payload, 'data.event_id'),
         ] as $v) {
             if (is_string($v) && trim($v) !== '') {
-                return $v;
+                return [trim($v), 'payload_nested', false];
             }
+        }
+
+        // Header fallback (kalau provider pakai request-id / event-id)
+        foreach ([
+            'X-Event-Id',
+            'X-Request-Id',
+            'Request-Id',
+        ] as $h) {
+            $hv = $request->headers->get($h);
+            if (is_string($hv) && trim($hv) !== '') {
+                return [trim($hv), 'header:' . strtolower($h), false];
+            }
+        }
+
+        // Deterministic generated id: raw body hash (agar retry bytes sama tetap dedup)
+        $hash = hash('sha256', $rawBody);
+
+        return ['gen_' . substr($hash, 0, 32), 'generated_body_hash', true];
+    }
+
+    private function resolveEventType(string $provider, array $payload, WebhookRequest $request): ?string
+    {
+        // Provider-specific preference
+        $candidates = match ($provider) {
+            'stripe' => [
+                Arr::get($payload, 'type'),
+            ],
+            'paypal' => [
+                Arr::get($payload, 'event_type'),
+                Arr::get($payload, 'type'),
+            ],
+            'midtrans' => [
+                Arr::get($payload, 'transaction_status'),
+                Arr::get($payload, 'status'),
+            ],
+            default => [
+                Arr::get($payload, 'type'),
+                Arr::get($payload, 'event_type'),
+                Arr::get($payload, 'event'),
+            ],
+        };
+
+        foreach ($candidates as $v) {
+            if (is_string($v) && trim($v) !== '') {
+                return trim($v);
+            }
+        }
+
+        // Header fallback
+        $hv = $request->headers->get('X-Event-Type');
+        if (is_string($hv) && trim($hv) !== '') {
+            return trim($hv);
         }
 
         return null;
     }
 
-    private function extractType(array $p): ?string
+    private function extractTypeGeneric(array $p): ?string
     {
         foreach ([
             Arr::get($p, 'type'),
@@ -187,7 +306,7 @@ class WebhooksController extends Controller
             Arr::get($p, 'data.type'),
         ] as $v) {
             if (is_string($v) && trim($v) !== '') {
-                return $v;
+                return trim($v);
             }
         }
 

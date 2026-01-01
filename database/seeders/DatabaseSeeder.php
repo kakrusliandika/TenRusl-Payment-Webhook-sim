@@ -16,23 +16,18 @@ final class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $now = Carbon::now();
+
         /**
          * =========================================================
          * 1) Demo Admin User
          * =========================================================
-         * Tujuan:
-         * - Setelah deploy / migrate:fresh --seed, admin panel tidak “kosong”
-         * - Kalau admin UI kamu butuh login user (bukan API key), ini langsung siap.
-         *
-         * Catatan:
-         * - Password: "password"
-         * - Email: admin@tenrusl.local
          */
         User::query()->updateOrCreate(
-            ['email' => 'admin@tenrusl.local'],
+            ['email' => 'admin@tenrusl.com'],
             [
                 'name' => 'Admin Demo',
-                'email_verified_at' => now(),
+                'email_verified_at' => $now,
                 'password' => Hash::make('password'),
                 'remember_token' => Str::random(10),
             ]
@@ -40,12 +35,8 @@ final class DatabaseSeeder extends Seeder
 
         /**
          * =========================================================
-         * 2) Seed Payments (agar Admin List ada isi)
+         * 2) Seed Payments
          * =========================================================
-         * Komposisi demo:
-         * - pending   : 6
-         * - succeeded : 4
-         * - failed    : 3
          */
         $pendingPayments = Payment::factory()
             ->count(6)
@@ -64,19 +55,10 @@ final class DatabaseSeeder extends Seeder
 
         /**
          * =========================================================
-         * 3) Seed Webhook Events (agar Admin Retry/Events list ada isi)
+         * 3) Seed Webhook Events
          * =========================================================
-         * Prinsip:
-         * - Sebagian event link ke payment_provider_ref yang ada (biar UI enak dilihat)
-         * - Ada event "received" due (eligible retry)
-         * - Ada event "failed" due (eligible retry)
-         * - Ada event "processed" final (riwayat)
          */
-
-        $now = Carbon::now();
-
-        // Helper untuk bikin payload + raw konsisten (audit-friendly)
-        $makePayload = static function (string $provider, string $providerRef, string $type) use ($now): array {
+        $makePayload = static function (Carbon $baseNow, string $provider, string $providerRef, string $type): array {
             $eventId = 'evt_seed_'.Str::ulid()->toBase32();
 
             $payload = [
@@ -86,7 +68,8 @@ final class DatabaseSeeder extends Seeder
                     'provider' => $provider,
                     'ref' => $providerRef,
                 ],
-                'sent_at' => $now->toISOString(),
+                // FIX Intelephense: Carbon::now()->toIso8601String()
+                'sent_at' => $baseNow->toIso8601String(),
             ];
 
             $raw = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -99,12 +82,10 @@ final class DatabaseSeeder extends Seeder
 
         /**
          * 3A) Received (due) untuk beberapa pending payment
-         * - status=received
-         * - payment_status=pending
-         * - next_retry_at=NULL (eligible)
          */
         foreach ($pendingPayments->take(3) as $p) {
             [$eventId, $payload, $raw] = $makePayload(
+                $now,
                 (string) $p->provider,
                 (string) $p->provider_ref,
                 'payment.pending'
@@ -117,6 +98,15 @@ final class DatabaseSeeder extends Seeder
                 'event_type' => (string) ($payload['type'] ?? null),
 
                 'signature_hash' => hash('sha256', 'seed:'.$eventId),
+
+                // Audit tambahan (sesuai migration)
+                'source_ip' => '127.0.0.1',
+                'request_id' => 'seed_req_'.Str::ulid()->toBase32(),
+                'headers' => [
+                    'content_type' => 'application/json',
+                    'seed' => true,
+                ],
+
                 'payload_raw' => $raw,
                 'payload' => $payload,
 
@@ -137,14 +127,12 @@ final class DatabaseSeeder extends Seeder
         }
 
         /**
-         * 3B) Failed (due) untuk 1 pending payment (simulasi perlu retry)
-         * - status=failed
-         * - payment_status=pending
-         * - next_retry_at di masa lalu (eligible)
+         * 3B) Failed (due) untuk 1 pending payment (eligible retry)
          */
         $pRetry = $pendingPayments->get(3);
         if ($pRetry) {
             [$eventId, $payload, $raw] = $makePayload(
+                $now,
                 (string) $pRetry->provider,
                 (string) $pRetry->provider_ref,
                 'payment.retry_required'
@@ -157,6 +145,10 @@ final class DatabaseSeeder extends Seeder
                 'event_type' => (string) ($payload['type'] ?? null),
 
                 'signature_hash' => hash('sha256', 'seed:'.$eventId),
+                'source_ip' => '127.0.0.1',
+                'request_id' => 'seed_req_'.Str::ulid()->toBase32(),
+                'headers' => ['content_type' => 'application/json', 'seed' => true],
+
                 'payload_raw' => $raw,
                 'payload' => $payload,
 
@@ -177,14 +169,12 @@ final class DatabaseSeeder extends Seeder
         }
 
         /**
-         * 3C) Not-due (untuk demo "scheduled retry")
-         * - status=received
-         * - payment_status=pending
-         * - next_retry_at future (tidak eligible sekarang)
+         * 3C) Not-due (scheduled retry)
          */
         $pNotDue = $pendingPayments->get(4);
         if ($pNotDue) {
             [$eventId, $payload, $raw] = $makePayload(
+                $now,
                 (string) $pNotDue->provider,
                 (string) $pNotDue->provider_ref,
                 'payment.scheduled_retry'
@@ -197,6 +187,10 @@ final class DatabaseSeeder extends Seeder
                 'event_type' => (string) ($payload['type'] ?? null),
 
                 'signature_hash' => hash('sha256', 'seed:'.$eventId),
+                'source_ip' => '127.0.0.1',
+                'request_id' => 'seed_req_'.Str::ulid()->toBase32(),
+                'headers' => ['content_type' => 'application/json', 'seed' => true],
+
                 'payload_raw' => $raw,
                 'payload' => $payload,
 
@@ -217,13 +211,11 @@ final class DatabaseSeeder extends Seeder
         }
 
         /**
-         * 3D) Processed (final history) untuk succeeded payment
-         * - status=processed
-         * - payment_status=succeeded
-         * - processed_at set
+         * 3D) Processed (history) untuk succeeded payment
          */
         foreach ($succeededPayments->take(2) as $p) {
             [$eventId, $payload, $raw] = $makePayload(
+                $now,
                 (string) $p->provider,
                 (string) $p->provider_ref,
                 'payment.succeeded'
@@ -236,6 +228,10 @@ final class DatabaseSeeder extends Seeder
                 'event_type' => (string) ($payload['type'] ?? null),
 
                 'signature_hash' => hash('sha256', 'seed:'.$eventId),
+                'source_ip' => '127.0.0.1',
+                'request_id' => 'seed_req_'.Str::ulid()->toBase32(),
+                'headers' => ['content_type' => 'application/json', 'seed' => true],
+
                 'payload_raw' => $raw,
                 'payload' => $payload,
 
@@ -257,11 +253,10 @@ final class DatabaseSeeder extends Seeder
 
         /**
          * 3E) Processed failed (history) untuk failed payment
-         * - status=processed
-         * - payment_status=failed
          */
         foreach ($failedPayments->take(1) as $p) {
             [$eventId, $payload, $raw] = $makePayload(
+                $now,
                 (string) $p->provider,
                 (string) $p->provider_ref,
                 'payment.failed'
@@ -274,6 +269,10 @@ final class DatabaseSeeder extends Seeder
                 'event_type' => (string) ($payload['type'] ?? null),
 
                 'signature_hash' => hash('sha256', 'seed:'.$eventId),
+                'source_ip' => '127.0.0.1',
+                'request_id' => 'seed_req_'.Str::ulid()->toBase32(),
+                'headers' => ['content_type' => 'application/json', 'seed' => true],
+
                 'payload_raw' => $raw,
                 'payload' => $payload,
 

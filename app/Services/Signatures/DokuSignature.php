@@ -9,23 +9,33 @@ use Illuminate\Http\Request;
 final class DokuSignature
 {
     /**
+     * Backward-compatible: return bool only.
+     */
+    public static function verify(string $rawBody, Request $request): bool
+    {
+        return self::verifyWithReason($rawBody, $request)['ok'];
+    }
+
+    /**
      * Verify DOKU HTTP Notification Signature.
      *
-     * Komponen (per baris) mengikuti pola dokumentasi DOKU:
+     * Components (one per line, no trailing \n):
      *  Client-Id:{clientId}
      *  Request-Id:{requestId}
      *  Request-Timestamp:{timestamp}
      *  Request-Target:{requestTarget}
-     *  [opsional] Digest:{base64(sha256(body))}
+     *  Digest:{base64(sha256(body))}  // for non-GET/DELETE
      *
      * Signature:
      *  "HMACSHA256=" + base64( HMAC_SHA256(secretKey, components) )
+     *
+     * @return array{ok: bool, reason: string}
      */
-    public static function verify(string $rawBody, Request $request): bool
+    public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $secretKey = config('tenrusl.doku_secret_key');
-        if (!is_string($secretKey) || $secretKey === '') {
-            return false;
+        if (!is_string($secretKey) || trim($secretKey) === '') {
+            return self::result(false, 'missing_secret_key');
         }
 
         $clientId = self::headerString($request, 'Client-Id');
@@ -34,17 +44,18 @@ final class DokuSignature
         $headerSig = self::headerString($request, 'Signature');
 
         if ($clientId === null || $reqId === null || $timestamp === null || $headerSig === null) {
-            return false;
+            return self::result(false, 'missing_headers');
         }
 
-        // Tentukan Request-Target:
+        // Determine Request-Target (path only). Prefer config override.
         $target = config('tenrusl.doku_request_target', '/');
         $target = is_string($target) ? trim($target) : '/';
 
         if ($target === '' || $target === '/') {
-            $uri = (string) $request->getRequestUri();
-            $uri = $uri !== '' ? $uri : '/';
-            $target = str_starts_with($uri, '/') ? $uri : '/' . ltrim($uri, '/');
+            $uri = (string) $request->getRequestUri(); // may include query
+            $path = parse_url($uri, PHP_URL_PATH);
+            $path = is_string($path) && $path !== '' ? $path : '/';
+            $target = str_starts_with($path, '/') ? $path : '/' . ltrim($path, '/');
         }
 
         $method = strtoupper((string) $request->getMethod());
@@ -62,19 +73,29 @@ final class DokuSignature
 
         $calc = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', $components, $secretKey, true));
 
-        return hash_equals($headerSig, $calc);
+        if (hash_equals($headerSig, $calc)) {
+            return self::result(true, 'ok');
+        }
+
+        return self::result(false, 'invalid_signature');
     }
 
     private static function headerString(Request $request, string $key): ?string
     {
-        $v = $request->header($key);
-
+        $v = $request->headers->get($key);
         if (!is_string($v)) {
             return null;
         }
 
         $v = trim($v);
-
         return $v !== '' ? $v : null;
+    }
+
+    /**
+     * @return array{ok: bool, reason: string}
+     */
+    private static function result(bool $ok, string $reason): array
+    {
+        return ['ok' => $ok, 'reason' => $reason];
     }
 }

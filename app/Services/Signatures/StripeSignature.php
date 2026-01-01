@@ -9,45 +9,62 @@ use Illuminate\Http\Request;
 final class StripeSignature
 {
     /**
-     * Verifies Stripe webhook signature.
-     *
-     * Stripe signs the raw payload with:
-     *   expected = HMAC-SHA256(secret, "{$t}.{$rawBody}")
-     *
-     * Header "Stripe-Signature" format:
-     *   t=TIMESTAMP,v1=HEX[,v1=HEX...]
+     * Backward-compatible: return bool only.
      */
     public static function verify(string $rawBody, Request $request): bool
     {
+        return self::verifyWithReason($rawBody, $request)['ok'];
+    }
+
+    /**
+     * Standardized output:
+     * - ok: true|false
+     * - reason: short code for audit/logging (no secrets)
+     *
+     * @return array{ok: bool, reason: string}
+     */
+    public static function verifyWithReason(string $rawBody, Request $request): array
+    {
         $secret = config('tenrusl.stripe_webhook_secret');
         if (!is_string($secret) || trim($secret) === '') {
-            return false;
+            return self::result(false, 'missing_secret');
         }
 
         $sigHeader = self::headerString($request, 'Stripe-Signature');
         if ($sigHeader === null) {
-            return false;
+            return self::result(false, 'missing_signature_header');
         }
 
         [$timestamp, $signatures] = self::parseStripeHeader($sigHeader);
         if ($timestamp === null || $signatures === []) {
-            return false;
+            return self::result(false, 'malformed_signature_header');
         }
 
-        $signedPayload = $timestamp . '.' . $rawBody;
-        $expected = strtolower(hash_hmac('sha256', $signedPayload, $secret)); // hex lowercase
+        $tolerance = (int) config('tenrusl.signature.timestamp_leeway_seconds', 300);
+        if ($tolerance < 0) {
+            $tolerance = 0;
+        }
+
+        $now = time();
+        if (abs($now - $timestamp) > $tolerance) {
+            return self::result(false, 'timestamp_out_of_tolerance');
+        }
+
+        // IMPORTANT: must use RAW request body bytes.
+        $signedPayload = (string) $timestamp . '.' . $rawBody;
+        $expected = strtolower(hash_hmac('sha256', $signedPayload, $secret)); // lowercase hex
 
         foreach ($signatures as $candidate) {
             if (hash_equals($expected, $candidate)) {
-                return true;
+                return self::result(true, 'ok');
             }
         }
 
-        return false;
+        return self::result(false, 'invalid_signature');
     }
 
     /**
-     * @return array{0: string|null, 1: list<string>} [timestamp, v1SignaturesLowercase]
+     * @return array{0: int|null, 1: list<string>} [timestamp, v1SignaturesLowercase]
      */
     private static function parseStripeHeader(string $header): array
     {
@@ -68,8 +85,8 @@ final class StripeSignature
             $k = trim($kv[0]);
             $v = trim($kv[1]);
 
-            if ($k === 't' && $v !== '') {
-                $timestamp = $v;
+            if ($k === 't' && $v !== '' && ctype_digit($v)) {
+                $timestamp = (int) $v;
                 continue;
             }
 
@@ -78,23 +95,26 @@ final class StripeSignature
             }
         }
 
-        // $v1 sudah list<string>, jadi array_values() tidak diperlukan.
         return [$timestamp, $v1];
     }
 
-    /**
-     * Ambil header jadi ?string yang bersih.
-     */
     private static function headerString(Request $request, string $key): ?string
     {
-        // HeaderBag::get($key) -> ?string (aman untuk analyzer & tidak pakai argumen tambahan)
         $v = $request->headers->get($key);
-        if ($v === null) {
+        if (!is_string($v)) {
             return null;
         }
 
         $v = trim($v);
 
         return $v !== '' ? $v : null;
+    }
+
+    /**
+     * @return array{ok: bool, reason: string}
+     */
+    private static function result(bool $ok, string $reason): array
+    {
+        return ['ok' => $ok, 'reason' => $reason];
     }
 }

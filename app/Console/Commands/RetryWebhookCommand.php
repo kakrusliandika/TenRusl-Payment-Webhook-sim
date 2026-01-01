@@ -10,7 +10,10 @@ use App\Services\Webhooks\RetryBackoff;
 use App\Services\Webhooks\WebhookProcessor;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -21,12 +24,12 @@ use Throwable;
  * - lakukan claiming atomik (lockForUpdate + update attempts/last_attempt_at/next_retry_at)
  * - proses inline atau dispatch job ke queue
  *
- * Kenapa harus ada claiming?
- * - supaya scheduler multi-run / multi-worker tidak memproses event yg sama bersamaan.
- * - next_retry_at berperan sebagai "lease" (mencegah re-pick) dan jadwal retry berikutnya.
+ * Tambahan operasional:
+ * - concurrency guard (distributed lock) supaya hanya 1 runner jalan pada satu waktu.
  *
  * Catatan:
  * - lockForUpdate wajib di dalam transaction agar benar-benar mengunci row.
+ * - Cache atomic lock butuh store yang mendukung LockProvider (redis/memcached/database/file/array).
  */
 class RetryWebhookCommand extends Command
 {
@@ -68,142 +71,196 @@ class RetryWebhookCommand extends Command
 
         $now = CarbonImmutable::now();
 
-        // -------------------------
-        // Claim event (single atau batch)
-        // -------------------------
-        /** @var Collection<int, WebhookEvent> $events */
-        if ($specificId !== '') {
-            $claimed = $this->claimOne(
-                id: $specificId,
-                provider: $provider,
-                maxAttempts: $maxAttempts,
-                mode: $mode,
-                now: $now,
-                baseMs: $baseMs,
-                capMs: $capMs,
-                minLeaseMs: $minLeaseMs,
-                force: $force
-            );
+        // =========================================================
+        // Concurrency guard: hanya 1 runner
+        // =========================================================
+        $runLock = $this->acquireRunLock($provider, $specificId);
+        if ($runLock instanceof Lock) {
+            if (! $runLock->get()) {
+                $this->info('Runner lain sedang memproses batch retry. Keluar (no-op).');
 
-            $events = $claimed ? collect([$claimed]) : collect();
-        } else {
-            $events = $this->claimBatch(
-                provider: $provider,
-                limit: $limit,
-                maxAttempts: $maxAttempts,
-                mode: $mode,
-                now: $now,
-                baseMs: $baseMs,
-                capMs: $capMs,
-                minLeaseMs: $minLeaseMs,
-                force: $force
-            );
-        }
-
-        if ($events->isEmpty()) {
-            $this->info('Tidak ada event yang perlu di-retry.');
-
-            return self::SUCCESS;
-        }
-
-        $this->info(sprintf(
-            'Memproses %d event (mode=%s, max_attempts=%d%s%s%s)...',
-            $events->count(),
-            $mode,
-            $maxAttempts,
-            $provider !== '' ? ", provider={$provider}" : '',
-            $specificId !== '' ? ", id={$specificId}" : '',
-            $useQueue ? ", via queue={$queueName}" : ', inline'
-        ));
-
-        $bar = $this->output->createProgressBar($events->count());
-        $bar->start();
-
-        $ok = 0;
-        $fail = 0;
-
-        foreach ($events as $event) {
-            try {
-                if ($useQueue) {
-                    /**
-                     * Jalur queue:
-                     * - Event sudah di-claim (attempts/next_retry_at sudah diupdate)
-                     * - Job idempotent dan punya guard (unique + overlap + db claim)
-                     */
-                    ProcessWebhookEvent::dispatch($event->id, 'retry', $force)
-                        ->onQueue($queueName);
-
-                    // Optional: tandai status queued supaya UI admin bisa bedain
-                    $event->forceFill([
-                        'status' => 'queued',
-                    ])->save();
-
-                    $ok++;
-                } else {
-                    /**
-                     * Jalur inline (sinkron):
-                     * - Kirim type='retry' agar processor tidak menaikkan attempts lagi (attempts sudah dinaikkan saat claim).
-                     */
-                    $processor->process(
-                        $event->provider,
-                        $event->event_id,
-                        'retry',
-                        (string) ($event->payload_raw ?? ''),
-                        (array) ($event->payload ?? [])
-                    );
-
-                    // Defensif finalize bila sudah final
-                    $event->refresh();
-                    $final = strtolower((string) ($event->payment_status ?? ''));
-                    if ($final !== '' && $final !== 'pending') {
-                        $event->forceFill([
-                            'status' => 'processed',
-                            'processed_at' => $event->processed_at ?? CarbonImmutable::now(),
-                            'next_retry_at' => null,
-                            'error_message' => null,
-                        ])->save();
-                    } else {
-                        // masih pending => biarkan next_retry_at (lease/jadwal) tetap ada
-                        $event->forceFill([
-                            'status' => 'received',
-                        ])->save();
-                    }
-
-                    $ok++;
-                }
-            } catch (Throwable $e) {
-                $fail++;
-
-                Log::error('RetryWebhookCommand: processing failed', [
-                    'webhook_event_id' => $event->id,
-                    'provider' => $event->provider,
-                    'event_id' => $event->event_id,
-                    'attempts' => $event->attempts,
-                    'next_retry_at' => $event->next_retry_at,
-                    'mode' => $mode,
-                    'useQueue' => $useQueue,
-                    'exception' => $e,
-                ]);
-
-                // Catat gagal supaya bisa ditrace; next_retry_at sudah diset saat claim.
-                try {
-                    $event->forceFill([
-                        'status' => 'failed',
-                        'error_message' => $e->getMessage(),
-                    ])->save();
-                } catch (Throwable) {
-                    // Jangan bikin command crash hanya karena gagal update error_message
-                }
-            } finally {
-                $bar->advance();
+                return self::SUCCESS;
             }
         }
 
-        $bar->finish();
-        $this->newLine();
-        $this->info(sprintf('Selesai. OK=%d, FAIL=%d', $ok, $fail));
+        try {
+            // -------------------------
+            // Claim event (single atau batch)
+            // -------------------------
+            /** @var Collection<int, WebhookEvent> $events */
+            if ($specificId !== '') {
+                $claimed = $this->claimOne(
+                    id: $specificId,
+                    provider: $provider,
+                    maxAttempts: $maxAttempts,
+                    mode: $mode,
+                    now: $now,
+                    baseMs: $baseMs,
+                    capMs: $capMs,
+                    minLeaseMs: $minLeaseMs,
+                    force: $force
+                );
 
-        return $fail > 0 ? self::FAILURE : self::SUCCESS;
+                $events = $claimed ? collect([$claimed]) : collect();
+            } else {
+                $events = $this->claimBatch(
+                    provider: $provider,
+                    limit: $limit,
+                    maxAttempts: $maxAttempts,
+                    mode: $mode,
+                    now: $now,
+                    baseMs: $baseMs,
+                    capMs: $capMs,
+                    minLeaseMs: $minLeaseMs,
+                    force: $force
+                );
+            }
+
+            if ($events->isEmpty()) {
+                $this->info('Tidak ada event yang perlu di-retry.');
+
+                return self::SUCCESS;
+            }
+
+            $this->info(sprintf(
+                'Memproses %d event (mode=%s, max_attempts=%d%s%s%s)...',
+                $events->count(),
+                $mode,
+                $maxAttempts,
+                $provider !== '' ? ", provider={$provider}" : '',
+                $specificId !== '' ? ", id={$specificId}" : '',
+                $useQueue ? ", via queue={$queueName}" : ', inline'
+            ));
+
+            $bar = $this->output->createProgressBar($events->count());
+            $bar->start();
+
+            $ok = 0;
+            $fail = 0;
+
+            foreach ($events as $event) {
+                try {
+                    if ($useQueue) {
+                        /**
+                         * Jalur queue:
+                         * - Event sudah di-claim (attempts/next_retry_at sudah diupdate)
+                         * - Job idempotent dan punya guard (unique + overlap + db claim)
+                         */
+                        ProcessWebhookEvent::dispatch($event->id, 'retry', $force)
+                            ->onQueue($queueName);
+
+                        // Optional: tandai status queued supaya UI admin bisa bedain
+                        $event->forceFill([
+                            'status' => 'queued',
+                        ])->save();
+
+                        $ok++;
+                    } else {
+                        /**
+                         * Jalur inline (sinkron):
+                         * - Kirim type='retry' agar processor tidak menaikkan attempts lagi
+                         *   (attempts sudah dinaikkan saat claim).
+                         */
+                        $processor->process(
+                            $event->provider,
+                            $event->event_id,
+                            'retry',
+                            (string) ($event->payload_raw ?? ''),
+                            (array) ($event->payload ?? [])
+                        );
+
+                        // Defensif finalize bila sudah final
+                        $event->refresh();
+                        $final = strtolower((string) ($event->payment_status ?? ''));
+                        if ($final !== '' && $final !== 'pending') {
+                            $event->forceFill([
+                                'status' => 'processed',
+                                'processed_at' => $event->processed_at ?? CarbonImmutable::now(),
+                                'next_retry_at' => null,
+                                'error_message' => null,
+                            ])->save();
+                        } else {
+                            // masih pending => biarkan next_retry_at (lease/jadwal) tetap ada
+                            $event->forceFill([
+                                'status' => 'received',
+                            ])->save();
+                        }
+
+                        $ok++;
+                    }
+                } catch (Throwable $e) {
+                    $fail++;
+
+                    Log::error('RetryWebhookCommand: processing failed', [
+                        'webhook_event_id' => $event->id,
+                        'provider' => $event->provider,
+                        'event_id' => $event->event_id,
+                        'attempts' => $event->attempts,
+                        'next_retry_at' => $event->next_retry_at,
+                        'mode' => $mode,
+                        'useQueue' => $useQueue,
+                        'exception' => $e,
+                    ]);
+
+                    // Catat gagal supaya bisa ditrace; next_retry_at sudah diset saat claim.
+                    try {
+                        $event->forceFill([
+                            'status' => 'failed',
+                            'error_message' => $e->getMessage(),
+                        ])->save();
+                    } catch (Throwable) {
+                        // Jangan bikin command crash hanya karena gagal update error_message
+                    }
+                } finally {
+                    $bar->advance();
+                }
+            }
+
+            $bar->finish();
+            $this->newLine();
+            $this->info(sprintf('Selesai. OK=%d, FAIL=%d', $ok, $fail));
+
+            return $fail > 0 ? self::FAILURE : self::SUCCESS;
+        } finally {
+            // release run lock
+            try {
+                if ($runLock instanceof Lock) {
+                    $runLock->release();
+                }
+            } catch (Throwable) {
+                // ignore
+            }
+        }
+    }
+
+    /**
+     * Acquire distributed run lock (IDE-safe: lewat LockProvider).
+     * Jika cache store tidak mendukung lock, return null (skip guard).
+     */
+    private function acquireRunLock(string $provider, string $specificId): ?Lock
+    {
+        $seconds = (int) config('tenrusl.retry_command_lock_seconds', 900);
+
+        $key = $this->runLockKey($provider, $specificId);
+
+        try {
+            // IDE-safe: ambil store lalu cek LockProvider
+            $store = Cache::store()->getStore();
+            if ($store instanceof LockProvider) {
+                return $store->lock($key, $seconds);
+            }
+        } catch (Throwable) {
+            // skip lock jika error
+        }
+
+        return null;
+    }
+
+    private function runLockKey(string $provider, string $specificId): string
+    {
+        // Global lock by default. Jika spesifik id, tetap gunakan global agar benar-benar single runner.
+        // (Kalau kamu mau allow parallel per-id/per-provider, bisa ubah di sini.)
+        return 'tenrusl:cmd:webhooks:retry:global';
     }
 
     /**

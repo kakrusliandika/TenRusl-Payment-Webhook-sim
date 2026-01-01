@@ -1,8 +1,13 @@
-name: Deploy to Railway (on push to main)
+name: Deploy to Railway (after CI success)
 
 on:
-  push:
-    branches: ["main"]
+  # Deploy hanya jika workflow CI selesai & sukses (test sebelum deploy).
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+  # Manual trigger tetap tersedia (misal hotfix / redeploy).
+  workflow_dispatch:
 
 concurrency:
   group: railway-deploy
@@ -13,12 +18,24 @@ permissions:
 
 jobs:
   deploy:
+    # Pastikan hanya deploy saat CI sukses dan branch main.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      LOG_CHANNEL: stderr
+
     steps:
-      - name: Checkout
+      - name: Checkout (same revision as CI)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node (Railway CLI runtime)
         uses: actions/setup-node@v4

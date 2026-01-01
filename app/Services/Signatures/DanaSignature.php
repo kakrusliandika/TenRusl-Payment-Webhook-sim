@@ -9,37 +9,56 @@ use Illuminate\Http\Request;
 final class DanaSignature
 {
     /**
-     * Verify DANA signature (SIMULATOR).
-     *
-     * Simulator:
-     * - Validasi X-SIGNATURE sebagai base64(RSA-SHA256(rawBody)).
-     * - Real-world DANA biasanya pakai canonical string (header + body). Bisa kamu ubah di $message.
+     * Backward-compatible: return bool only.
      */
     public static function verify(string $rawBody, Request $request): bool
     {
+        return self::verifyWithReason($rawBody, $request)['ok'];
+    }
+
+    /**
+     * Verify DANA signature (SIMULATOR).
+     *
+     * NOTE:
+     * - DANA docs mention RSA-SHA256 signature verification with a composed "string to sign".
+     * - Simulator implementation verifies RSA-SHA256 directly over raw body.
+     *   If you implement canonical string later, replace $message.
+     *
+     * @return array{ok: bool, reason: string}
+     */
+    public static function verifyWithReason(string $rawBody, Request $request): array
+    {
         $publicKey = config('tenrusl.dana_public_key');
-        if (!is_string($publicKey) || $publicKey === '') {
-            return false;
+        if (!is_string($publicKey) || trim($publicKey) === '') {
+            return self::result(false, 'missing_public_key');
         }
 
         $signatureB64 = self::headerString($request, 'X-SIGNATURE');
         if ($signatureB64 === null) {
-            return false;
+            return self::result(false, 'missing_signature_header');
         }
 
         $signature = base64_decode($signatureB64, true);
         if ($signature === false) {
-            return false;
+            return self::result(false, 'invalid_signature_base64');
         }
-
-        // Simulator: sign/verify langsung raw body
-        $message = $rawBody;
 
         $pem = self::normalizePem($publicKey);
 
-        $ok = openssl_verify($message, $signature, $pem, OPENSSL_ALGO_SHA256);
+        // Simulator: sign/verify directly raw body
+        $message = $rawBody;
 
-        return $ok === 1;
+        $ok = @openssl_verify($message, $signature, $pem, OPENSSL_ALGO_SHA256);
+
+        if ($ok === 1) {
+            return self::result(true, 'ok');
+        }
+
+        if ($ok === 0) {
+            return self::result(false, 'invalid_signature');
+        }
+
+        return self::result(false, 'openssl_verify_error');
     }
 
     private static function normalizePem(string $key): string
@@ -57,14 +76,20 @@ final class DanaSignature
 
     private static function headerString(Request $request, string $key): ?string
     {
-        $v = $request->header($key);
-
+        $v = $request->headers->get($key);
         if (!is_string($v)) {
             return null;
         }
 
         $v = trim($v);
-
         return $v !== '' ? $v : null;
+    }
+
+    /**
+     * @return array{ok: bool, reason: string}
+     */
+    private static function result(bool $ok, string $reason): array
+    {
+        return ['ok' => $ok, 'reason' => $reason];
     }
 }

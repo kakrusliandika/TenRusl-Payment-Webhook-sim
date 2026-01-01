@@ -1,12 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
 use App\Models\Payment;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
-class PaymentFactory extends Factory
+final class PaymentFactory extends Factory
 {
     protected $model = Payment::class;
 
@@ -18,16 +20,10 @@ class PaymentFactory extends Factory
         $currency = 'IDR';
         $description = $this->faker->sentence(3);
 
-        // Tabel memiliki kolom unik idempotency_key → isi untuk kemudahan test/seed
+        // Kolom unik idempotency_key → isi untuk kemudahan test/seed
         $idemKey = (string) Str::uuid();
 
-        /**
-         * (Opsional) fingerprint payload untuk mendeteksi konflik idempotency:
-         * - kalau request datang dengan Idempotency-Key sama tapi body berbeda,
-         *   service bisa respon 409 dan tetap tercatat rapi di DB.
-         *
-         * Di demo seed, kita isi hash yang “stabil” berdasarkan field utama.
-         */
+        // Fingerprint “stabil” untuk mendeteksi konflik idempotency
         $requestHash = hash('sha256', implode('|', [
             'provider='.$provider,
             'amount='.$amount,
@@ -40,23 +36,24 @@ class PaymentFactory extends Factory
             // Set id ULID agar konsisten dengan HasUlid
             'id' => (string) Str::ulid(),
 
-            // Kolom yang dipakai kode/model
+            // Identitas provider
             'provider' => $provider,
             'provider_ref' => 'sim_'.$provider.'_'.Str::ulid()->toBase32(),
 
+            // Payment fields
             'amount' => $amount,
             'currency' => $currency,
             'description' => $description,
 
-            // Gunakan "meta" (bukan "metadata") agar konsisten dengan model & resource
+            // Konsisten: gunakan "meta"
             'meta' => [
                 'customer_id' => 'cus_'.$this->faker->numberBetween(1000, 9999),
             ],
 
-            // Konsisten dengan enum PaymentStatus
+            // pending | succeeded | failed
             'status' => $this->faker->randomElement(['pending', 'succeeded', 'failed']),
 
-            // Idempotency fields (support admin/debug)
+            // Idempotency fields
             'idempotency_key' => $idemKey,
             'idempotency_request_hash' => $requestHash,
         ];

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -14,8 +16,15 @@ return new class extends Migration
         $hasProcessedAt = Schema::hasColumn('webhook_events', 'processed_at');
         $hasPaymentStatus = Schema::hasColumn('webhook_events', 'payment_status');
         $hasPaymentProviderRef = Schema::hasColumn('webhook_events', 'payment_provider_ref');
+
         $hasAttempts = Schema::hasColumn('webhook_events', 'attempts');
         $hasAttemptCount = Schema::hasColumn('webhook_events', 'attempt_count');
+
+        // Tambahan audit fields
+        $hasSignatureHash = Schema::hasColumn('webhook_events', 'signature_hash');
+        $hasSourceIp = Schema::hasColumn('webhook_events', 'source_ip');
+        $hasRequestId = Schema::hasColumn('webhook_events', 'request_id');
+        $hasHeaders = Schema::hasColumn('webhook_events', 'headers');
 
         Schema::table('webhook_events', function (Blueprint $table) use (
             $hasReceivedAt,
@@ -23,33 +32,78 @@ return new class extends Migration
             $hasProcessedAt,
             $hasPaymentStatus,
             $hasPaymentProviderRef,
-            $hasAttempts
-        ) {
-            // Kolom audit & status pembayaran yang diharapkan kode
+            $hasAttempts,
+            $hasSignatureHash,
+            $hasSourceIp,
+            $hasRequestId,
+            $hasHeaders,
+        ): void {
+            // Audit & status fields yang diharapkan kode
             if (! $hasReceivedAt) {
-                $table->timestamp('received_at')->nullable();
+                $table->timestamp('received_at')->nullable()->index();
             }
 
             if (! $hasLastAttemptAt) {
-                $table->timestamp('last_attempt_at')->nullable();
+                $table->timestamp('last_attempt_at')->nullable()->index();
             }
 
             if (! $hasProcessedAt) {
-                $table->timestamp('processed_at')->nullable();
+                $table->timestamp('processed_at')->nullable()->index();
             }
 
             if (! $hasPaymentStatus) {
-                // pending|succeeded|failed (nullable untuk kompatibilitas state lama)
-                $table->string('payment_status', 20)->nullable();
+                $table->string('payment_status', 20)->nullable()->index();
             }
 
             if (! $hasPaymentProviderRef) {
-                $table->string('payment_provider_ref', 150)->nullable();
+                $table->string('payment_provider_ref', 191)->nullable()->index();
             }
 
-            // Kolom attempts (target akhir)
+            // attempts (target akhir)
             if (! $hasAttempts) {
                 $table->unsignedSmallInteger('attempts')->default(0);
+            }
+
+            // Audit tambahan
+            if (! $hasSignatureHash) {
+                $table->string('signature_hash', 128)->nullable();
+            }
+
+            if (! $hasSourceIp) {
+                $table->string('source_ip', 45)->nullable();
+            }
+
+            if (! $hasRequestId) {
+                $table->string('request_id', 120)->nullable();
+            }
+
+            if (! $hasHeaders) {
+                $table->json('headers')->nullable();
+            }
+        });
+
+        // Index guarded untuk audit tambahan
+        Schema::table('webhook_events', function (Blueprint $table) use (
+            $hasSignatureHash,
+            $hasSourceIp,
+            $hasRequestId
+        ): void {
+            if (! $hasSignatureHash) {
+                if (! self::indexExists('webhook_events', 'webhook_events_signature_hash_idx')) {
+                    $table->index('signature_hash', 'webhook_events_signature_hash_idx');
+                }
+            }
+
+            if (! $hasSourceIp) {
+                if (! self::indexExists('webhook_events', 'webhook_events_source_ip_index')) {
+                    $table->index('source_ip', 'webhook_events_source_ip_index');
+                }
+            }
+
+            if (! $hasRequestId) {
+                if (! self::indexExists('webhook_events', 'webhook_events_request_id_index')) {
+                    $table->index('request_id', 'webhook_events_request_id_index');
+                }
             }
         });
 
@@ -57,65 +111,73 @@ return new class extends Migration
         if ($hasAttemptCount && Schema::hasColumn('webhook_events', 'attempts')) {
             DB::statement('UPDATE webhook_events SET attempts = attempt_count WHERE attempts = 0');
 
-            // Best-effort: drop kolom lama agar konsisten dengan kode.
-            // (Kalau suatu environment tidak mendukung dropColumn, jangan bikin migrasi gagal.)
+            // Best-effort drop kolom lama (jangan bikin migrasi gagal).
             try {
-                Schema::table('webhook_events', function (Blueprint $table) {
+                Schema::table('webhook_events', function (Blueprint $table): void {
                     $table->dropColumn('attempt_count');
                 });
-            } catch (\Throwable $e) {
+            } catch (\Throwable) {
                 // noop
             }
         }
-
-        /**
-         * PENTING:
-         * Jangan bikin index next_retry_at di sini.
-         * Di project kamu index itu SUDAH dibuat oleh migration create_webhook_events_table,
-         * dan mencoba create lagi akan error "index ... already exists" di SQLite.
-         */
     }
 
     public function down(): void
     {
-        // Restore attempt_count bila diperlukan untuk rollback
+        /**
+         * Down dibuat “konservatif” untuk mencegah data loss pada fresh install
+         * yang sudah membawa kolom-kolom ini dari migration create_webhook_events_table.
+         *
+         * Yang kita lakukan hanya best-effort restore attempt_count (jika dibutuhkan)
+         * tanpa menghapus kolom-kolom audit utama.
+         */
         $hasAttemptCount = Schema::hasColumn('webhook_events', 'attempt_count');
         $hasAttempts = Schema::hasColumn('webhook_events', 'attempts');
 
         if (! $hasAttemptCount && $hasAttempts) {
-            Schema::table('webhook_events', function (Blueprint $table) {
+            Schema::table('webhook_events', function (Blueprint $table): void {
                 $table->unsignedSmallInteger('attempt_count')->default(0);
             });
 
             DB::statement('UPDATE webhook_events SET attempt_count = attempts');
         }
+    }
 
-        Schema::table('webhook_events', function (Blueprint $table) {
-            // attempts
-            if (Schema::hasColumn('webhook_events', 'attempts')) {
-                $table->dropColumn('attempts');
-            }
+    /**
+     * Cek keberadaan index tanpa Doctrine DBAL.
+     */
+    private static function indexExists(string $table, string $indexName): bool
+    {
+        try {
+            $driver = Schema::getConnection()->getDriverName();
 
-            // kolom audit
-            if (Schema::hasColumn('webhook_events', 'received_at')) {
-                $table->dropColumn('received_at');
-            }
-            if (Schema::hasColumn('webhook_events', 'last_attempt_at')) {
-                $table->dropColumn('last_attempt_at');
-            }
-            if (Schema::hasColumn('webhook_events', 'processed_at')) {
-                $table->dropColumn('processed_at');
-            }
+            return match ($driver) {
+                'sqlite' => collect(DB::select("PRAGMA index_list('$table')"))
+                    ->contains(fn ($row) => isset($row->name) && $row->name === $indexName),
 
-            // payment fields
-            if (Schema::hasColumn('webhook_events', 'payment_status')) {
-                $table->dropColumn('payment_status');
-            }
-            if (Schema::hasColumn('webhook_events', 'payment_provider_ref')) {
-                $table->dropColumn('payment_provider_ref');
-            }
-        });
+                'mysql' => count(DB::select(
+                    'SELECT 1
+                     FROM information_schema.statistics
+                     WHERE table_schema = DATABASE()
+                       AND table_name = ?
+                       AND index_name = ?
+                     LIMIT 1',
+                    [$table, $indexName]
+                )) > 0,
 
-        // Tidak drop index next_retry_at di sini karena bukan migration ini yang membuatnya.
+                'pgsql' => count(DB::select(
+                    'SELECT 1
+                     FROM pg_indexes
+                     WHERE tablename = ?
+                       AND indexname = ?
+                     LIMIT 1',
+                    [$table, $indexName]
+                )) > 0,
+
+                default => false,
+            };
+        } catch (\Throwable) {
+            return false;
+        }
     }
 };

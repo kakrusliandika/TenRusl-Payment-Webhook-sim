@@ -9,18 +9,25 @@ use Illuminate\Http\Request;
 final class XenditSignature
 {
     /**
-     * Xendit webhook verification:
-     * - Token ada di header `x-callback-token` (atau variasi kapitalisasi)
-     * - Cocokkan dengan token di config/env kamu.
-     *
-     * Catatan: $rawBody tidak dipakai untuk token-based verification,
-     * tapi dipertahankan agar signature interface konsisten.
+     * Backward-compatible: return bool only.
      */
     public static function verify(string $rawBody, Request $request): bool
     {
+        return self::verifyWithReason($rawBody, $request)['ok'];
+    }
+
+    /**
+     * Standardized output:
+     * - ok: true|false
+     * - reason: short code for audit/logging (no secrets)
+     *
+     * @return array{ok: bool, reason: string}
+     */
+    public static function verifyWithReason(string $rawBody, Request $request): array
+    {
         $expected = config('tenrusl.xendit_callback_token');
         if (!is_string($expected) || trim($expected) === '') {
-            return false;
+            return self::result(false, 'missing_expected_token');
         }
 
         $token = self::headerString($request, 'x-callback-token')
@@ -28,23 +35,33 @@ final class XenditSignature
             ?? self::headerString($request, 'X-Callback-Token');
 
         if ($token === null) {
-            return false;
+            return self::result(false, 'missing_token_header');
         }
 
-        return hash_equals(trim($expected), $token);
+        if (hash_equals(trim($expected), $token)) {
+            return self::result(true, 'ok');
+        }
+
+        return self::result(false, 'invalid_token');
     }
 
     private static function headerString(Request $request, string $key): ?string
     {
-        // Symfony HeaderBag::get($key, $default = null) => ?string
         $v = $request->headers->get($key);
-
-        if ($v === null) {
+        if (!is_string($v)) {
             return null;
         }
 
         $v = trim($v);
 
         return $v !== '' ? $v : null;
+    }
+
+    /**
+     * @return array{ok: bool, reason: string}
+     */
+    private static function result(bool $ok, string $reason): array
+    {
+        return ['ok' => $ok, 'reason' => $reason];
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use Closure;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -14,87 +15,167 @@ use Throwable;
 /**
  * CorrelationIdMiddleware
  * -----------------------
- * Menjaga X-Request-ID konsisten untuk tracing:
- * - Pakai X-Request-ID dari client jika valid
- * - Jika tidak ada -> generate ULID
+ * Menjaga request id konsisten untuk tracing:
+ * - Ambil request id dari upstream jika ada (mis. LB / gateway / API management):
+ *     - X-Request-ID (utama, akan dipropagate)
+ *     - X-Correlation-ID
+ *     - traceparent (W3C Trace Context) -> pakai trace-id sebagai correlation id
+ * - Jika tidak ada / invalid -> generate ULID
  * - Simpan ke request attribute
- * - Inject ke Laravel Context (jika tersedia)
- * - Inject ke Log context (shareContext / withContext)
+ * - Inject ke Log context
  * - Propagate ke response header X-Request-ID
  *
  * Catatan:
  * - Agar FE bisa membaca header ini di browser (cross-origin),
- *   CORS harus expose header lewat Access-Control-Expose-Headers. :contentReference[oaicite:1]{index=1}
- * - Contoh pola middleware + Log::withContext + set response header ada di docs Laravel. :contentReference[oaicite:2]{index=2}
- * - Context::add juga direkomendasikan via middleware untuk trace metadata lintas request/job. :contentReference[oaicite:3]{index=3}
+ *   CORS harus expose header lewat Access-Control-Expose-Headers.
  */
 class CorrelationIdMiddleware
 {
+    /** Header canonical yang kita gunakan keluar-masuk. */
     public const HEADER = 'X-Request-ID';
+
+    /** Attribute name untuk dipakai downstream (controller/job/log). */
     public const ATTR = 'correlation_id';
+
+    /** Attribute tambahan untuk audit/debug. */
+    public const ATTR_SOURCE = 'correlation_id_source';
+
+    /**
+     * Upstream header candidates (urut prioritas).
+     * Catatan: header di HTTP case-insensitive, tapi kita tulis canonical.
+     *
+     * Kamu bisa override via config('tenrusl.correlation_id.upstream_headers')
+     * untuk menyesuaikan dengan infra kamu.
+     *
+     * @var string[]
+     */
+    private const DEFAULT_UPSTREAM_HEADERS = [
+        'X-Request-ID',
+        'X-Correlation-ID',
+        'X-Correlation-Id',
+        'X-Request-Id',
+        'Traceparent',
+        'traceparent',
+    ];
 
     /**
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $incoming = (string) ($request->headers->get(self::HEADER) ?? '');
-        $requestId = $this->sanitizeRequestId($incoming);
-
-        if ($requestId === '') {
-            $requestId = strtolower((string) Str::ulid());
-        }
+        [$requestId, $source] = $this->resolveRequestId($request);
 
         // Simpan di attribute + header request (biar downstream konsisten)
         $request->attributes->set(self::ATTR, $requestId);
+        $request->attributes->set(self::ATTR_SOURCE, $source);
         $request->headers->set(self::HEADER, $requestId);
 
-        // 1) Laravel Context (kalau tersedia)
-        $this->addToLaravelContext($request, $requestId);
+        // Log context (shareContext jika ada, fallback withContext)
+        $this->addToLogContext($requestId, $source);
 
-        // 2) Log context (shareContext jika ada, fallback withContext)
-        $this->addToLogContext($requestId);
+        try {
+            /** @var \Symfony\Component\HttpFoundation\Response $response */
+            $response = $next($request);
+        } catch (Throwable $e) {
+            // Pastikan error response juga membawa X-Request-ID
+            $response = $this->renderException($request, $e);
+        }
 
-        /** @var \Symfony\Component\HttpFoundation\Response $response */
-        $response = $next($request);
-
-        // Pastikan header selalu ada di response (payments + admin + webhooks)
         $response->headers->set(self::HEADER, $requestId);
 
         return $response;
     }
 
-    private function addToLaravelContext(Request $request, string $requestId): void
+    /**
+     * Tentukan request id terbaik:
+     * - ambil dari upstream jika valid,
+     * - else generate ULID.
+     *
+     * @return array{0:string,1:string} [requestId, source]
+     */
+    private function resolveRequestId(Request $request): array
     {
-        try {
-            // Guard agar tidak crash jika facade Context tidak tersedia di versi tertentu
-            if (class_exists(\Illuminate\Support\Facades\Context::class)) {
-                \Illuminate\Support\Facades\Context::add([
-                    'request_id' => $requestId,
-                    'url' => $request->url(),
-                ]);
-            }
-        } catch (Throwable $e) {
-            // jangan bikin request gagal hanya karena context
+        $headers = config('tenrusl.correlation_id.upstream_headers');
+        if (! is_array($headers) || $headers === []) {
+            $headers = self::DEFAULT_UPSTREAM_HEADERS;
         }
+
+        foreach ($headers as $h) {
+            if (! is_string($h) || trim($h) === '') {
+                continue;
+            }
+
+            $raw = (string) ($request->headers->get($h) ?? '');
+            $raw = trim($raw);
+            if ($raw === '') {
+                continue;
+            }
+
+            // Special-case: traceparent -> ambil trace-id sebagai correlation id
+            if (strtolower($h) === 'traceparent') {
+                $traceId = $this->parseTraceparentTraceId($raw);
+                if ($traceId !== null) {
+                    return [$traceId, 'traceparent'];
+                }
+                continue;
+            }
+
+            $id = $this->sanitizeRequestId($raw);
+            if ($id !== '') {
+                return [$id, $h];
+            }
+        }
+
+        // Fallback: generate ULID
+        return [strtolower((string) Str::ulid()), 'generated'];
     }
 
-    private function addToLogContext(string $requestId): void
+    /**
+     * Inject context ke log (agar semua log line punya request_id).
+     */
+    private function addToLogContext(string $requestId, string $source): void
     {
+        $ctx = [
+            'request_id' => $requestId,
+            'request_id_source' => $source,
+        ];
+
         try {
             if (method_exists(Log::class, 'shareContext')) {
-                Log::shareContext(['request_id' => $requestId]);
+                Log::shareContext($ctx);
                 return;
             }
-        } catch (Throwable $e) {
+        } catch (Throwable) {
             // lanjut fallback
         }
 
         try {
-            Log::withContext(['request_id' => $requestId]);
-        } catch (Throwable $e) {
+            Log::withContext($ctx);
+        } catch (Throwable) {
             // ignore
         }
+    }
+
+    /**
+     * Render exception menggunakan ExceptionHandler Laravel, lalu return response-nya.
+     * Ini menjaga behavior default Laravel, tapi memastikan header X-Request-ID hadir.
+     */
+    private function renderException(Request $request, Throwable $e): Response
+    {
+        try {
+            /** @var \Illuminate\Contracts\Debug\ExceptionHandler $handler */
+            $handler = app(ExceptionHandler::class);
+
+            $response = $handler->render($request, $e);
+            if ($response instanceof Response) {
+                return $response;
+            }
+        } catch (Throwable) {
+            // fallback
+        }
+
+        // Fallback terakhir: response 500 generik
+        return response('Internal Server Error', 500);
     }
 
     /**
@@ -118,5 +199,21 @@ class CorrelationIdMiddleware
         $value = preg_replace('/[^A-Za-z0-9\-\_\.\:]/', '', $value) ?? '';
 
         return $value;
+    }
+
+    /**
+     * Parse W3C traceparent: "version-traceid-parentid-flags"
+     * Ambil trace-id (32 hex) sebagai correlation id (lebih stabil lintas sistem).
+     */
+    private function parseTraceparentTraceId(string $traceparent): ?string
+    {
+        $traceparent = trim($traceparent);
+
+        // contoh: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+        if (preg_match('/^[\da-f]{2}-([\da-f]{32})-[\da-f]{16}-[\da-f]{2}$/i', $traceparent, $m) === 1) {
+            return strtolower($m[1]);
+        }
+
+        return null;
     }
 }

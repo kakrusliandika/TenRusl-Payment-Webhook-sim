@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dev
     container_name: tenrusl-app
     working_dir: /var/www/html
     env_file:
@@ -20,7 +21,10 @@ services:
       DB_USERNAME: tenrusl
       DB_PASSWORD: secret
 
-      # Composer cache biar install lebih cepat
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+
       COMPOSER_CACHE_DIR: /tmp/composer
     volumes:
       - ./:/var/www/html
@@ -29,6 +33,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
     expose:
       - "9000"
     networks:
@@ -39,9 +45,87 @@ services:
         composer install --no-interaction --prefer-dist --no-progress;
       fi
       && php artisan key:generate --force || true
-      && php artisan config:clear || true
+      && php artisan optimize:clear || true
       && php artisan migrate --force || true
       && php-fpm
+      "
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: tenrusl-worker
+    working_dir: /var/www/html
+    env_file:
+      - .env
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: tenrusl_webhook
+      DB_USERNAME: tenrusl
+      DB_PASSWORD: secret
+
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+    volumes:
+      - ./:/var/www/html
+      - tenrusl-vendor:/var/www/html/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - tenrusl
+    restart: unless-stopped
+    command: >
+      sh -lc "
+      php artisan queue:work --sleep=1 --tries=3 --timeout=90
+      "
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: tenrusl-scheduler
+    working_dir: /var/www/html
+    env_file:
+      - .env
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: tenrusl_webhook
+      DB_USERNAME: tenrusl
+      DB_PASSWORD: secret
+
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+    volumes:
+      - ./:/var/www/html
+      - tenrusl-vendor:/var/www/html/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - tenrusl
+    restart: unless-stopped
+    command: >
+      sh -lc "
+      php artisan schedule:work
       "
 
   nginx:
@@ -72,6 +156,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --sql-mode=ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+      - --default-time-zone=+00:00
     volumes:
       - tenrusl-mysql:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro

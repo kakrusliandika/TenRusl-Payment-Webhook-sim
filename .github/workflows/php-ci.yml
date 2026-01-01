@@ -27,6 +27,7 @@ on:
       - "phpunit.xml*"
       - "pest.php"
       - ".github/workflows/php-ci.yml"
+  workflow_dispatch:
 
 concurrency:
   group: php-ci-${{ github.ref }}
@@ -36,7 +37,8 @@ permissions:
   contents: read
 
 jobs:
-  tests:
+  php:
+    name: PHP (migrate + lint + analyse + test)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -79,7 +81,7 @@ jobs:
             composer-${{ runner.os }}-
 
       - name: Install Dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: composer install --no-interaction --prefer-dist --no-progress --ansi
 
       # Perubahan: hilangkan "|| true" supaya kalau setup env/key gagal, workflow fail jelas.
       - name: Prepare App + SQLite
@@ -97,9 +99,18 @@ jobs:
           DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
         run: php artisan migrate --force --no-interaction -v
 
+      - name: Run Pint (lint)
+        run: composer format:check
+
+      - name: Run static analysis (Larastan)
+        run: composer analyse:larastan
+
       - name: Run Tests (Pest)
         env:
           APP_ENV: testing
           DB_CONNECTION: sqlite
           DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-        run: vendor/bin/pest -q
+        run: composer test
+
+      - name: Composer security audit
+        run: composer audit --locked

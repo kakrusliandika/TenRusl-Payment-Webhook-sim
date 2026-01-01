@@ -1,7 +1,6 @@
 <?php
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Default Queue Connection Name
@@ -13,7 +12,7 @@ return [
     |
     */
 
-    'default' => env('QUEUE_CONNECTION', 'database'),
+    'default' => env('QUEUE_CONNECTION', 'redis'),
 
     /*
     |--------------------------------------------------------------------------
@@ -30,7 +29,6 @@ return [
     */
 
     'connections' => [
-
         'sync' => [
             'driver' => 'sync',
         ],
@@ -41,7 +39,7 @@ return [
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
-            'after_commit' => false,
+            'after_commit' => (bool) env('QUEUE_AFTER_COMMIT', false),
         ],
 
         'beanstalkd' => [
@@ -50,7 +48,7 @@ return [
             'queue' => env('BEANSTALKD_QUEUE', 'default'),
             'retry_after' => (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', 90),
             'block_for' => 0,
-            'after_commit' => false,
+            'after_commit' => (bool) env('QUEUE_AFTER_COMMIT', false),
         ],
 
         'sqs' => [
@@ -61,7 +59,7 @@ return [
             'queue' => env('SQS_QUEUE', 'default'),
             'suffix' => env('SQS_SUFFIX'),
             'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-            'after_commit' => false,
+            'after_commit' => (bool) env('QUEUE_AFTER_COMMIT', false),
         ],
 
         'redis' => [
@@ -69,8 +67,14 @@ return [
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
-            'block_for' => null,
-            'after_commit' => false,
+
+            // block_for (detik) mengurangi busy-loop saat queue kosong (lebih hemat CPU).
+            // Set ke null untuk non-blocking.
+            'block_for' => env('REDIS_QUEUE_BLOCK_FOR') === null
+                ? (int) env('REDIS_QUEUE_BLOCK_FOR_DEFAULT', 5)
+                : (int) env('REDIS_QUEUE_BLOCK_FOR'),
+
+            'after_commit' => (bool) env('QUEUE_AFTER_COMMIT', false),
         ],
 
         'deferred' => [
@@ -84,11 +88,15 @@ return [
         'failover' => [
             'driver' => 'failover',
             'connections' => [
+                'redis',
                 'database',
                 'deferred',
             ],
         ],
 
+        'null' => [
+            'driver' => 'null',
+        ],
     ],
 
     /*
@@ -125,5 +133,4 @@ return [
         'database' => env('DB_CONNECTION', 'sqlite'),
         'table' => 'failed_jobs',
     ],
-
 ];

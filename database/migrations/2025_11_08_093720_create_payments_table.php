@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('payments', function (Blueprint $table) {
+        Schema::create('payments', function (Blueprint $table): void {
             /*
              * Primary key ULID (string).
              */
@@ -16,12 +18,8 @@ return new class extends Migration
 
             /*
              * Identitas payment di simulator:
-             * - provider       : xendit|midtrans|stripe|...
-             * - provider_ref   : "sim_xendit_..." (atau id yang kamu generate)
-             *
-             * Ini WAJIB untuk endpoint:
-             * GET /api/v1/payments/{provider}/{provider_ref}/status
-             * dan untuk update saat webhook masuk.
+             * - provider     : xendit|midtrans|stripe|...
+             * - provider_ref : "sim_xendit_..." (atau id yang kamu generate)
              */
             $table->string('provider', 32)->index();
             $table->string('provider_ref', 191);
@@ -35,55 +33,37 @@ return new class extends Migration
 
             /*
              * Metadata fleksibel.
-             * Di layer request kamu bisa terima meta/metadata dan map ke sini.
              */
             $table->json('meta')->nullable();
 
             /*
-             * Status payment (selaraskan dengan OpenAPI + domain):
+             * Status payment:
              * pending | succeeded | failed
              */
             $table->string('status', 20)->default('pending')->index();
 
             /*
-             * Idempotency-Key (opsional tapi recommended):
-             * - nullable: supaya flow non-idempotent tetap bisa
-             * - unique: satu key mengacu ke satu payment
-             *
-             * Catatan:
-             * - MySQL mengizinkan multiple NULL dalam UNIQUE index.
-             * - SQLite memperlakukan NULL sebagai distinct untuk UNIQUE.
+             * Idempotency-Key
              */
             $table->string('idempotency_key', 255)->nullable();
             $table->unique('idempotency_key', 'payments_idempotency_key_unique');
 
             /*
-             * (Opsional tapi sangat membantu) fingerprint payload untuk mendeteksi konflik idempotency:
-             * Jika request datang dengan Idempotency-Key sama tapi body beda => bisa respon 409.
-             * Implementasinya di service/controller, tapi kolom ini bikin konfliknya "tercatat" rapi.
+             * Fingerprint request untuk deteksi konflik idempotency (409).
              */
             $table->string('idempotency_request_hash', 64)->nullable()->index();
 
             $table->timestamps();
 
             /*
-             * Lookup status harus cepat: provider + provider_ref.
-             * Bisa unique (lebih aman) jika provider_ref memang unik per provider.
+             * Lookup status cepat: provider + provider_ref.
              */
             $table->unique(['provider', 'provider_ref'], 'payments_provider_provider_ref_unique');
 
             /*
-             * Index tambahan untuk Admin List:
-             * - Umumnya admin list filter by status dan sort by created_at desc.
-             * - Composite index membantu query tetap cepat saat data mulai besar.
+             * Index tambahan untuk Admin List.
              */
             $table->index(['status', 'created_at'], 'payments_status_created_at_idx');
-
-            /*
-             * Index tambahan opsional:
-             * - Filter by provider dan sort by created_at.
-             * - Berguna untuk admin list per provider / tab.
-             */
             $table->index(['provider', 'created_at'], 'payments_provider_created_at_idx');
         });
     }

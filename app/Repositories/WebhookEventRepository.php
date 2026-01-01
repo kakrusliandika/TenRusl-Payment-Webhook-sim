@@ -11,6 +11,7 @@ use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 final class WebhookEventRepository
@@ -20,7 +21,7 @@ final class WebhookEventRepository
      *
      * Catatan:
      * - Jika $forUpdate=true, baris akan di-lock (pessimistic lock).
-     * - Lock ini hanya efektif jika dipanggil di dalam DB transaction.
+     * - Lock efektif jika dipanggil di dalam DB transaction.
      */
     public function findByProviderEvent(string $provider, string $eventId, bool $forUpdate = false): ?WebhookEvent
     {
@@ -42,6 +43,14 @@ final class WebhookEventRepository
      * Insert event baru, atau kalau duplicate key (unique provider+event_id) maka ambil event existing.
      *
      * Return: [WebhookEvent $event, bool $duplicate]
+     *
+     * Definisi attempts (konsisten untuk operasi & UI):
+     * - attempts menghitung "handling count" (penerimaan + retry/processing attempt).
+     * - Event baru saat diterima: attempts = 1 dan last_attempt_at = received_at.
+     *
+     * Signature audit:
+     * - webhook_events.signature_hash DIISI saat pertama kali disimpan.
+     * - Best-effort: hash dari material signature (header/body signature) tanpa menyimpan secret.
      *
      * @return array{0: WebhookEvent, 1: bool}
      */
@@ -67,10 +76,15 @@ final class WebhookEventRepository
             $event->payload = $payload;
 
             $event->status = 'received';
+
+            // attempts menghitung penerimaan + handling
             $event->attempts = 1;
 
             $event->received_at = $now;
             $event->last_attempt_at = $now;
+
+            // Audit signature hash (best-effort, tanpa menyimpan secret)
+            $event->signature_hash = $this->computeSignatureHash($provider, $payload, $rawBody);
 
             $event->save();
 
@@ -87,7 +101,7 @@ final class WebhookEventRepository
             }
 
             if ($existing === null) {
-                // Kalau benar-benar tidak ketemu tapi error duplicate, biarkan error aslinya naik
+                // Jika benar-benar tidak ketemu tapi error duplicate, biarkan error aslinya naik
                 throw $e;
             }
 
@@ -96,11 +110,15 @@ final class WebhookEventRepository
     }
 
     /**
-     * Kaitkan event ke Payment (untuk admin monitoring per payment).
+     * Kaitkan event ke Payment (untuk monitoring).
+     *
+     * Catatan:
+     * - Skema DB simulator memakai payment_provider_ref.
+     * - Relasi Eloquent bisa disesuaikan di Model bila mau eager-load based on provider_ref.
      */
     public function attachToPayment(WebhookEvent $event, Payment $payment): bool
     {
-        $event->payment_id = $payment->getKey();
+        $event->payment_provider_ref = (string) $payment->provider_ref;
 
         return $event->save();
     }
@@ -310,10 +328,90 @@ final class WebhookEventRepository
     }
 
     /**
+     * Best-effort signature material -> sha256 hash (tanpa menyimpan secret).
+     *
+     * Prioritas:
+     * 1) signature di payload (contoh Midtrans: signature_key)
+     * 2) signature headers (contoh Stripe/Paddle/OY/Payoneer/dst) dari current request()
+     * 3) fallback: body fingerprint (tetap berguna untuk audit) dengan prefix "body:"
+     */
+    private function computeSignatureHash(string $provider, array $payload, string $rawBody): string
+    {
+        $provider = strtolower(trim($provider));
+
+        // Midtrans: signature_key ada di body
+        if ($provider === 'midtrans') {
+            $sigKey = $payload['signature_key'] ?? null;
+            if (is_string($sigKey) && trim($sigKey) !== '') {
+                return hash('sha256', 'midtrans:' . trim($sigKey));
+            }
+        }
+
+        // Skrill: md5sig/sha2sig ada di form body
+        if ($provider === 'skrill') {
+            $md5sig = $payload['md5sig'] ?? null;
+            $sha2sig = $payload['sha2sig'] ?? null;
+
+            if (is_string($sha2sig) && trim($sha2sig) !== '') {
+                return hash('sha256', 'skrill:sha2:' . trim($sha2sig));
+            }
+            if (is_string($md5sig) && trim($md5sig) !== '') {
+                return hash('sha256', 'skrill:md5:' . trim($md5sig));
+            }
+        }
+
+        $req = $this->currentRequest();
+        if ($req instanceof Request) {
+            $candidates = [
+                // Stripe
+                'Stripe-Signature',
+                // Paddle Billing
+                'Paddle-Signature',
+                'paddle-signature',
+                // OY / Payoneer / TriPay / generic
+                'X-OY-Signature',
+                'X-Payoneer-Signature',
+                'X-Callback-Signature',
+                // Xendit token style
+                'X-CALLBACK-TOKEN',
+                'X-Callback-Token',
+                // Generic / legacy
+                'X-Signature',
+                'X-Webhook-Signature',
+                'X-Hub-Signature',
+                'X-Hub-Signature-256',
+                'Signature',
+                'Authorization',
+            ];
+
+            foreach ($candidates as $h) {
+                $v = $req->headers->get($h);
+                if (is_string($v) && trim($v) !== '') {
+                    return hash('sha256', $provider . ':hdr:' . strtolower($h) . ':' . trim($v));
+                }
+            }
+        }
+
+        // Fallback audit fingerprint (bukan material signature, tapi tetap berguna untuk forensik)
+        return hash('sha256', 'body:' . $rawBody);
+    }
+
+    private function currentRequest(): ?Request
+    {
+        try {
+            $r = request();
+            return $r instanceof Request ? $r : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * Helper: deteksi duplicate key lintas DB.
      *
      * - MySQL/MariaDB: SQLSTATE 23000 + driverCode 1062
      * - PostgreSQL:    SQLSTATE 23505
+     * - SQLite:        SQLSTATE 23000 (constraint)
      */
     private function isDuplicateKey(QueryException $e): bool
     {

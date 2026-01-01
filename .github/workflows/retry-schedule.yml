@@ -12,7 +12,7 @@ on:
       limit:
         description: "Batch limit"
         required: false
-        default: "100"
+        default: "200"
       max_attempts:
         description: "Max attempts"
         required: false
@@ -21,10 +21,23 @@ on:
         description: "Backoff mode: full|equal|decorrelated"
         required: false
         default: "full"
+      force:
+        description: "Force retry (abaikan next_retry_at / max attempts). true|false"
+        required: false
+        default: "false"
+      queue:
+        description: "Dispatch ke queue (true) atau inline (false)"
+        required: false
+        default: "false"
+      queue_name:
+        description: "Queue name (jika queue=true)"
+        required: false
+        default: "webhooks"
 
 concurrency:
-  group: retry-schedule
-  cancel-in-progress: true
+  # Pastikan hanya 1 run aktif untuk workflow ini dalam 1 repo
+  group: tenrusl-retry-${{ github.repository }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -32,20 +45,35 @@ permissions:
 jobs:
   retry:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     env:
+      # Runtime Laravel
       APP_ENV: production
-
-      # Default: SQLite ephemeral biar workflow mandiri.
-      DB_CONNECTION: sqlite
-      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-
-      # Tambahan: konsisten & aman untuk artisan runtime.
+      APP_DEBUG: "false"
       LOG_CHANNEL: stderr
+      LOG_LEVEL: info
+
+      # Wajib: gunakan Redis untuk lock (multi-run safe)
+      CACHE_STORE: redis
+
+      # Workflow ini tidak menjalankan queue worker; default sinkron
       QUEUE_CONNECTION: sync
-      CACHE_STORE: database
       SESSION_DRIVER: array
+
+      # ======= Secrets (set di GitHub → Settings → Secrets and variables) =======
+      APP_KEY: ${{ secrets.APP_KEY }}
+
+      DB_CONNECTION: ${{ secrets.DB_CONNECTION }}
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_DATABASE: ${{ secrets.DB_DATABASE }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      REDIS_HOST: ${{ secrets.REDIS_HOST }}
+      REDIS_PORT: ${{ secrets.REDIS_PORT }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -57,9 +85,8 @@ jobs:
           php-version: "8.3"
           coverage: none
           tools: composer
-          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
+          extensions: mbstring, dom, fileinfo, intl, pcntl, pdo, pdo_mysql, pdo_pgsql, redis
 
-      # Tambahan: validate composer supaya gagal cepat kalau lock rusak.
       - name: Validate composer.json
         run: composer validate --no-check-publish
 
@@ -71,39 +98,48 @@ jobs:
           restore-keys: |
             composer-${{ runner.os }}-
 
-      - name: Install Dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Install Dependencies (prod-only)
+        run: composer install --prefer-dist --no-interaction --no-progress --no-dev --optimize-autoloader
 
-      # Perubahan: hilangkan "|| true" untuk key/config; kalau gagal harus kelihatan.
-      - name: Prepare App + SQLite
+      - name: Sanity check required env
         run: |
-          mkdir -p database
-          touch database/database.sqlite
-          cp .env.example .env || true
-          php artisan key:generate --force
-          php artisan config:clear
+          if [ -z "${APP_KEY:-}" ]; then
+            echo "APP_KEY is required (set secrets.APP_KEY)."
+            exit 1
+          fi
+          if [ -z "${DB_CONNECTION:-}" ]; then
+            echo "DB_CONNECTION is required."
+            exit 1
+          fi
 
-      - name: Run Migrations
-        env:
-          DB_CONNECTION: ${{ env.DB_CONNECTION }}
-          DB_DATABASE: ${{ env.DB_DATABASE }}
-        run: php artisan migrate --force --no-interaction -v
-
+      # Tidak ada migrasi di workflow schedule (migrasi = langkah rilis terpisah)
       - name: Execute Retry Processor
         env:
           RETRY_PROVIDER: ${{ inputs.provider }}
           RETRY_LIMIT: ${{ inputs.limit }}
           RETRY_MAX_ATTEMPTS: ${{ inputs.max_attempts }}
           RETRY_BACKOFF_MODE: ${{ inputs.mode }}
+          RETRY_FORCE: ${{ inputs.force }}
+          RETRY_QUEUE: ${{ inputs.queue }}
+          RETRY_QUEUE_NAME: ${{ inputs.queue_name }}
         run: |
-          LIMIT="${RETRY_LIMIT:-100}"
+          LIMIT="${RETRY_LIMIT:-200}"
           MAX_ATTEMPTS="${RETRY_MAX_ATTEMPTS:-5}"
           MODE="${RETRY_BACKOFF_MODE:-full}"
           PROVIDER="${RETRY_PROVIDER:-}"
+          FORCE="${RETRY_FORCE:-false}"
+          QUEUE="${RETRY_QUEUE:-false}"
+          QUEUE_NAME="${RETRY_QUEUE_NAME:-webhooks}"
 
           CMD="php artisan tenrusl:webhooks:retry --limit=${LIMIT} --max-attempts=${MAX_ATTEMPTS} --mode=${MODE}"
           if [ -n "${PROVIDER}" ]; then
             CMD="${CMD} --provider=${PROVIDER}"
+          fi
+          if [ "${FORCE}" = "true" ]; then
+            CMD="${CMD} --force"
+          fi
+          if [ "${QUEUE}" = "true" ]; then
+            CMD="${CMD} --queue --queue-name=${QUEUE_NAME}"
           fi
 
           echo "Running: ${CMD}"
