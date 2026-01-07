@@ -1,3 +1,4 @@
+// tests/Feature/Webhooks/PaddleWebhookTest.php
 <?php
 
 declare(strict_types=1);
@@ -10,17 +11,19 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     config([
-        'tenrusl.payoneer_shared_secret' => 'testsecret',
-        // optional merchant id checks can remain empty to avoid blocking
-        'tenrusl.payoneer_merchant_id' => '',
+        'tenrusl.paddle_signing_secret' => 'test_paddle_secret',
+        // Longgarin sedikit biar test tidak flakey kalau runner lagi lambat
+        'tenrusl.signature.timestamp_leeway_seconds' => 600,
     ]);
 });
 
-it('accepts Payoneer webhook with valid signature and returns 202', function () {
+it('accepts Paddle webhook with valid Paddle-Signature (HMAC) and returns 202', function () {
     $payload = [
-        'event' => 'payment.approved',
-        'id' => 'py_'.now()->timestamp,
-        'data' => ['payoutId' => 'PO-'.now()->timestamp],
+        'event_id' => 'evt_'.now()->timestamp,
+        'event_type' => 'subscription.created',
+        'data' => [
+            'id' => 'sub_'.now()->timestamp,
+        ],
     ];
 
     $rawBody = json_encode($payload);
@@ -28,11 +31,15 @@ it('accepts Payoneer webhook with valid signature and returns 202', function () 
         $rawBody = '';
     }
 
-    $secret = (string) config('tenrusl.payoneer_shared_secret');
-    $sig = hash_hmac('sha256', $rawBody, $secret);
+    $ts = time();
+    $secret = (string) config('tenrusl.paddle_signing_secret');
 
-    $resp = postJson('/api/v1/webhooks/payoneer', $payload, [
-        'X-Payoneer-Signature' => $sig,
+    // Paddle Billing signature: HMAC_SHA256( "{ts}:{rawBody}", secret )
+    $h1 = hash_hmac('sha256', $ts.':'.$rawBody, $secret);
+    $signatureHeader = "ts={$ts}; h1={$h1}";
+
+    $resp = postJson('/api/v1/webhooks/paddle', $payload, [
+        'Paddle-Signature' => $signatureHeader,
     ]);
 
     $resp->assertStatus(202)
@@ -42,16 +49,20 @@ it('accepts Payoneer webhook with valid signature and returns 202', function () 
                 'result' => ['duplicate', 'persisted', 'status'],
             ],
         ])
-        ->assertJsonPath('data.event.provider', 'payoneer');
+        ->assertJsonPath('data.event.provider', 'paddle')
+        ->assertJsonPath('data.event.event_id', $payload['event_id'])
+        ->assertJsonPath('data.event.type', $payload['event_type']);
 });
 
-it('rejects Payoneer webhook with missing/invalid signature and returns 401', function () {
+it('rejects Paddle webhook with missing/invalid Paddle-Signature and returns 401', function () {
     $payload = [
-        'event' => 'payment.approved',
-        'id' => 'py_invalid',
+        'event_id' => 'evt_invalid',
+        'event_type' => 'subscription.created',
     ];
 
-    $resp = postJson('/api/v1/webhooks/payoneer', $payload /* no signature header */);
+    $resp = postJson('/api/v1/webhooks/paddle', $payload, [
+        'Paddle-Signature' => 'ts=0; h1=invalid',
+    ]);
 
     $resp->assertStatus(401);
 });

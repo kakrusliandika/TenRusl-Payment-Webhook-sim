@@ -3,27 +3,34 @@
 use App\Console\Commands\RetryWebhookCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 /*
 |---------------------------------------------------------------------------
 | Console Routes
 |---------------------------------------------------------------------------
-| - File ini di-load otomatis oleh bootstrap/app.php via:
-|     ->withRouting(commands: base_path('routes/console.php'), ...)
+| - Scheduler Laravel cukup dipicu oleh 1 cron entry:
+|     * * * * * php /path-to-your-project/artisan schedule:run --no-interaction
 |
-| - Di Laravel 11/12+, scheduled tasks sering didefinisikan di file ini
-|   memakai facade Schedule.
-|
-| - Scheduler akan dieksekusi oleh:
-|     - `php artisan schedule:run` (via cron setiap menit), atau
-|     - `php artisan schedule:work` (loop worker untuk local/dev).
-|
-| - Catatan penting:
-|   `withoutOverlapping()` memakai cache lock/mutex.
-|   Pastikan CACHE_STORE kamu bukan driver `array` jika scheduler dipakai beneran.
+| - Task schedule didefinisikan di source control (umumnya routes/console.php).
 |---------------------------------------------------------------------------
 */
+
+/*
+|---------------------------------------------------------------------------
+| Scheduler lock store (optional)
+|---------------------------------------------------------------------------
+| Kamu bisa memaksa scheduler memakai cache store tertentu untuk locks
+| (berguna untuk multi-instance: Redis / database / memcached / dynamodb).
+| Set via config/env (opsional): tenrusl.scheduler_cache_store
+| Contoh: TENRUSL_SCHEDULER_CACHE_STORE=redis
+|---------------------------------------------------------------------------
+*/
+$schedulerCacheStore = (string) config('tenrusl.scheduler_cache_store', '');
+if ($schedulerCacheStore !== '') {
+    Schedule::useCache($schedulerCacheStore);
+}
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -85,8 +92,8 @@ Artisan::command('tenrusl:route:list-v1', function () {
 | Scheduler: TenRusl webhook retry engine
 |---------------------------------------------------------------------------
 | - withoutOverlapping() memakai cache locks.
-| - Bisa aktifkan onOneServer() jika scheduler jalan di banyak server dan
-|   cache store shared (redis/db/memcached/dynamodb).
+| - onOneServer() menambah “single scheduler active” lintas instance
+|   (wajib pakai cache store shared seperti Redis).
 |---------------------------------------------------------------------------
 */
 $maxAttempts = (int) config('tenrusl.max_retry_attempts', 5);
@@ -95,10 +102,42 @@ $mode = (string) config('tenrusl.scheduler_backoff_mode', 'full');          // f
 $limit = (int) config('tenrusl.scheduler_limit', 200);
 $useQueue = (bool) config('tenrusl.scheduler_queue', false);               // opsional: jalankan via queue
 
+// Single scheduler active (lintas instance).
+// Default: production = true, non-production = false.
+$isProduction = app()->environment('production');
+$singleScheduler = (bool) config('tenrusl.scheduler_singleton', $isProduction);
+
+// Cache store yang dipakai scheduler untuk locks (default: cache.default).
+$defaultCacheStore = (string) config('cache.default', '');
+$lockCacheStore = $schedulerCacheStore !== '' ? $schedulerCacheStore : $defaultCacheStore;
+
+// `onOneServer()` butuh cache driver yang shared lintas instance.
+// Kalau store tidak cocok, disable otomatis biar tidak “terlihat singleton” padahal tidak.
+$singleServerCapableStores = ['database', 'memcached', 'dynamodb', 'redis'];
+
+if ($singleScheduler && ! in_array($lockCacheStore, $singleServerCapableStores, true)) {
+    Log::warning('TenRusl scheduler: disabling onOneServer() because cache store is not single-server capable.', [
+        'cache_store' => $lockCacheStore,
+        'expected_one_of' => $singleServerCapableStores,
+    ]);
+    $singleScheduler = false;
+}
+
+// `withoutOverlapping()` memakai cache locks; driver `array` tidak cocok untuk production.
+if ($lockCacheStore === 'array') {
+    Log::warning('TenRusl scheduler: cache store "array" is not suitable for scheduler locks. Use redis/database for production.', [
+        'cache_store' => $lockCacheStore,
+    ]);
+}
+
+// TTL lock untuk withoutOverlapping (menit)
+$overlapMinutes = (int) config('tenrusl.scheduler_lock_minutes', 10);
+
 // Sanitasi ringan
 $maxAttempts = $maxAttempts <= 0 ? 1 : $maxAttempts;
 $limit = $limit <= 0 ? 200 : min($limit, 2000);
 $mode = $mode !== '' ? $mode : 'full';
+$overlapMinutes = $overlapMinutes <= 0 ? 10 : min($overlapMinutes, 60);
 
 // Format argumen CLI:
 // tenrusl:webhooks:retry --limit=200 --max-attempts=5 --mode=full [--provider=xendit] [--queue]
@@ -119,14 +158,9 @@ if ($useQueue) {
 
 $event = Schedule::command(RetryWebhookCommand::class, $params)
     ->everyMinute()
-
-    // Hindari double-run kalau scheduler “ketarik” 2 kali / proses sebelumnya belum kelar.
-    // Argumen 10 = menit TTL lock.
-    ->withoutOverlapping(10)
-
-    // Nama event scheduler (berguna saat schedule:list)
+    ->withoutOverlapping($overlapMinutes)
     ->name('tenrusl:webhooks:retry');
 
-// Kalau scheduler jalan di banyak server & cache store shared,
-// aktifkan ini biar hanya 1 server yang jalanin retry engine.
-// $event->onOneServer();
+if ($singleScheduler) {
+    $event->onOneServer();
+}

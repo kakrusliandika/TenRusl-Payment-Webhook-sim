@@ -11,10 +11,20 @@ use Illuminate\Support\Facades\Route;
 | - '/'                      => main/index
 | - '/providers'             => pages/providers (via ProviderController@index)
 | - '/providers/{provider}'  => pages/show (via ProviderController@show)
+| - Legal pages:
+|     - '/terms'   => pages/terms
+|     - '/privacy' => pages/privacy
+|     - '/cookies' => pages/cookies
+| - Optional internal index:
+|     - '/pages'   => pages/index (noindex)
 | - Endpoint JSON demo payments:
 |     - '/payments/providers'                        => PaymentController@providers
 |     - '/payments/{provider}/{providerRef}/status'  => PaymentController@status
 | - 'setlocale' is applied to the 'web' group via bootstrap/app.php
+|
+| Health check:
+| - Standar health endpoint didefinisikan via bootstrap/app.php (withRouting health: '/health').
+| - Jadi tidak ada route /health custom di sini agar tidak duplikatif.
 */
 
 // Global pattern untuk parameter "provider"
@@ -42,6 +52,16 @@ Route::get('/p/{provider}', function (string $provider) {
     return redirect()->route('providers.show', ['provider' => $provider], 301);
 });
 
+// ================= Legal (static views) =================
+// Shortcut view routes direkomendasikan untuk route yang hanya return view.
+
+Route::view('/terms', 'pages.terms')->name('legal.terms');
+Route::view('/privacy', 'pages.privacy')->name('legal.privacy');
+Route::view('/cookies', 'pages.cookies')->name('legal.cookies');
+
+// Optional internal pages index (QA/Ops)
+Route::view('/pages', 'pages.index')->name('pages.index');
+
 // ================= Payments demo (JSON sederhana) =================
 
 // Daftar provider aktif via JSON (non-API, sekadar demo)
@@ -54,12 +74,8 @@ Route::get(
     [PaymentController::class, 'status']
 )->name('payments.status');
 
-// ================= Health =================
-
-// Health check (204)
-Route::get('/health', fn () => response()->noContent())->name('health');
-
 // ================= Fallback -> proper 404 =================
+// Laravel mendukung custom error pages di resources/views/errors/*.blade.php
 
 Route::fallback(function () {
     return response()->view('errors.404', [], 404);
