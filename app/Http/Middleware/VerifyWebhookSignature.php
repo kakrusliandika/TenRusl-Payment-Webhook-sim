@@ -21,25 +21,27 @@ use Symfony\Component\HttpFoundation\Response;
  * - Validasi signature-material wajib (header / body field) per provider
  * - Simpan fingerprint signature (hash) ke request attribute (untuk audit/persist)
  * - Verifikasi signature via SignatureVerifier
- * - Kalau gagal: stop dan return error JSON.
+ * - Replay mitigation (timestamp tolerance) untuk provider yang mendukung
+ * - Kalau gagal: stop dan return error JSON generik (tanpa bocor detail verifikasi).
  */
 class VerifyWebhookSignature
 {
     public const RAW_BODY_ATTR = 'tenrusl_raw_body';
+
     public const SIG_HASH_ATTR = 'tenrusl_signature_hash';
+
     public const SIG_SOURCE_ATTR = 'tenrusl_signature_source';
+
     public const SIG_VERIFIED_ATTR = 'tenrusl_signature_verified';
 
     /**
      * Optional DI: jika SignatureVerifier kamu dibuat sebagai service instance.
      * Kalau tidak ada, middleware akan fallback ke static SignatureVerifier::verify(...).
      */
-    public function __construct(private readonly ?SignatureVerifier $verifier = null)
-    {
-    }
+    public function __construct(private readonly ?SignatureVerifier $verifier = null) {}
 
     /**
-     * @param \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response) $next
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, \Closure $next): Response
     {
@@ -48,8 +50,8 @@ class VerifyWebhookSignature
             return response()->noContent(Response::HTTP_NO_CONTENT);
         }
 
-        if (!$request->isMethod('POST')) {
-            return $this->error(
+        if (! $request->isMethod('POST')) {
+            return $this->errorGeneric(
                 status: Response::HTTP_METHOD_NOT_ALLOWED,
                 code: 'method_not_allowed',
                 message: 'Method not allowed.'
@@ -58,41 +60,41 @@ class VerifyWebhookSignature
 
         $provider = strtolower((string) $request->route('provider'));
         if ($provider === '') {
-            return $this->error(
+            // ini bukan signature issue, tapi routing issue
+            return $this->errorGeneric(
                 status: Response::HTTP_UNAUTHORIZED,
                 code: 'unauthorized',
-                message: 'Missing provider in route.'
+                message: 'Unauthorized.'
             );
         }
 
         // Enforce allowlist (deny-by-default jika list kosong)
         $allowlist = $this->normalizeAllowlist((array) config('tenrusl.providers_allowlist', []));
-        if ($allowlist === [] || !in_array($provider, $allowlist, true)) {
+        if ($allowlist === [] || ! in_array($provider, $allowlist, true)) {
             $this->auditLog('failed', $request, $provider, [
                 'reason' => 'provider_not_allowed',
             ]);
 
-            return $this->error(
+            return $this->errorGeneric(
                 status: Response::HTTP_UNAUTHORIZED,
                 code: 'unauthorized',
-                message: 'Provider not allowed.',
-                provider: $provider
+                message: 'Unauthorized.'
             );
         }
 
         // Enforce Content-Type
         $contentType = $this->normalizeContentType($request);
-        if ($contentType === '' || !$this->isAllowedContentType($provider, $contentType)) {
+        if ($contentType === '' || ! $this->isAllowedContentType($provider, $contentType)) {
             $this->auditLog('failed', $request, $provider, [
                 'reason' => 'unsupported_content_type',
                 'content_type' => $contentType,
             ]);
 
-            return $this->error(
+            // Ini bukan “signature detail”, aman untuk dikembalikan lebih spesifik
+            return $this->errorGeneric(
                 status: Response::HTTP_UNSUPPORTED_MEDIA_TYPE,
                 code: 'unsupported_media_type',
-                message: 'Unsupported Content-Type.',
-                provider: $provider
+                message: 'Unsupported Content-Type.'
             );
         }
 
@@ -109,16 +111,15 @@ class VerifyWebhookSignature
                     'max_bytes' => $maxBytes,
                 ]);
 
-                return $this->error(
+                return $this->errorGeneric(
                     status: Response::HTTP_REQUEST_ENTITY_TOO_LARGE,
                     code: 'payload_too_large',
-                    message: 'Payload too large.',
-                    provider: $provider
+                    message: 'Payload too large.'
                 );
             }
         }
 
-        // Ambil RAW body (source-of-truth untuk signature)
+        // Ambil RAW body (source-of-truth untuk signature).
         // getContent() aman dipanggil dan nilainya dicache oleh Request.
         $rawBody = (string) $request->getContent();
         $rawBytes = strlen($rawBody);
@@ -131,11 +132,10 @@ class VerifyWebhookSignature
                 'reason' => 'empty_payload',
             ]);
 
-            return $this->error(
+            return $this->errorGeneric(
                 status: Response::HTTP_BAD_REQUEST,
                 code: 'invalid_payload',
-                message: 'Empty webhook payload.',
-                provider: $provider
+                message: 'Invalid payload.'
             );
         }
 
@@ -146,13 +146,15 @@ class VerifyWebhookSignature
                 'max_bytes' => $maxBytes,
             ]);
 
-            return $this->error(
+            return $this->errorGeneric(
                 status: Response::HTTP_REQUEST_ENTITY_TOO_LARGE,
                 code: 'payload_too_large',
-                message: 'Payload too large.',
-                provider: $provider
+                message: 'Payload too large.'
             );
         }
+
+        // Strict mode: production default lebih ketat.
+        $strict = $this->strictMode();
 
         // Validasi signature-material wajib (header / body field) per provider
         $sig = $this->extractSignatureFingerprint($provider, $request, $rawBody);
@@ -165,18 +167,34 @@ class VerifyWebhookSignature
             $request->attributes->set(self::SIG_SOURCE_ATTR, $sig['source']);
         }
 
-        if (!$sig['present']) {
+        if (! $sig['present']) {
             $this->auditLog('failed', $request, $provider, [
                 'reason' => 'missing_signature_material',
                 'signature_source' => $sig['source'],
                 'signature_hash' => $sig['hash'],
             ]);
 
-            return $this->error(
+            return $this->errorGeneric(
                 status: Response::HTTP_UNAUTHORIZED,
                 code: 'unauthorized',
-                message: 'Missing signature.',
-                provider: $provider
+                message: 'Unauthorized.'
+            );
+        }
+
+        // Replay mitigation (timestamp tolerance) untuk provider yang mendukung.
+        // Di strict mode (production default), jika provider mensyaratkan timestamp,
+        // maka timestamp harus ada & bisa diparse.
+        if (! $this->passesReplayMitigation($provider, $request, $strict)) {
+            $this->auditLog('failed', $request, $provider, [
+                'reason' => 'replay_suspected',
+                'signature_source' => $sig['source'],
+                'signature_hash' => $sig['hash'],
+            ]);
+
+            return $this->errorGeneric(
+                status: Response::HTTP_UNAUTHORIZED,
+                code: 'unauthorized',
+                message: 'Unauthorized.'
             );
         }
 
@@ -198,26 +216,24 @@ class VerifyWebhookSignature
                 'exception' => $e::class,
             ]);
 
-            return $this->error(
+            return $this->errorGeneric(
                 status: Response::HTTP_UNAUTHORIZED,
                 code: 'unauthorized',
-                message: 'Signature verification error.',
-                provider: $provider
+                message: 'Unauthorized.'
             );
         }
 
-        if (!$verified) {
+        if (! $verified) {
             $this->auditLog('failed', $request, $provider, [
                 'reason' => 'invalid_signature',
                 'signature_source' => $sig['source'],
                 'signature_hash' => $sig['hash'],
             ]);
 
-            return $this->error(
+            return $this->errorGeneric(
                 status: Response::HTTP_UNAUTHORIZED,
                 code: 'unauthorized',
-                message: 'Invalid webhook signature.',
-                provider: $provider
+                message: 'Unauthorized.'
             );
         }
 
@@ -229,6 +245,18 @@ class VerifyWebhookSignature
         ]);
 
         return $next($request);
+    }
+
+    private function strictMode(): bool
+    {
+        $cfg = config('tenrusl.signature.strict');
+        if (is_bool($cfg)) {
+            return $cfg;
+        }
+
+        $env = strtolower((string) config('app.env', 'production'));
+
+        return $env === 'production';
     }
 
     /**
@@ -258,8 +286,7 @@ class VerifyWebhookSignature
     /**
      * Normalize allowlist ke lowercase unique.
      *
-     * @param array<int, mixed> $allow
-     *
+     * @param  array<int, mixed>  $allow
      * @return string[]
      */
     private function normalizeAllowlist(array $allow): array
@@ -286,7 +313,7 @@ class VerifyWebhookSignature
     {
         $ct = $request->headers->get('Content-Type');
 
-        if (!is_string($ct) || trim($ct) === '') {
+        if (! is_string($ct) || trim($ct) === '') {
             $ct = (string) (
                 $request->server('CONTENT_TYPE')
                 ?? $request->server('HTTP_CONTENT_TYPE')
@@ -359,7 +386,7 @@ class VerifyWebhookSignature
      * Global payload size limit (bytes).
      *
      * - Prefer config() agar aman untuk config:cache
-     * - Fallback ke env untuk backward compatibility
+     * - Fallback getenv untuk external env (bukan .env runtime) sebagai safety net
      */
     private function maxPayloadBytes(): int
     {
@@ -377,6 +404,204 @@ class VerifyWebhookSignature
 
         // Default 1 MiB
         return 1024 * 1024;
+    }
+
+    /**
+     * Timestamp tolerance (seconds) untuk mitigasi replay.
+     *
+     * - Prefer config() agar aman untuk config:cache
+     * - Fallback getenv untuk external env sebagai safety net
+     */
+    private function timestampLeewaySeconds(): int
+    {
+        $v = config('tenrusl.signature.timestamp_leeway_seconds');
+
+        if (is_numeric($v) && (int) $v > 0) {
+            return (int) $v;
+        }
+
+        $env = getenv('TENRUSL_SIG_TS_LEEWAY_SECONDS');
+
+        if (is_string($env) && ctype_digit($env) && (int) $env > 0) {
+            return (int) $env;
+        }
+
+        // Default 300s (5 menit)
+        return 300;
+    }
+
+    /**
+     * Replay mitigation:
+     * - Provider yang "timestamped signatures" (Stripe, Airwallex, Doku, PayPal)
+     *   di strict mode: timestamp harus ada & bisa diparse.
+     * - Jika timestamp valid: pastikan berada dalam window (now +/- leeway).
+     */
+    private function passesReplayMitigation(string $provider, Request $request, bool $strict): bool
+    {
+        $detail = $this->extractRequestTimestampDetail($provider, $request);
+
+        // provider tidak punya timestamp policy
+        if ($detail['state'] === 'not_applicable') {
+            return true;
+        }
+
+        // strict: missing/unparseable => reject (ketat di production)
+        if ($strict && ($detail['state'] === 'missing' || $detail['state'] === 'unparseable')) {
+            Log::warning('Webhook timestamp missing/unparseable in strict mode', [
+                'provider' => $provider,
+                'request_id' => $this->requestId($request),
+                'state' => $detail['state'],
+            ]);
+
+            return false;
+        }
+
+        // non-strict: missing/unparseable => allow (best-effort)
+        if ($detail['state'] === 'missing' || $detail['state'] === 'unparseable') {
+            return true;
+        }
+
+        $ts = $detail['timestamp'];
+        if (! is_int($ts) || $ts <= 0) {
+            return $strict ? false : true;
+        }
+
+        $now = time();
+        $leeway = $this->timestampLeewaySeconds();
+
+        $diff = abs($now - $ts);
+
+        if ($diff <= $leeway) {
+            return true;
+        }
+
+        // Outside tolerance -> reject
+        // (Jika ini sering terjadi padahal signature valid, cek sinkronisasi waktu server/NTP).
+        Log::warning('Webhook timestamp outside tolerance', [
+            'provider' => $provider,
+            'request_id' => $this->requestId($request),
+            'now' => $now,
+            'timestamp' => $ts,
+            'diff_seconds' => $diff,
+            'leeway_seconds' => $leeway,
+        ]);
+
+        return false;
+    }
+
+    /**
+     * Extract request timestamp (epoch seconds) dari header/signature provider.
+     *
+     * Return detail:
+     * - state: not_applicable | missing | unparseable | ok
+     * - timestamp: int|null (epoch seconds)
+     *
+     * @return array{state: string, timestamp: int|null}
+     */
+    private function extractRequestTimestampDetail(string $provider, Request $request): array
+    {
+        // Stripe: Stripe-Signature: t=1492774577,v1=...
+        if ($provider === 'stripe') {
+            $hdr = $this->headerString($request, 'Stripe-Signature');
+            if ($hdr === null) {
+                return ['state' => 'missing', 'timestamp' => null];
+            }
+
+            if (preg_match('/(?:^|,)\s*t=(\d{9,13})\s*(?:,|$)/', $hdr, $m) === 1) {
+                $n = (int) $m[1];
+
+                // If ms, normalize to seconds
+                if ($n > 20000000000) {
+                    $n = (int) floor($n / 1000);
+                }
+
+                return $n > 0
+                    ? ['state' => 'ok', 'timestamp' => $n]
+                    : ['state' => 'unparseable', 'timestamp' => null];
+            }
+
+            return ['state' => 'unparseable', 'timestamp' => null];
+        }
+
+        // Airwallex: x-timestamp (epoch seconds OR ms)
+        if ($provider === 'airwallex') {
+            $hdr = $this->headerString($request, 'x-timestamp');
+            if ($hdr === null) {
+                return ['state' => 'missing', 'timestamp' => null];
+            }
+
+            if (! ctype_digit($hdr)) {
+                return ['state' => 'unparseable', 'timestamp' => null];
+            }
+
+            $n = (int) $hdr;
+
+            // Normalize ms -> seconds
+            if ($n > 20000000000) {
+                $n = (int) floor($n / 1000);
+            }
+
+            return $n > 0
+                ? ['state' => 'ok', 'timestamp' => $n]
+                : ['state' => 'unparseable', 'timestamp' => null];
+        }
+
+        // DOKU: Request-Timestamp (RFC3339)
+        if ($provider === 'doku') {
+            $hdr = $this->headerString($request, 'Request-Timestamp');
+            if ($hdr === null) {
+                return ['state' => 'missing', 'timestamp' => null];
+            }
+
+            $dt = $this->parseDateTimeToEpoch($hdr);
+
+            return $dt !== null
+                ? ['state' => 'ok', 'timestamp' => $dt]
+                : ['state' => 'unparseable', 'timestamp' => null];
+        }
+
+        // PayPal: PAYPAL-TRANSMISSION-TIME (RFC3339)
+        if ($provider === 'paypal') {
+            $hdr = $this->headerString($request, 'PAYPAL-TRANSMISSION-TIME');
+            if ($hdr === null) {
+                return ['state' => 'missing', 'timestamp' => null];
+            }
+
+            $dt = $this->parseDateTimeToEpoch($hdr);
+
+            return $dt !== null
+                ? ['state' => 'ok', 'timestamp' => $dt]
+                : ['state' => 'unparseable', 'timestamp' => null];
+        }
+
+        return ['state' => 'not_applicable', 'timestamp' => null];
+    }
+
+    private function parseDateTimeToEpoch(string $value): ?int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        // Numeric epoch?
+        if (ctype_digit($value)) {
+            $n = (int) $value;
+
+            if ($n > 20000000000) {
+                $n = (int) floor($n / 1000);
+            }
+
+            return $n > 0 ? $n : null;
+        }
+
+        try {
+            $dt = new \DateTimeImmutable($value);
+
+            return $dt->getTimestamp();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -435,9 +660,7 @@ class VerifyWebhookSignature
                 ['Authorization'],
             ],
             'paddle' => [
-                // Billing HMAC header
                 ['Paddle-Signature'],
-                // Classic RSA signature in form body
                 ['__body_field:p_signature'],
             ],
             'midtrans' => [
@@ -447,7 +670,6 @@ class VerifyWebhookSignature
                 ['__form_field:md5sig', '__form_field:sha2sig'],
             ],
             default => [
-                // Default: minimal 1 of these should exist
                 ['Authorization'],
             ],
         };
@@ -545,7 +767,7 @@ class VerifyWebhookSignature
     {
         $v = $request->headers->get($key);
 
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
@@ -557,7 +779,7 @@ class VerifyWebhookSignature
     private function extractJsonField(string $rawBody, string $key): ?string
     {
         $decoded = json_decode($rawBody, true);
-        if (!is_array($decoded)) {
+        if (! is_array($decoded)) {
             return null;
         }
 
@@ -577,13 +799,13 @@ class VerifyWebhookSignature
         $params = [];
         parse_str($rawBody, $params);
 
-        if (!is_array($params)) {
+        if (! is_array($params)) {
             return null;
         }
 
         $v = $params[$key] ?? null;
 
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
@@ -612,7 +834,7 @@ class VerifyWebhookSignature
      *
      * $result: ok|failed
      *
-     * @param array<string, mixed> $extra
+     * @param  array<string, mixed>  $extra
      */
     private function auditLog(string $result, Request $request, string $provider, array $extra = []): void
     {
@@ -636,19 +858,13 @@ class VerifyWebhookSignature
         Log::warning('Webhook signature rejected', $ctx);
     }
 
-    private function error(int $status, string $code, string $message, ?string $provider = null): JsonResponse
+    private function errorGeneric(int $status, string $code, string $message): JsonResponse
     {
-        $payload = [
+        return response()->json([
             'error' => [
                 'code' => $code,
                 'message' => $message,
             ],
-        ];
-
-        if ($provider !== null && $provider !== '') {
-            $payload['error']['provider'] = $provider;
-        }
-
-        return response()->json($payload, $status);
+        ], $status);
     }
 }

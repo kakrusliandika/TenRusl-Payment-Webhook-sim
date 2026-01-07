@@ -50,7 +50,90 @@ if ($providersAllowlist === []) {
 // Demo secrets: jangan pernah punya default "changeme" di production.
 $demoSecretDefault = $isProduction ? '' : 'changeme';
 
+
+$normalizeTrustedProxies = static function (mixed $value) use ($csv): array|string|null {
+    if (! is_string($value)) {
+        return null;
+    }
+
+    $value = trim($value);
+
+    if ($value === '') {
+        return null;
+    }
+
+    if ($value === '*') {
+        return '*';
+    }
+
+    $parts = $csv($value);
+
+    return $parts !== [] ? $parts : null;
+};
+
+$trustedProxies = $normalizeTrustedProxies(env('TRUSTED_PROXIES'));
+
+$webhookRateLimitProviderOverrides = (static function (): array {
+    $raw = env('TENRUSL_WEBHOOK_RATE_LIMIT_PROVIDERS_JSON', '');
+
+    if (! is_string($raw)) {
+        return [];
+    }
+
+    $raw = trim($raw);
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (! is_array($decoded)) {
+        return [];
+    }
+
+    $out = [];
+
+    foreach ($decoded as $provider => $limits) {
+        if (! is_string($provider)) {
+            continue;
+        }
+
+        $provider = strtolower(trim($provider));
+        if ($provider === '') {
+            continue;
+        }
+
+        if (! is_array($limits)) {
+            continue;
+        }
+
+        $entry = [];
+
+        if (array_key_exists('per_second', $limits)) {
+            $entry['per_second'] = (int) $limits['per_second'];
+        }
+        if (array_key_exists('per_minute', $limits)) {
+            $entry['per_minute'] = (int) $limits['per_minute'];
+        }
+
+        if ($entry !== []) {
+            $out[$provider] = $entry;
+        }
+    }
+
+    return $out;
+})();
+
 return [
+    /*
+    |--------------------------------------------------------------------------
+    | Runtime platform knobs (proxy, queue, etc.)
+    |--------------------------------------------------------------------------
+    */
+    'trusted_proxies' => $trustedProxies,
+
+    // Queue name untuk memproses webhook secara async (dipakai WebhooksController).
+    'webhook_queue' => env('TENRUSL_WEBHOOK_QUEUE', 'default'),
+
     /*
     |--------------------------------------------------------------------------
     | Demo secrets (read from .env)
@@ -65,28 +148,28 @@ return [
     | Optional provider secrets
     |--------------------------------------------------------------------------
     */
-    'stripe_webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
-    'paypal_env' => env('PAYPAL_ENV', $isProduction ? 'live' : 'sandbox'),
-    'paypal_webhook_id' => env('PAYPAL_WEBHOOK_ID'),
-    'paypal_client_id' => env('PAYPAL_CLIENT_ID'),
-    'paypal_client_secret' => env('PAYPAL_CLIENT_SECRET'),
-    'paddle_signing_secret' => env('PADDLE_SIGNING_SECRET'),
-    'paddle_public_key' => env('PADDLE_PUBLIC_KEY'),
-    'ls_webhook_secret' => env('LS_WEBHOOK_SECRET'),
-    'airwallex_webhook_secret' => env('AIRWALLEX_WEBHOOK_SECRET'),
-    'tripay_private_key' => env('TRIPAY_PRIVATE_KEY'),
-    'doku_client_id' => env('DOKU_CLIENT_ID'),
-    'doku_secret_key' => env('DOKU_SECRET_KEY'),
-    'doku_request_target' => env('DOKU_REQUEST_TARGET', '/'),
-    'dana_public_key' => env('DANA_PUBLIC_KEY'),
-    'oy_callback_secret' => env('OY_CALLBACK_SECRET'),
-    'oy_ip_whitelist' => env('OY_IP_WHITELIST'),
-    'payoneer_shared_secret' => env('PAYONEER_SHARED_SECRET'),
-    'payoneer_merchant_id' => env('PAYONEER_MERCHANT_ID'),
-    'skrill_merchant_id' => env('SKRILL_MERCHANT_ID'),
-    'skrill_email' => env('SKRILL_EMAIL'),
-    'skrill_md5_secret' => env('SKRILL_MD5_SECRET'),
-    'amzn_bwp_public_key' => env('AMZN_BWP_PUBLIC_KEY'),
+    'stripe_webhook_secret' => env('TENRUSL_STRIPE_WEBHOOK_SECRET', env('STRIPE_WEBHOOK_SECRET')),
+    'paypal_env' => env('TENRUSL_PAYPAL_ENV', env('PAYPAL_ENV', $isProduction ? 'live' : 'sandbox')),
+    'paypal_webhook_id' => env('TENRUSL_PAYPAL_WEBHOOK_ID', env('PAYPAL_WEBHOOK_ID')),
+    'paypal_client_id' => env('TENRUSL_PAYPAL_CLIENT_ID', env('PAYPAL_CLIENT_ID')),
+    'paypal_client_secret' => env('TENRUSL_PAYPAL_CLIENT_SECRET', env('PAYPAL_CLIENT_SECRET')),
+    'paddle_signing_secret' => env('TENRUSL_PADDLE_SIGNING_SECRET', env('PADDLE_SIGNING_SECRET')),
+    'paddle_public_key' => env('TENRUSL_PADDLE_PUBLIC_KEY', env('PADDLE_PUBLIC_KEY')),
+    'ls_webhook_secret' => env('TENRUSL_LS_WEBHOOK_SECRET', env('LS_WEBHOOK_SECRET')),
+    'airwallex_webhook_secret' => env('TENRUSL_AIRWALLEX_WEBHOOK_SECRET', env('AIRWALLEX_WEBHOOK_SECRET')),
+    'tripay_private_key' => env('TENRUSL_TRIPAY_PRIVATE_KEY', env('TRIPAY_PRIVATE_KEY')),
+    'doku_client_id' => env('TENRUSL_DOKU_CLIENT_ID', env('DOKU_CLIENT_ID')),
+    'doku_secret_key' => env('TENRUSL_DOKU_SECRET_KEY', env('DOKU_SECRET_KEY')),
+    'doku_request_target' => env('TENRUSL_DOKU_REQUEST_TARGET', env('DOKU_REQUEST_TARGET', '/')),
+    'dana_public_key' => env('TENRUSL_DANA_PUBLIC_KEY', env('DANA_PUBLIC_KEY')),
+    'oy_callback_secret' => env('TENRUSL_OY_CALLBACK_SECRET', env('OY_CALLBACK_SECRET')),
+    'oy_ip_whitelist' => env('TENRUSL_OY_IP_WHITELIST', env('OY_IP_WHITELIST')),
+    'payoneer_shared_secret' => env('TENRUSL_PAYONEER_SHARED_SECRET', env('PAYONEER_SHARED_SECRET')),
+    'payoneer_merchant_id' => env('TENRUSL_PAYONEER_MERCHANT_ID', env('PAYONEER_MERCHANT_ID')),
+    'skrill_merchant_id' => env('TENRUSL_SKRILL_MERCHANT_ID', env('SKRILL_MERCHANT_ID')),
+    'skrill_email' => env('TENRUSL_SKRILL_EMAIL', env('SKRILL_EMAIL')),
+    'skrill_md5_secret' => env('TENRUSL_SKRILL_MD5_SECRET', env('SKRILL_MD5_SECRET')),
+    'amzn_bwp_public_key' => env('TENRUSL_AMZN_BWP_PUBLIC_KEY', env('AMZN_BWP_PUBLIC_KEY')),
 
     /*
     |--------------------------------------------------------------------------
@@ -108,8 +191,28 @@ return [
     | Dipakai oleh PaymentsController::adminIndex() (header-based).
     | Fail-closed: kalau key kosong, endpoint admin ditolak.
     */
+    // Header name bisa diubah lewat env (default: X-Admin-Key)
+    'admin_header' => env('TENRUSL_ADMIN_HEADER', env('ADMIN_HEADER', 'X-Admin-Key')),
+
+    // Backward-compatible keys (tetap dipertahankan)
     'admin_demo_key' => env('TENRUSL_ADMIN_DEMO_KEY', env('ADMIN_DEMO_KEY', '')),
     'admin_key' => env('TENRUSL_ADMIN_KEY', ''),
+
+    // Skema yang lebih tegas & jelas (dipakai controller):
+    // - production: wajib admin.key (fail-closed), demo_key ditolak default
+    // - non-production: admin.key dan/atau admin.demo_key bisa diterima
+    'admin' => [
+        'header' => env('TENRUSL_ADMIN_HEADER', env('ADMIN_HEADER', 'X-Admin-Key')),
+        'key' => env('TENRUSL_ADMIN_KEY', ''),
+        'demo_key' => env('TENRUSL_ADMIN_DEMO_KEY', env('ADMIN_DEMO_KEY', '')),
+
+        // Safety valve (default false): kalau true, demo key boleh dipakai di production.
+        // Disarankan tetap false.
+        'accept_demo_in_production' => filter_var(
+            env('TENRUSL_ADMIN_ACCEPT_DEMO_IN_PROD', false),
+            FILTER_VALIDATE_BOOL
+        ),
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -137,7 +240,17 @@ return [
     'scheduler_limit' => (int) env('TENRUSL_SCHEDULER_LIMIT', 200),
 
     // Jika true, scheduler jalan via queue (worker). Jika false, jalan langsung di process scheduler.
-    'scheduler_queue' => (bool) env('TENRUSL_SCHEDULER_QUEUE', false),
+    'scheduler_queue' => filter_var(
+        env('TENRUSL_SCHEDULER_QUEUE', false),
+        FILTER_VALIDATE_BOOL
+    ),
+
+    // Scheduler singleton + lock (dipakai di routes/console.php)
+    'scheduler_singleton' => filter_var(
+        env('TENRUSL_SCHEDULER_SINGLETON', $isProduction ? 'true' : 'false'),
+        FILTER_VALIDATE_BOOL
+    ),
+    'scheduler_lock_minutes' => (int) env('TENRUSL_SCHEDULER_LOCK_MINUTES', 10),
 
     /*
     |--------------------------------------------------------------------------
@@ -170,6 +283,9 @@ return [
     // TTL cache untuk menyimpan response idempotent.
     'idempotency_ttl' => (int) env('TENRUSL_IDEMPOTENCY_TTL', 3600),
 
+    // Storage hint (future-proof): redis / database / cache, dll (tergantung implementasi service).
+    'idempotency_storage' => env('TENRUSL_IDEMPOTENCY_STORAGE', $isProduction ? 'redis' : 'cache'),
+
     'idempotency' => [
         'ttl_seconds' => (int) env(
             'TENRUSL_IDEMPOTENCY_TTL_SECONDS',
@@ -187,6 +303,76 @@ return [
         'timestamp_leeway_seconds' => (int) env(
             'TENRUSL_SIG_TS_LEEWAY_SECONDS',
             (int) env('TENRUSL_SIG_TS_LEEWAY', env('SIG_TS_LEEWAY', 300))
+        ),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook receiver safety knobs
+    |--------------------------------------------------------------------------
+    | (A) Key config yang dipakai kode tapi belum didefinisikan jelas:
+    | - VerifyWebhookSignature middleware mengakses: tenrusl.webhook_max_payload_bytes
+    |
+    | (B) Knob production yang sebaiknya jadi “config resmi”:
+    | - payload max bytes
+    | - rate limit tuning (angka limit di RouteServiceProvider sebaiknya baca config ini)
+    | - correlation id behavior (header, generate, include response)
+    */
+    'webhook_max_payload_bytes' => (int) env('TENRUSL_WEBHOOK_MAX_PAYLOAD_BYTES', 5 * 1024 * 1024),
+
+    'rate_limit' => [
+        'web' => [
+            'per_minute' => (int) env('TENRUSL_RATE_WEB_PER_MINUTE', 240),
+        ],
+
+        'api' => [
+            'per_second' => (int) env('TENRUSL_RATE_API_PER_SECOND', 5),
+            'per_minute' => (int) env('TENRUSL_RATE_API_PER_MINUTE', 120),
+        ],
+
+        'webhooks' => [
+            // Default limits untuk webhook receiver.
+            // - Disediakan supaya gampang ditarik oleh RateLimiter di RouteServiceProvider
+            // - Tuning cukup lewat env tanpa redeploy (via config cache saat deploy).
+            'per_second' => (int) env('TENRUSL_RATE_WEBHOOKS_PER_SECOND', 10),
+
+            // Backward-compatible: tetap dukung TENRUSL_WEBHOOK_RATE_LIMIT_PER_MINUTE.
+            'per_minute' => (int) env(
+                'TENRUSL_RATE_WEBHOOKS_PER_MINUTE',
+                (int) env('TENRUSL_WEBHOOK_RATE_LIMIT_PER_MINUTE', 600)
+            ),
+
+            // Keying strategy:
+            // - ip: berdasarkan IP (butuh TrustProxies benar)
+            // - provider: berdasarkan provider path param
+            // - ip_provider: gabungan
+            'key_by' => env('TENRUSL_WEBHOOK_RATE_LIMIT_KEY_BY', 'ip_provider'),
+
+            /**
+             * Optional provider overrides (JSON via env).
+             * Example:
+             * TENRUSL_WEBHOOK_RATE_LIMIT_PROVIDERS_JSON={"stripe":{"per_second":25,"per_minute":1500},"midtrans":{"per_second":10}}
+             *
+             * @var array<string, array{per_second?: int, per_minute?: int}>
+             */
+            'providers' => $webhookRateLimitProviderOverrides,
+        ],
+    ],
+
+    'correlation_id' => [
+        // Header yang dipakai untuk tracing. Default: X-Request-ID
+        'header' => env('TENRUSL_CORRELATION_ID_HEADER', 'X-Request-ID'),
+
+        // Generate ID kalau tidak ada di request
+        'generate_if_missing' => filter_var(
+            env('TENRUSL_CORRELATION_ID_GENERATE', true),
+            FILTER_VALIDATE_BOOL
+        ),
+
+        // Sertakan header ke response (biar client bisa log korelasi)
+        'include_in_response' => filter_var(
+            env('TENRUSL_CORRELATION_ID_INCLUDE_IN_RESPONSE', true),
+            FILTER_VALIDATE_BOOL
         ),
     ],
 ];

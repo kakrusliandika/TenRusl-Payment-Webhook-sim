@@ -31,7 +31,7 @@ final class OySignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $secret = config('tenrusl.oy_callback_secret');
-        if (!is_string($secret) || trim($secret) === '') {
+        if (! is_string($secret) || trim($secret) === '') {
             return self::result(false, 'missing_secret');
         }
 
@@ -41,7 +41,7 @@ final class OySignature
 
         if ($ipWhitelist !== '') {
             $allowed = array_values(array_filter(array_map('trim', explode(',', $ipWhitelist))));
-            if ($allowed !== [] && !in_array((string) $request->ip(), $allowed, true)) {
+            if ($allowed !== [] && ! in_array((string) $request->ip(), $allowed, true)) {
                 return self::result(false, 'ip_not_allowed');
             }
         }
@@ -86,11 +86,12 @@ final class OySignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

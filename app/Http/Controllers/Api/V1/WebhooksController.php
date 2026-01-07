@@ -6,10 +6,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\WebhookRequest;
-use App\Services\Webhooks\WebhookProcessor;
+use App\Http\Middleware\VerifyWebhookSignature;
+use App\Jobs\ProcessWebhookEvent;
+use App\Repositories\WebhookEventRepository;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -25,11 +27,11 @@ use Symfony\Component\HttpFoundation\Response;
  *   1) raw body (untuk signature) tetap original
  *   2) parse payload (untuk pemrosesan)
  *   3) normalisasi event_id + event_type
- *   4) delegasi ke WebhookProcessor (dedup + enqueue/process)
+ *   4) persist event minimal + dispatch job (cepat ACK, proses async via queue worker)
  */
 class WebhooksController extends Controller
 {
-    public function __construct(private readonly WebhookProcessor $processor) {}
+    public function __construct(private readonly WebhookEventRepository $events) {}
 
     public function receive(WebhookRequest $request, string $provider): JsonResponse
     {
@@ -82,14 +84,70 @@ class WebhooksController extends Controller
             );
         }
 
-        // 4) Proses (dedup + enqueue/process)
-        $result = $this->processor->process(
-            $provider,
-            $eventId,
-            $type,
-            $rawBody,
-            $payload
+        // 4) Persist event SECEPAT mungkin (DB) lalu ACK 2xx.
+        //    Pemrosesan berat harus async (queue worker) agar webhook receiver tahan burst & tidak timeout.
+
+        $requestId = $this->resolveRequestId($request);
+        $sourceIp = (string) $request->ip();
+        $headers = $this->safeAuditHeaders($request);
+
+        /** @var mixed $sigHash */
+        $sigHash = $request->attributes->get(VerifyWebhookSignature::SIG_HASH_ATTR);
+        $sigHash = is_string($sigHash) ? $sigHash : null;
+
+        /** @var mixed $sigSource */
+        $sigSource = $request->attributes->get(VerifyWebhookSignature::SIG_SOURCE_ATTR);
+        $sigSource = is_string($sigSource) ? $sigSource : null;
+
+        // Insert (atau return existing jika duplicate) - ini cepat.
+        [$event, $duplicate] = $this->events->storeNewOrGetExisting(
+            provider: $provider,
+            eventId: $eventId,
+            eventType: $type,
+            rawBody: $rawBody,
+            payload: $payload,
+            receivedAt: now(),
+            lockExisting: false,
+            requestId: $requestId,
+            sourceIp: $sourceIp,
+            headers: $headers,
+            signatureHash: $sigHash,
+            signatureSource: $sigSource,
         );
+
+        // Untuk duplicate delivery, tetap catat attempt count (biar observability akurat)
+        if ($duplicate) {
+            $this->events->touchAttempt($event);
+
+            return response()->json([
+                'data' => [
+                    'event' => [
+                        'provider' => $provider,
+                        'event_id' => $eventId,
+                        'type' => $type,
+                        'event_id_source' => $eventIdSource,
+                        'event_id_generated' => $generated,
+                        'duplicate' => true,
+                    ],
+                    'ack' => 'duplicate',
+                ],
+            ], Response::HTTP_OK);
+        }
+
+        // Dispatch processing job (async). Jika queue down, event tetap tersimpan dan bisa dipick oleh scheduler.
+        try {
+            $job = new ProcessWebhookEvent((string) $event->id, 'incoming');
+            $queue = trim((string) config('tenrusl.webhook_queue', 'default'));
+            $queue = $queue !== '' ? $queue : 'default';
+            if ($queue !== '' && $queue !== 'default') {
+                $job->onQueue($queue);
+            }
+            dispatch($job);
+        } catch (\Throwable $e) {
+            // Fail-open untuk ACK: provider butuh 2xx agar tidak flood retry.
+            // Event sudah tersimpan; scheduler/ops bisa memproses ulang.
+            $this->events->scheduleNextRetry($event, now(), 'Queue dispatch failed: '.$e->getMessage());
+        }
 
         return response()->json([
             'data' => [
@@ -99,10 +157,73 @@ class WebhooksController extends Controller
                     'type' => $type,
                     'event_id_source' => $eventIdSource,
                     'event_id_generated' => $generated,
+                    'duplicate' => false,
                 ],
-                'result' => $result,
+                'ack' => 'accepted',
             ],
         ], Response::HTTP_ACCEPTED);
+    }
+
+    private function resolveRequestId(Request $request): string
+    {
+        /** @var mixed $attr */
+        $attr = $request->attributes->get('correlation_id');
+        if (is_string($attr) && $attr !== '') {
+            return $attr;
+        }
+
+        $hdr = $request->headers->get('X-Request-ID');
+        if (is_string($hdr) && trim($hdr) !== '') {
+            return trim($hdr);
+        }
+
+        return '';
+    }
+
+    /**
+     * Simpan subset header yang aman untuk audit.
+     * - jangan simpan Authorization/Cookie/Secret/Signature value mentah
+     * - simpan metadata yang berguna untuk tracing/debug
+     *
+     * @return array<string, string>
+     */
+    private function safeAuditHeaders(Request $request): array
+    {
+        $allow = [
+            'Content-Type',
+            'Content-Length',
+            'User-Agent',
+            'X-Request-ID',
+            'X-Correlation-ID',
+            'X-Forwarded-For',
+            'X-Forwarded-Proto',
+            'X-Forwarded-Port',
+            'X-Real-IP',
+            'X-Event-Id',
+            'X-Event-Type',
+            'Request-Id',
+        ];
+
+        $out = [];
+        foreach ($allow as $k) {
+            $v = $request->headers->get($k);
+            if (is_string($v) && trim($v) !== '') {
+                $out[$k] = trim($v);
+            }
+        }
+
+        // Tambahan: informatif untuk proxy/LB (tanpa secrets)
+        $server = [
+            'REMOTE_ADDR' => $request->server('REMOTE_ADDR'),
+            'REQUEST_METHOD' => $request->server('REQUEST_METHOD'),
+        ];
+        foreach ($server as $k => $v) {
+            if (is_string($v) && trim($v) !== '') {
+                $out['_server:'.$k] = trim($v);
+            }
+        }
+
+        return $out;
     }
 
     private function resolveRawBody(WebhookRequest $request): string
@@ -250,14 +371,14 @@ class WebhooksController extends Controller
         ] as $h) {
             $hv = $request->headers->get($h);
             if (is_string($hv) && trim($hv) !== '') {
-                return [trim($hv), 'header:' . strtolower($h), false];
+                return [trim($hv), 'header:'.strtolower($h), false];
             }
         }
 
         // Deterministic generated id: raw body hash (agar retry bytes sama tetap dedup)
         $hash = hash('sha256', $rawBody);
 
-        return ['gen_' . substr($hash, 0, 32), 'generated_body_hash', true];
+        return ['gen_'.substr($hash, 0, 32), 'generated_body_hash', true];
     }
 
     private function resolveEventType(string $provider, array $payload, WebhookRequest $request): ?string

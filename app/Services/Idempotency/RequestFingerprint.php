@@ -37,7 +37,7 @@ final class RequestFingerprint
 
         // getRequestUri() termasuk query string (kalau ada) => semantik bisa beda
         $uri = (string) ($request->getRequestUri() ?: '/');
-        $uri = '/' . ltrim($uri, '/');
+        $uri = '/'.ltrim($uri, '/');
 
         $ct = strtolower((string) $request->header('content-type', ''));
         $accept = strtolower((string) $request->header('accept', ''));
@@ -81,7 +81,7 @@ final class RequestFingerprint
     /**
      * Sort JSON "object" keys recursively. Keep list-array order intact.
      *
-     * @param array<mixed> $value
+     * @param  array<mixed>  $value
      * @return array<mixed>
      */
     private function sortJson(array $value): array
@@ -100,7 +100,7 @@ final class RequestFingerprint
     }
 
     /**
-     * @param array<mixed> $arr
+     * @param  array<mixed>  $arr
      */
     private function isAssoc(array $arr): bool
     {

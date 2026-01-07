@@ -13,15 +13,15 @@ use Illuminate\Validation\Rule;
  *
  * Fokus:
  * - Validasi input FE (provider, amount, currency, meta/metadata, description).
- * - Normalisasi input sebelum validasi:
+ * - Normalisasi input sebelum rules() dipakai:
  *   - "metadata" (alias/legacy) -> "meta" (internal)
  *   - provider -> lowercase
  *   - currency -> uppercase dan default IDR
  *   - amount -> integer jika numeric-string (mis. "10000")
  *
  * Catatan:
- * - validated() di FormRequest Laravel mengembalikan mixed bila $key diisi,
- *   jadi override tetap mengikuti signature aslinya. :contentReference[oaicite:1]{index=1}
+ * - validated() pada FormRequest mendukung pengambilan sebagian data via parameter $key,
+ *   jadi override di sini mempertahankan signature agar tetap kompatibel.
  */
 class CreatePaymentRequest extends FormRequest
 {
@@ -36,13 +36,13 @@ class CreatePaymentRequest extends FormRequest
     /**
      * Normalisasi input sebelum rules() dipakai.
      *
-     * prepareForValidation adalah hook resmi FormRequest untuk menyiapkan data sebelum validasi. :contentReference[oaicite:2]{index=2}
+     * Hook resmi FormRequest untuk menyiapkan data sebelum validasi berjalan.
      */
     protected function prepareForValidation(): void
     {
         $merge = [];
 
-        // Normalisasi provider -> lowercase agar cocok dengan allowlist config (umumnya lowercase)
+        // Normalisasi provider -> lowercase agar konsisten dengan allowlist config
         $provider = $this->input('provider');
         if (is_string($provider) && $provider !== '') {
             $merge['provider'] = strtolower($provider);
@@ -110,7 +110,6 @@ class CreatePaymentRequest extends FormRequest
      *
      * @param  array|int|string|null  $key
      * @param  mixed  $default
-     * @return mixed
      */
     public function validated($key = null, $default = null): mixed
     {

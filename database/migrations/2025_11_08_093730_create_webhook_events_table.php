@@ -95,6 +95,11 @@ return new class extends Migration
             $table->index(['provider', 'next_retry_at'], 'webhook_events_provider_next_retry_idx');
             $table->index(['status', 'created_at'], 'webhook_events_status_created_at_idx');
             $table->index(['payment_status', 'created_at'], 'webhook_events_paystatus_created_at_idx');
+
+            // Retry due query yang umum: status + next_retry_at
+            $table->index(['status', 'next_retry_at'], 'webhook_events_status_next_retry_idx');
+
+            // Kombinasi untuk dashboard/filter yang sering: status + payment_status + next_retry_at
             $table->index(
                 ['status', 'payment_status', 'next_retry_at'],
                 'webhook_events_status_paystatus_next_retry_idx'

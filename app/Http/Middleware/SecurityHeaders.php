@@ -1,47 +1,44 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Middleware;
 
+use Bepsvpt\SecureHeaders\SecureHeadersMiddleware as PackageSecureHeaders;
 use Closure;
 use Illuminate\Http\Request;
+use Spatie\Csp\AddCspHeaders as PackageAddCspHeaders;
 use Symfony\Component\HttpFoundation\Response;
 
-class SecurityHeaders
+/**
+ * SecurityHeaders (legacy wrapper)
+ * -------------------------------
+ * @deprecated Gunakan middleware package langsung:
+ * - \Bepsvpt\SecureHeaders\SecureHeadersMiddleware
+ * - \Spatie\Csp\AddCspHeaders
+ *
+ * Alasan file ini tetap dipertahankan:
+ * - Menghindari breaking change jika ada route/group lama yang masih mereferensikan App\Http\Middleware\SecurityHeaders.
+ * - Tidak ada duplikasi header policy; semuanya bersumber dari config package.
+ */
+final class SecurityHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {
-        /** @var \Symfony\Component\HttpFoundation\Response $response */
-        $response = $next($request);
+        /** @var PackageSecureHeaders $secureHeaders */
+        $secureHeaders = app(PackageSecureHeaders::class);
 
-        // === Strict-Transport-Security (aktif hanya bila HTTPS & bukan lokal) ===
-        // HSTS melindungi dari downgrade attack. Terapkan di prod setelah site full HTTPS.
-        // preload opsional; includeSubDomains disarankan jika semua subdomain sudah HTTPS.
-        $isHttps = $request->isSecure() || $request->headers->get('X-Forwarded-Proto') === 'https';
-        if ($isHttps && ! app()->environment('local')) {
-            $response->headers->set(
-                'Strict-Transport-Security',
-                'max-age=31536000; includeSubDomains; preload'
-            );
+        // Untuk API JSON biasanya CSP tidak dibutuhkan.
+        if ($request->is('api/*')) {
+            return $secureHeaders->handle($request, $next);
         }
 
-        // === MIME sniffing protection ===
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        /** @var PackageAddCspHeaders $csp */
+        $csp = app(PackageAddCspHeaders::class);
 
-        // === Clickjacking protection (pakai CSP frame-ancestors kalau sudah ada CSP) ===
-        // SAMEORIGIN = boleh di-embed oleh origin sendiri, aman untuk dashboard.
-        $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
-
-        // === Referrer privacy ===
-        // strict-origin-when-cross-origin = default modern yang aman & praktis.
-        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-        // === Tambahan aman & tidak mengganggu ===
-        $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
-        $response->headers->set('X-Download-Options', 'noopen'); // IE/Edge lama
-        $response->headers->set('X-DNS-Prefetch-Control', 'off'); // cegah DNS prefetch liar
-
-        // Catatan CSP:
-        // Header CSP sebaiknya dikelola via spatie/laravel-csp (lihat bagian B).
-        return $response;
+        // Chain: SecureHeaders -> CSP -> next
+        return $secureHeaders->handle($request, function (Request $request) use ($csp, $next) {
+            return $csp->handle($request, $next);
+        });
     }
 }

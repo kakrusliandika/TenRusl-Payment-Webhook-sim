@@ -1,116 +1,14 @@
-﻿name: PHP CI
+﻿name: PHP CI (disabled)
 
-on:
-  push:
-    paths:
-      - "app/**"
-      - "bootstrap/**"
-      - "config/**"
-      - "database/**"
-      - "routes/**"
-      - "tests/**"
-      - "composer.json"
-      - "composer.lock"
-      - "phpunit.xml*"
-      - "pest.php"
-      - ".github/workflows/php-ci.yml"
-  pull_request:
-    paths:
-      - "app/**"
-      - "bootstrap/**"
-      - "config/**"
-      - "database/**"
-      - "routes/**"
-      - "tests/**"
-      - "composer.json"
-      - "composer.lock"
-      - "phpunit.xml*"
-      - "pest.php"
-      - ".github/workflows/php-ci.yml"
-  workflow_dispatch:
-
-concurrency:
-  group: php-ci-${{ github.ref }}
-  cancel-in-progress: true
+on: {}
 
 permissions:
   contents: read
 
 jobs:
-  php:
-    name: PHP (migrate + lint + analyse + test)
+  disabled:
+    name: Disabled (merged into ci.yml)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    # Tambahan: samakan env dengan CI utama.
-    env:
-      APP_ENV: testing
-      APP_DEBUG: true
-      LOG_CHANNEL: stderr
-
-      DB_CONNECTION: sqlite
-      DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-
-      QUEUE_CONNECTION: sync
-      CACHE_STORE: database
-      SESSION_DRIVER: array
-      MAIL_MAILER: log
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.3"
-          coverage: none
-          tools: composer
-          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
-
-      # Tambahan: validate biar error composer kebaca cepat.
-      - name: Validate composer.json
-        run: composer validate --no-check-publish
-
-      - name: Cache Composer
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache/files
-          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            composer-${{ runner.os }}-
-
-      - name: Install Dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress --ansi
-
-      # Perubahan: hilangkan "|| true" supaya kalau setup env/key gagal, workflow fail jelas.
-      - name: Prepare App + SQLite
-        run: |
-          cp .env.example .env || true
-          php artisan key:generate --force
-          php artisan config:clear
-          mkdir -p database
-          touch database/database.sqlite
-
-      - name: Migrate
-        env:
-          APP_ENV: testing
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-        run: php artisan migrate --force --no-interaction -v
-
-      - name: Run Pint (lint)
-        run: composer format:check
-
-      - name: Run static analysis (Larastan)
-        run: composer analyse:larastan
-
-      - name: Run Tests (Pest)
-        env:
-          APP_ENV: testing
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-        run: composer test
-
-      - name: Composer security audit
-        run: composer audit --locked
+      - name: This workflow is intentionally disabled
+        run: echo "Merged into .github/workflows/ci.yml. Safe to delete after cleanup."

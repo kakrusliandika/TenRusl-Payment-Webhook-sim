@@ -57,6 +57,13 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        // Channel khusus webhooks (biar bisa dipisah dari log web umum)
+        'webhooks' => [
+            'driver' => 'stack',
+            'channels' => explode(',', (string) env('LOG_WEBHOOKS_STACK', 'stderr_webhooks')),
+            'ignore_exceptions' => false,
+        ],
+
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
@@ -69,6 +76,15 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        // (Optional) file rotasi khusus webhook
+        'daily_webhooks' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/webhooks.log'),
+            'level' => env('LOG_WEBHOOKS_LEVEL', env('LOG_LEVEL', 'info')),
+            'days' => env('LOG_WEBHOOKS_DAYS', env('LOG_DAILY_DAYS', 14)),
             'replace_placeholders' => true,
         ],
 
@@ -102,6 +118,18 @@ return [
                 'stream' => 'php://stderr',
             ],
             'formatter' => env('LOG_STDERR_FORMATTER', JsonFormatter::class),
+            'processors' => [PsrLogMessageProcessor::class],
+        ],
+
+        // Channel JSON khusus webhooks ke STDERR
+        'stderr_webhooks' => [
+            'driver' => 'monolog',
+            'level' => env('LOG_WEBHOOKS_LEVEL', env('LOG_LEVEL', 'info')),
+            'handler' => StreamHandler::class,
+            'handler_with' => [
+                'stream' => 'php://stderr',
+            ],
+            'formatter' => env('LOG_WEBHOOKS_FORMATTER', JsonFormatter::class),
             'processors' => [PsrLogMessageProcessor::class],
         ],
 

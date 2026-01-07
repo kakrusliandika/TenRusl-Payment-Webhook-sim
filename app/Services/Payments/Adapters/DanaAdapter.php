@@ -20,7 +20,7 @@ final class DanaAdapter implements PaymentAdapter
      */
     public function create(array $input): array
     {
-        $ref = 'sim_dana_' . Str::ulid()->toBase32();
+        $ref = 'sim_dana_'.Str::ulid()->toBase32();
 
         // amount wajib ada sesuai array-shape PHPDoc, jadi tidak perlu ?? (biar PHPStan tidak protes).
         $amount = (string) $input['amount'];

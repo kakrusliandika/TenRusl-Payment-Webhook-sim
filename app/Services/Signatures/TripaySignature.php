@@ -21,14 +21,16 @@ final class TripaySignature
      * - Header: X-Callback-Signature
      * - Value: hex(HMAC-SHA256(rawBody, private_key))
      *
-     * TriPay docs show callback signature is HMAC-SHA256 keyed with merchant private key. :contentReference[oaicite:5]{index=5}
+     * Kontrak:
+     * - rawBody harus RAW bytes dari Request::getContent()
+     * - signature dibandingkan secara constant-time (hash_equals)
      *
      * @return array{ok: bool, reason: string}
      */
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $privateKey = config('tenrusl.tripay_private_key');
-        if (!is_string($privateKey) || trim($privateKey) === '') {
+        if (! is_string($privateKey) || trim($privateKey) === '') {
             return self::result(false, 'missing_private_key');
         }
 
@@ -54,11 +56,12 @@ final class TripaySignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

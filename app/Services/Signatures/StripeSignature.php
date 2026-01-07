@@ -26,7 +26,7 @@ final class StripeSignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $secret = config('tenrusl.stripe_webhook_secret');
-        if (!is_string($secret) || trim($secret) === '') {
+        if (! is_string($secret) || trim($secret) === '') {
             return self::result(false, 'missing_secret');
         }
 
@@ -51,7 +51,7 @@ final class StripeSignature
         }
 
         // IMPORTANT: must use RAW request body bytes.
-        $signedPayload = (string) $timestamp . '.' . $rawBody;
+        $signedPayload = (string) $timestamp.'.'.$rawBody;
         $expected = strtolower(hash_hmac('sha256', $signedPayload, $secret)); // lowercase hex
 
         foreach ($signatures as $candidate) {
@@ -87,6 +87,7 @@ final class StripeSignature
 
             if ($k === 't' && $v !== '' && ctype_digit($v)) {
                 $timestamp = (int) $v;
+
                 continue;
             }
 
@@ -101,7 +102,7 @@ final class StripeSignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 

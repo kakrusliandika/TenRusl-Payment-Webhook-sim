@@ -17,16 +17,16 @@
 
 
 # Railway Postgres-only config for TenRusl Payment Webhook Simulator
-# Rename this to 'railway.toml' if you want to use Postgres config by default.
-# Deploy from GitHub in Railway. Add the Postgres plugin to your project so DATABASE_URL is injected.
+# Deploy from GitHub in Railway. Add the Postgres plugin so DATABASE_URL is injected.
 
 [build]
 builder = "NIXPACKS"
 buildCommand = "composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader"
 
 [deploy]
+# Pastikan start-postgres.sh mengarah ke mode web (atau ganti jadi: sh start.sh web)
 startCommand = "sh start-postgres.sh"
-healthcheckPath = "/up"
+healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 numReplicas = 1

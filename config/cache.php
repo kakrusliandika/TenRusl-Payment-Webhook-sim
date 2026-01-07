@@ -72,8 +72,12 @@ return [
 
         'redis' => [
             'driver' => 'redis',
+
+            // Cache keys -> gunakan koneksi redis "cache" (lihat config/database.php)
             'connection' => env('REDIS_CACHE_CONNECTION', 'cache'),
-            'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
+
+            // Locks -> gunakan koneksi redis "lock" agar tidak campur dengan cache keys
+            'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'lock'),
         ],
 
         'dynamodb' => [

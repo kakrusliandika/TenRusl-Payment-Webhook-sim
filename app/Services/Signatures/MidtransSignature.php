@@ -26,12 +26,12 @@ final class MidtransSignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $serverKey = config('tenrusl.midtrans_server_key');
-        if (!is_string($serverKey) || trim($serverKey) === '') {
+        if (! is_string($serverKey) || trim($serverKey) === '') {
             return self::result(false, 'missing_server_key');
         }
 
         $data = json_decode($rawBody, true);
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             return self::result(false, 'invalid_json');
         }
 
@@ -46,7 +46,7 @@ final class MidtransSignature
 
         // Midtrans formula:
         // signature_key = SHA512(order_id + status_code + gross_amount + serverKey)
-        $calc = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        $calc = hash('sha512', $orderId.$statusCode.$grossAmount.$serverKey);
 
         if (hash_equals(strtolower($calc), strtolower($postedSig))) {
             return self::result(true, 'ok');

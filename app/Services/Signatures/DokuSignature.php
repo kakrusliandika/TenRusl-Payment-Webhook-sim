@@ -34,7 +34,7 @@ final class DokuSignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $secretKey = config('tenrusl.doku_secret_key');
-        if (!is_string($secretKey) || trim($secretKey) === '') {
+        if (! is_string($secretKey) || trim($secretKey) === '') {
             return self::result(false, 'missing_secret_key');
         }
 
@@ -55,23 +55,23 @@ final class DokuSignature
             $uri = (string) $request->getRequestUri(); // may include query
             $path = parse_url($uri, PHP_URL_PATH);
             $path = is_string($path) && $path !== '' ? $path : '/';
-            $target = str_starts_with($path, '/') ? $path : '/' . ltrim($path, '/');
+            $target = str_starts_with($path, '/') ? $path : '/'.ltrim($path, '/');
         }
 
         $method = strtoupper((string) $request->getMethod());
-        $includeDigest = !in_array($method, ['GET', 'DELETE'], true);
+        $includeDigest = ! in_array($method, ['GET', 'DELETE'], true);
 
         $components = "Client-Id:{$clientId}\n"
-            . "Request-Id:{$reqId}\n"
-            . "Request-Timestamp:{$timestamp}\n"
-            . "Request-Target:{$target}";
+            ."Request-Id:{$reqId}\n"
+            ."Request-Timestamp:{$timestamp}\n"
+            ."Request-Target:{$target}";
 
         if ($includeDigest) {
             $digestB64 = base64_encode(hash('sha256', $rawBody, true));
             $components .= "\nDigest:{$digestB64}";
         }
 
-        $calc = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', $components, $secretKey, true));
+        $calc = 'HMACSHA256='.base64_encode(hash_hmac('sha256', $components, $secretKey, true));
 
         if (hash_equals($headerSig, $calc)) {
             return self::result(true, 'ok');
@@ -83,11 +83,12 @@ final class DokuSignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

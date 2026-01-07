@@ -277,23 +277,45 @@ class PaymentsController extends Controller
 
     private function denyIfNotAdmin(Request $request): ?JsonResponse
     {
-        $expected = (string) (
-            config('tenrusl.admin_demo_key')
-            ?? config('tenrusl.admin_key')
-            ?? env('TENRUSL_ADMIN_DEMO_KEY')
-            ?? env('ADMIN_DEMO_KEY')
-            ?? ''
-        );
+        $isProduction = app()->environment('production');
 
-        if ($expected === '') {
+        // Config source of truth (lebih jelas daripada null-coalescing yang rawan "empty string"):
+        $adminKey = trim((string) config('tenrusl.admin.key', config('tenrusl.admin_key', '')));
+        $demoKey = trim((string) config('tenrusl.admin.demo_key', config('tenrusl.admin_demo_key', '')));
+
+        $acceptDemoInProd = (bool) config('tenrusl.admin.accept_demo_in_production', false);
+
+        // Key rules:
+        // - production: wajib adminKey (fail-closed). demoKey default ditolak.
+        // - non-production: adminKey dan/atau demoKey bisa diterima.
+        $allowedKeys = [];
+
+        if ($adminKey !== '') {
+            $allowedKeys[] = $adminKey;
+        }
+
+        if ((! $isProduction || $acceptDemoInProd) && $demoKey !== '') {
+            $allowedKeys[] = $demoKey;
+        }
+
+        if ($allowedKeys === []) {
             return response()->json([
-                'message' => 'Admin demo is not configured',
+                'message' => 'Admin key is not configured',
                 'code' => 'admin_not_configured',
             ], Response::HTTP_SERVICE_UNAVAILABLE);
         }
 
-        $provided = (string) $request->header('X-Admin-Key', '');
+        $headerName = (string) config('tenrusl.admin.header', config('tenrusl.admin_header', 'X-Admin-Key'));
+        $headerName = trim($headerName) !== '' ? trim($headerName) : 'X-Admin-Key';
 
+        $provided = (string) $request->header($headerName, '');
+
+        // Backward-compatible fallback kalau header custom dipakai tapi client masih kirim X-Admin-Key
+        if ($provided === '' && strcasecmp($headerName, 'X-Admin-Key') !== 0) {
+            $provided = (string) $request->header('X-Admin-Key', '');
+        }
+
+        // Optional Bearer token fallback
         if ($provided === '') {
             $auth = (string) $request->header('Authorization', '');
             if (stripos($auth, 'bearer ') === 0) {
@@ -301,14 +323,23 @@ class PaymentsController extends Controller
             }
         }
 
-        if ($provided === '' || ! hash_equals($expected, $provided)) {
+        if ($provided === '') {
             return response()->json([
                 'message' => 'Unauthorized',
                 'code' => 'unauthorized',
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        return null;
+        foreach ($allowedKeys as $expected) {
+            if (hash_equals($expected, $provided)) {
+                return null;
+            }
+        }
+
+        return response()->json([
+            'message' => 'Unauthorized',
+            'code' => 'unauthorized',
+        ], Response::HTTP_UNAUTHORIZED);
     }
 
     private function cleanString(mixed $value): ?string

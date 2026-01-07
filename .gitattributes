@@ -12,11 +12,40 @@
 *.md diff=markdown
 *.php diff=php
 
-# Export ignores (lighter source tarballs)
-.github export-ignore
-.vscode export-ignore
-docker export-ignore
-postman export-ignore
+# Export ignores (release archive hygiene via git archive)
+.gitignore export-ignore
+.gitattributes export-ignore
+
+.github/ export-ignore
+.vscode/ export-ignore
+.idea/ export-ignore
+
+# Env files must never be exported (keep only examples)
+.env export-ignore
+.env.* export-ignore
+.env.example -export-ignore
+.env.production.example -export-ignore
+
+# Docker/dev tooling that shouldn't ship in source archives
+docker/ export-ignore
+postman/ export-ignore
+phpstan.neon export-ignore
+phpunit.xml export-ignore
+railway.toml export-ignore
+render.yaml export-ignore
+docker-compose.yml export-ignore
+Makefile export-ignore
+perbaikan.md export-ignore
+-p/ export-ignore
+
+# Runtime/dev artifacts
+storage/logs/ export-ignore
+storage/phpstan/ export-ignore
+storage/framework/testing/ export-ignore
+database/*.sqlite export-ignore
+coverage/ export-ignore
+node_modules/ export-ignore
+public/build/ export-ignore
 
 # Improve GitHub linguist accuracy
 vendor/* linguist-vendored

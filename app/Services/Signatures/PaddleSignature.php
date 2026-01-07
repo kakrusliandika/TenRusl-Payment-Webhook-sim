@@ -19,11 +19,14 @@ final class PaddleSignature
     /**
      * Verifies Paddle webhook signature.
      *
-     * Supports:
-     * - Paddle Billing (modern): "Paddle-Signature" header with "ts=...,h1=..." (semicolon or comma separated)
-     *   signature = HMAC-SHA256(secret, "{$ts}:{$rawBody}")
-     *   + timestamp tolerance check (anti-replay)
-     * - Paddle Classic (legacy): form-POST with "p_signature" (RSA, public key)
+     * Supported modes:
+     * 1) Paddle Billing (modern):
+     *    - Header: "Paddle-Signature" (contoh: "ts=1671552777;h1=abcdef...")
+     *    - Signature: HMAC-SHA256(secret, "{$ts}:{$rawBody}") dibandingkan dengan h1 (dan h2, dst jika ada).
+     *    - Timestamp tolerance check untuk anti-replay.
+     *
+     * 2) Paddle Classic (legacy):
+     *    - form POST dengan field "p_signature" (RSA, public key).
      *
      * @return array{ok: bool, reason: string}
      */
@@ -40,15 +43,17 @@ final class PaddleSignature
     }
 
     /**
-     * Paddle Billing: HMAC-SHA256 over "{$ts}:{$rawBody}" compared to h1/h2/... (hex).
-     * Header parsing approach matches Paddle docs guidance. :contentReference[oaicite:3]{index=3}
+     * Paddle Billing:
+     * - Parse header: "ts=...;h1=...;h2=..."
+     * - Build signed payload: "{$ts}:{$rawBody}"
+     * - expected = HMAC-SHA256(secret, signedPayload) (hex)
      *
      * @return array{ok: bool, reason: string}
      */
     private static function verifyBillingHmacWithReason(string $rawBody, string $paddleSignatureHeader): array
     {
         $secret = config('tenrusl.paddle_signing_secret');
-        if (!is_string($secret) || trim($secret) === '') {
+        if (! is_string($secret) || trim($secret) === '') {
             return self::result(false, 'missing_secret');
         }
 
@@ -77,7 +82,7 @@ final class PaddleSignature
         }
 
         $ts = $parts['ts'] ?? null;
-        if (!is_string($ts) || $ts === '' || !ctype_digit($ts)) {
+        if (! is_string($ts) || $ts === '' || ! ctype_digit($ts)) {
             return self::result(false, 'missing_or_invalid_ts');
         }
 
@@ -112,7 +117,7 @@ final class PaddleSignature
         }
 
         // IMPORTANT: must use RAW request body bytes
-        $signedPayload = $ts . ':' . $rawBody;
+        $signedPayload = $ts.':'.$rawBody;
         $expected = hash_hmac('sha256', $signedPayload, $secret); // hex lowercase
 
         foreach ($provided as $sig) {
@@ -137,19 +142,19 @@ final class PaddleSignature
     private static function verifyClassicRsaWithReason(string $rawBody): array
     {
         $publicKey = config('tenrusl.paddle_public_key');
-        if (!is_string($publicKey) || trim($publicKey) === '') {
+        if (! is_string($publicKey) || trim($publicKey) === '') {
             return self::result(false, 'missing_public_key');
         }
 
         $fields = [];
         parse_str($rawBody, $fields);
 
-        if (!is_array($fields) || $fields === []) {
+        if (! is_array($fields) || $fields === []) {
             return self::result(false, 'invalid_form_body');
         }
 
         $pSignature = $fields['p_signature'] ?? null;
-        if (!is_string($pSignature) || trim($pSignature) === '') {
+        if (! is_string($pSignature) || trim($pSignature) === '') {
             return self::result(false, 'missing_p_signature');
         }
 
@@ -166,7 +171,7 @@ final class PaddleSignature
 
         $pem = self::normalizePem($publicKey);
 
-        // Legacy Paddle signatures often verify with SHA1 in older docs/integrations.
+        // Legacy Paddle signatures often verify with SHA1 in older integrations.
         $ok = @openssl_verify($data, $binarySignature, $pem, OPENSSL_ALGO_SHA1);
 
         if ($ok === 1) {
@@ -191,17 +196,19 @@ final class PaddleSignature
 
         // If it looks like base64, wrap as PUBLIC KEY.
         $wrapped = chunk_split(str_replace(["\r", "\n", ' '], '', $trim), 64, "\n");
+
         return "-----BEGIN PUBLIC KEY-----\n{$wrapped}-----END PUBLIC KEY-----\n";
     }
 
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

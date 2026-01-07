@@ -21,8 +21,12 @@ services:
       DB_USERNAME: tenrusl
       DB_PASSWORD: secret
 
+      REDIS_CLIENT: phpredis
       REDIS_HOST: redis
+      REDIS_PORT: 6379
+
       CACHE_STORE: redis
+      SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
 
       COMPOSER_CACHE_DIR: /tmp/composer
@@ -47,7 +51,7 @@ services:
       && php artisan key:generate --force || true
       && php artisan optimize:clear || true
       && php artisan migrate --force || true
-      && php-fpm
+      && sh ./start.sh fpm
       "
 
   worker:
@@ -70,9 +74,18 @@ services:
       DB_USERNAME: tenrusl
       DB_PASSWORD: secret
 
+      REDIS_CLIENT: phpredis
       REDIS_HOST: redis
+      REDIS_PORT: 6379
+
       CACHE_STORE: redis
+      SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
+
+      WORKER_SLEEP: "1"
+      WORKER_TRIES: "3"
+      WORKER_TIMEOUT: "90"
+      WORKER_QUEUE: "default"
     volumes:
       - ./:/var/www/html
       - tenrusl-vendor:/var/www/html/vendor
@@ -84,10 +97,9 @@ services:
     networks:
       - tenrusl
     restart: unless-stopped
+    stop_grace_period: 30s
     command: >
-      sh -lc "
-      php artisan queue:work --sleep=1 --tries=3 --timeout=90
-      "
+      sh -lc "sh ./start.sh worker"
 
   scheduler:
     build:
@@ -109,8 +121,12 @@ services:
       DB_USERNAME: tenrusl
       DB_PASSWORD: secret
 
+      REDIS_CLIENT: phpredis
       REDIS_HOST: redis
+      REDIS_PORT: 6379
+
       CACHE_STORE: redis
+      SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
     volumes:
       - ./:/var/www/html
@@ -123,10 +139,9 @@ services:
     networks:
       - tenrusl
     restart: unless-stopped
+    stop_grace_period: 30s
     command: >
-      sh -lc "
-      php artisan schedule:work
-      "
+      sh -lc "sh ./start.sh scheduler-work"
 
   nginx:
     image: nginx:alpine

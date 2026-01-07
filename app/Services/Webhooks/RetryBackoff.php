@@ -14,9 +14,9 @@ namespace App\Services\Webhooks;
  *
  * Nilai balik dalam milidetik (ms).
  *
- * Referensi konsep jitter ini umum dipakai di sistem retry agar:
- * - menghindari thundering herd (semua retry di waktu yg sama),
- * - lebih stabil saat provider webhook burst / timeout.
+ * Referensi konsep jitter:
+ * - AWS Architecture Blog: Full / Equal / Decorrelated Jitter
+ * - Amazon Builders' Library: retry/backoff/jitter untuk mencegah herd
  */
 final class RetryBackoff
 {
@@ -68,12 +68,13 @@ final class RetryBackoff
 
         // Exponential base (tanpa jitter) -> cap.
         // base=500: attempt1=500, attempt2=1000, attempt3=2000, dst.
+        // NOTE: attempt sudah di-clamp (opsional) agar tidak overflow ekstrem.
         $exp = (int) ($baseMs * (2 ** ($attempt - 1)));
         $exp = min($capMs, max(0, $exp));
 
         return match ($mode) {
             'equal' => self::equalJitter($exp),
-            'decorrelated' => self::decorrelatedJitter($baseMs, $capMs, $prevMs ?? $exp),
+            'decorrelated' => self::decorrelatedJitter($baseMs, $capMs, $prevMs ?? max($baseMs, $exp)),
             default => self::fullJitter($exp),
         };
     }
@@ -94,7 +95,7 @@ final class RetryBackoff
         $maxAttempts = max(0, $maxAttempts);
 
         $out = [];
-        $prev = $baseMs;
+        $prev = max(0, $baseMs);
 
         for ($i = 1; $i <= $maxAttempts; $i++) {
             $delay = self::compute(

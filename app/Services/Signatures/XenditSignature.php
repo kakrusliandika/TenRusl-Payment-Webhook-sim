@@ -26,7 +26,7 @@ final class XenditSignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $expected = config('tenrusl.xendit_callback_token');
-        if (!is_string($expected) || trim($expected) === '') {
+        if (! is_string($expected) || trim($expected) === '') {
             return self::result(false, 'missing_expected_token');
         }
 
@@ -48,7 +48,7 @@ final class XenditSignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 

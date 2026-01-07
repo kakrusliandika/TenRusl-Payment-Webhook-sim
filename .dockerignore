@@ -1,0 +1,63 @@
+# VCS / IDE
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+
+# Env (never bake secrets into image)
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Node / front-end build cache
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+public/build
+public/hot
+
+# PHP dependencies (copied from vendor stage)
+vendor
+
+# Laravel runtime artifacts
+storage/*.key
+storage/logs
+storage/phpstan
+storage/framework/cache
+storage/framework/sessions
+storage/framework/views
+storage/framework/testing
+storage/app/private
+storage/app/public
+
+# Local sqlite & runtime DB artifacts
+database/*.sqlite
+database/database.sqlite
+
+# PHPUnit / Pest / coverage
+coverage
+.phpunit.result.cache
+
+# Static analysis / tooling caches
+.phpstan
+.phpstan.neon
+phpstan.neon
+phpstan.neon.dist
+storage/phpstan
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docs / misc (optional: keep image lean)
+docs
+postman
+docker
+render.yaml
+*.md
+-p

@@ -1,9 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-# =========================
-# Deterministic & safe boot
-# =========================
+MODE="${1:-web}" # web | fpm | worker | scheduler-run | scheduler-work
 
 APP_ENV="${APP_ENV:-production}"
 
@@ -31,7 +29,7 @@ warn() {
 # -----------------------------------------
 if [ -z "${APP_KEY:-}" ]; then
   if [ "${APP_ENV}" = "production" ] || [ "${STRICT_BOOT}" = "1" ]; then
-    fail "APP_KEY is required. Generate once during release (php artisan key:generate) and set it via env."
+    fail "APP_KEY is required. Generate once and set it via env/secret."
   fi
 
   # Optional for local/dev ONLY (explicit opt-in)
@@ -49,14 +47,6 @@ fi
 ensure_dir() {
   d="$1"
   [ -d "$d" ] || mkdir -p "$d"
-
-  # Try to fix ownership when running as root (Docker)
-  if command -v id >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
-    # best-effort (image might not have www-data)
-    chown -R www-data:www-data "$d" >/dev/null 2>&1 || true
-  fi
-
-  # Ensure writable
   chmod -R ug+rwX "$d" >/dev/null 2>&1 || true
 
   if [ ! -w "$d" ]; then
@@ -72,19 +62,34 @@ ensure_dir "storage"
 ensure_dir "bootstrap/cache"
 
 # --------------------------------------------------------
-# 3) DB defaulting (optional; OFF by default for safety)
+# 3) Fail-fast: prevent silent “demo-mode” in production
 # --------------------------------------------------------
-# If you really want demo-friendly auto SQLite, set:
-#   ALLOW_DEFAULT_SQLITE=1
-if [ -z "${DB_CONNECTION:-}" ] && [ "${ALLOW_DEFAULT_SQLITE:-0}" = "1" ]; then
-  export DB_CONNECTION="sqlite"
-  mkdir -p database
-  [ -f database/database.sqlite ] || touch database/database.sqlite
-  export DB_DATABASE="${DB_DATABASE:-database/database.sqlite}"
+if [ "${APP_ENV}" = "production" ] || [ "${STRICT_BOOT}" = "1" ]; then
+  if [ "${DB_CONNECTION:-}" = "" ] || [ "${DB_CONNECTION}" = "sqlite" ]; then
+    fail "Production must not use sqlite. Set DB_CONNECTION=pgsql/mysql and provide DB_URL (recommended) or DB_HOST/DB_*."
+  fi
+
+  if [ -z "${DB_URL:-}" ] && [ -z "${DB_HOST:-}" ]; then
+    fail "Database config missing. Set DB_URL (recommended) or DB_HOST/DB_DATABASE/DB_USERNAME/DB_PASSWORD."
+  fi
+
+  if [ "${CACHE_STORE:-}" != "redis" ]; then
+    fail "Production requires CACHE_STORE=redis (for locks/idempotency/multi-instance)."
+  fi
+
+  if [ "${QUEUE_CONNECTION:-}" != "redis" ]; then
+    fail "Production requires QUEUE_CONNECTION=redis (for retry + burst traffic)."
+  fi
+
+  # Session tidak selalu kritikal utk webhook, tapi aman disentralisasi
+  if [ "${SESSION_DRIVER:-}" != "redis" ]; then
+    warn "SESSION_DRIVER is not redis. Recommended: SESSION_DRIVER=redis for multi-instance."
+  fi
 fi
 
 # --------------------------------------------------------
 # 4) Optimize caches (production default ON)
+#    + Event cache (recommended when you have many events/listeners)
 # --------------------------------------------------------
 RUN_OPTIMIZE="${RUN_OPTIMIZE:-}"
 if [ -z "${RUN_OPTIMIZE}" ]; then
@@ -99,37 +104,123 @@ if [ "${RUN_OPTIMIZE}" = "1" ]; then
   php artisan config:cache --no-interaction
   php artisan route:cache --no-interaction || true
   php artisan view:cache --no-interaction || true
+
+  # event:cache documented by Laravel (safe to no-op/fail-soft if not applicable)
+  php artisan event:cache --no-interaction || true
 fi
 
 # --------------------------------------------------------
 # 5) Migrations are a RELEASE step (not at boot)
 # --------------------------------------------------------
-# To run migrations explicitly, do it in a separate release job:
-#   php artisan migrate --force --no-interaction
 if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
-  warn "RUN_MIGRATIONS=1 is enabled. Prefer running migrations as a separate release step."
+  warn "RUN_MIGRATIONS=1 is enabled. Prefer platform preDeployCommand / release step."
   php artisan migrate --force --no-interaction
 fi
 
 # --------------------------------------------------------
-# 6) Scheduler & Worker are separate processes
+# Helper: graceful supervisor for long-running artisan
 # --------------------------------------------------------
-# Scheduler (separate container / cron):
-#   * * * * * php /var/www/html/artisan schedule:run >> /dev/null 2>&1
-#
-# Worker (separate container / supervisor):
-#   php artisan queue:work --sleep=1 --tries=1
+run_graceful() {
+  # $1..$n = command
+  "$@" &
+  CHILD_PID="$!"
+
+  trap 'kill -TERM "${CHILD_PID}" 2>/dev/null || true; wait "${CHILD_PID}" 2>/dev/null || true; exit 0' INT TERM
+  wait "${CHILD_PID}"
+}
 
 # --------------------------------------------------------
-# 7) Start the web process (one process per container)
+# 6) Mode switch
 # --------------------------------------------------------
-START_MODE="${START_MODE:-fpm}" # fpm | builtin
-PORT="${PORT:-8080}"
+case "${MODE}" in
+  web)
+    # nginx + php-fpm, nginx listens on $PORT
+    PORT="${PORT:-10000}"
+    CLIENT_MAX_BODY_SIZE="${CLIENT_MAX_BODY_SIZE:-5m}"
+    FASTCGI_READ_TIMEOUT="${FASTCGI_READ_TIMEOUT:-120}"
 
-if [ "${START_MODE}" = "builtin" ]; then
-  echo "Starting Laravel (builtin PHP server) on 0.0.0.0:${PORT}"
-  exec php -S 0.0.0.0:"${PORT}" -t public
-fi
+    mkdir -p /etc/nginx/conf.d
 
-echo "Starting PHP-FPM"
-exec php-fpm -F
+    cat > /etc/nginx/conf.d/default.conf <<EOF
+server {
+  listen ${PORT};
+  server_name _;
+  root /var/www/html/public;
+  index index.php;
+
+  access_log /dev/stdout;
+  error_log /dev/stderr warn;
+
+  client_max_body_size ${CLIENT_MAX_BODY_SIZE};
+
+  location / {
+    try_files \$uri \$uri/ /index.php?\$query_string;
+  }
+
+  location ~ \.php\$ {
+    include /etc/nginx/fastcgi_params;
+    fastcgi_pass 127.0.0.1:9000;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+    fastcgi_param DOCUMENT_ROOT \$realpath_root;
+    fastcgi_read_timeout ${FASTCGI_READ_TIMEOUT};
+  }
+
+  location ~ /\.(?!well-known).* {
+    deny all;
+  }
+}
+EOF
+
+    php-fpm -F &
+    FPM_PID="$!"
+
+    nginx -g "daemon off;" &
+    NGINX_PID="$!"
+
+    trap 'kill -TERM "${FPM_PID}" "${NGINX_PID}" 2>/dev/null || true; wait || true' INT TERM
+
+    # monitor: kalau salah satu mati, matikan yang lain
+    while kill -0 "${FPM_PID}" 2>/dev/null && kill -0 "${NGINX_PID}" 2>/dev/null; do
+      sleep 1
+    done
+
+    warn "One of the processes exited. Shutting down..."
+    kill -TERM "${FPM_PID}" "${NGINX_PID}" 2>/dev/null || true
+    wait || true
+    exit 1
+    ;;
+
+  fpm)
+    # php-fpm only (untuk compose + nginx terpisah)
+    exec php-fpm -F
+    ;;
+
+  worker)
+    WORKER_SLEEP="${WORKER_SLEEP:-1}"
+    WORKER_TRIES="${WORKER_TRIES:-3}"
+    WORKER_TIMEOUT="${WORKER_TIMEOUT:-90}"
+    WORKER_QUEUE="${WORKER_QUEUE:-default}"
+
+    # Graceful: forward SIGTERM/SIGINT to artisan worker
+    run_graceful php artisan queue:work \
+      --sleep="${WORKER_SLEEP}" \
+      --tries="${WORKER_TRIES}" \
+      --timeout="${WORKER_TIMEOUT}" \
+      --queue="${WORKER_QUEUE}"
+    ;;
+
+  scheduler-run)
+    # dipanggil cron job (sekali eksekusi)
+    exec php artisan schedule:run --no-interaction
+    ;;
+
+  scheduler-work)
+    # loop worker (enak utk local/dev)
+    run_graceful php artisan schedule:work --no-interaction
+    ;;
+
+  *)
+    fail "Unknown MODE: ${MODE}. Use: web | fpm | worker | scheduler-run | scheduler-work"
+    ;;
+esac

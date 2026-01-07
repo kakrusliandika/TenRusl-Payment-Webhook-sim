@@ -21,7 +21,7 @@ final class PaypalAdapter implements PaymentAdapter
     public function create(array $input): array
     {
         // Contoh pola ID PayPal disimulasikan
-        $ref = 'sim_paypal_' . Str::ulid()->toBase32();
+        $ref = 'sim_paypal_'.Str::ulid()->toBase32();
 
         // amount wajib ada sesuai array-shape PHPDoc, jadi tidak perlu ??.
         $amount = (string) $input['amount'];

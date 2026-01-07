@@ -37,7 +37,7 @@ use Throwable;
  * - Field status yang dipakai: received|processing|failed|processed (string bebas).
  * - payment_status: pending|succeeded|failed (final ketika != pending).
  */
-class ProcessWebhookEvent implements ShouldQueue, ShouldBeUniqueUntilProcessing
+class ProcessWebhookEvent implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -58,9 +58,15 @@ class ProcessWebhookEvent implements ShouldQueue, ShouldBeUniqueUntilProcessing
     public int $tries = 1;
 
     /**
-     * @param string $webhookEventId  Primary key webhook_events (ULID/UUID/string)
-     * @param string|null $trigger   'retry'|'admin'|'replay'|null (opsional)
-     * @param bool $force            true = abaikan beberapa guard non-final (tetap skip jika sudah final)
+     * Timeout job (detik). Ini penting untuk “ops hygiene” agar worker tidak hang terlalu lama.
+     * Nilai ini bisa dibuat configurable.
+     */
+    public int $timeout = 120;
+
+    /**
+     * @param  string  $webhookEventId  Primary key webhook_events (ULID/UUID/string)
+     * @param  string|null  $trigger  'retry'|'admin'|'replay'|null (opsional)
+     * @param  bool  $force  true = abaikan beberapa guard non-final (tetap skip jika sudah final)
      */
     public function __construct(
         public string $webhookEventId,
@@ -73,7 +79,15 @@ class ProcessWebhookEvent implements ShouldQueue, ShouldBeUniqueUntilProcessing
          * karena trait Queueable sudah mendefinisikan property tersebut.
          * Set queue gunakan onQueue() (disediakan Queueable).
          */
-        $this->onQueue('webhooks');
+
+        // Configurable knobs (default aman)
+        $this->uniqueFor = (int) config('tenrusl.job_unique_for_seconds', 600);
+        $this->tries = (int) config('tenrusl.job_tries', 1);
+        $this->timeout = (int) config('tenrusl.job_timeout_seconds', 120);
+
+        $queue = (string) config('tenrusl.webhooks_queue', 'webhooks');
+        $queue = trim($queue) !== '' ? trim($queue) : 'webhooks';
+        $this->onQueue($queue);
     }
 
     /**
@@ -93,9 +107,12 @@ class ProcessWebhookEvent implements ShouldQueue, ShouldBeUniqueUntilProcessing
     {
         // 15 detik cukup untuk "menghindari tabrakan" singkat antar worker.
         // Kalau processing bisa lama, naikkan lock TTL / gunakan dontRelease() sesuai kebutuhan.
+        $releaseAfter = (int) config('tenrusl.job_without_overlapping_release_after_seconds', 15);
+        $releaseAfter = $releaseAfter <= 0 ? 15 : min($releaseAfter, 300);
+
         return [
             (new WithoutOverlapping($this->uniqueId()))
-                ->releaseAfter(15),
+                ->releaseAfter($releaseAfter),
         ];
     }
 
@@ -173,7 +190,7 @@ class ProcessWebhookEvent implements ShouldQueue, ShouldBeUniqueUntilProcessing
         // - Jika gagal claim => berarti ada worker lain yg menang
         // -------------------------
         /** @var WebhookEvent|null $claimed */
-        $claimed = DB::transaction(function () use ($now): ?WebhookEvent {
+        $claimed = DB::transaction(function (): ?WebhookEvent {
             /** @var WebhookEvent|null $fresh */
             $fresh = WebhookEvent::query()
                 ->whereKey($this->webhookEventId)

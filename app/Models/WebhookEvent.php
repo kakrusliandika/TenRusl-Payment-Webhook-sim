@@ -109,7 +109,7 @@ class WebhookEvent extends Model
      */
     public function payment(): BelongsTo
     {
-        return $this->belongsTo(Payment::class, 'payment_id', (new Payment())->getKeyName());
+        return $this->belongsTo(Payment::class, 'payment_id', (new Payment)->getKeyName());
     }
 
     /**

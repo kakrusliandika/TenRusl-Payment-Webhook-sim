@@ -31,7 +31,7 @@ final class PayoneerSignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $secret = config('tenrusl.payoneer_shared_secret');
-        if (!is_string($secret) || trim($secret) === '') {
+        if (! is_string($secret) || trim($secret) === '') {
             return self::result(false, 'missing_secret');
         }
 
@@ -41,7 +41,7 @@ final class PayoneerSignature
 
         $hdrMerchantId = self::headerString($request, 'X-Payoneer-Merchant-Id');
         if ($cfgMerchantId !== '' && $hdrMerchantId !== null && $hdrMerchantId !== '') {
-            if (!hash_equals($cfgMerchantId, $hdrMerchantId)) {
+            if (! hash_equals($cfgMerchantId, $hdrMerchantId)) {
                 return self::result(false, 'merchant_mismatch');
             }
         }
@@ -76,11 +76,12 @@ final class PayoneerSignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

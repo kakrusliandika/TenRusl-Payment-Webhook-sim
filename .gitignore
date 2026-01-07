@@ -1,46 +1,72 @@
+###############################################################################
 # Laravel / PHP
+###############################################################################
 /vendor/
-composer.lock
 composer.phar
+# IMPORTANT: composer.lock JANGAN di-ignore untuk aplikasi (harus ikut version control)
 
-# Env & keys
+###############################################################################
+# Environment & keys (JANGAN DI COMMIT)
+###############################################################################
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.key
 
-# Storage / cache / logs
+###############################################################################
+# Laravel storage / cache / logs
+/database/*.sqlite
+/database/database.sqlite
+/storage/phpstan
+###############################################################################
+/public/hot
+/public/storage
+
+# Jika kamu build asset di CI/Deploy (recommended), ignore output build:
+# (Jika kamu sengaja commit build output, hapus baris ini.)
+/public/build
+
 /storage/*.key
-/storage/app/public
+/storage/logs
 /storage/framework/cache
 /storage/framework/sessions
 /storage/framework/views
-/storage/logs
-/bootstrap/cache
+/bootstrap/cache/*.php
 
-# PHPUnit / Pest
+###############################################################################
+# Test caches
+###############################################################################
 .phpunit.result.cache
 /.phpunit.cache
 /.pest.cache
 
+###############################################################################
 # Node
+###############################################################################
 /node_modules/
 npm-debug.log*
 yarn-error.log*
 pnpm-lock.yaml
 
+###############################################################################
 # IDE
+###############################################################################
 /.vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
 /.idea/
 *.iml
 
+###############################################################################
 # OS
+###############################################################################
 .DS_Store
 Thumbs.db
 
-
+###############################################################################
+# Helpers
+###############################################################################
 /_ide_helper.php
 /_ide_helper_models.php
 /.phpstorm.meta.php

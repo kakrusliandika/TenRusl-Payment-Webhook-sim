@@ -27,7 +27,7 @@ final class AirwallexSignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $secret = config('tenrusl.airwallex_webhook_secret');
-        if (!is_string($secret) || trim($secret) === '') {
+        if (! is_string($secret) || trim($secret) === '') {
             return self::result(false, 'missing_secret');
         }
 
@@ -38,12 +38,12 @@ final class AirwallexSignature
             return self::result(false, 'missing_signature_headers');
         }
 
-        if (!ctype_digit($timestampStr)) {
+        if (! ctype_digit($timestampStr)) {
             return self::result(false, 'invalid_timestamp_format');
         }
 
         // IMPORTANT: use x-timestamp EXACTLY as received (string) for digest.
-        $valueToDigest = $timestampStr . $rawBody;
+        $valueToDigest = $timestampStr.$rawBody;
         $expected = hash_hmac('sha256', $valueToDigest, $secret); // hex lowercase
 
         $sigNorm = strtolower(trim($signature));
@@ -51,7 +51,7 @@ final class AirwallexSignature
             $sigNorm = substr($sigNorm, 7);
         }
 
-        if (!hash_equals(strtolower($expected), $sigNorm)) {
+        if (! hash_equals(strtolower($expected), $sigNorm)) {
             return self::result(false, 'invalid_signature');
         }
 
@@ -80,11 +80,12 @@ final class AirwallexSignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

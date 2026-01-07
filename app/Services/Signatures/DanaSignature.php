@@ -29,7 +29,7 @@ final class DanaSignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $publicKey = config('tenrusl.dana_public_key');
-        if (!is_string($publicKey) || trim($publicKey) === '') {
+        if (! is_string($publicKey) || trim($publicKey) === '') {
             return self::result(false, 'missing_public_key');
         }
 
@@ -77,11 +77,12 @@ final class DanaSignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

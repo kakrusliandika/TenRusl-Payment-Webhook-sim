@@ -26,7 +26,7 @@ final class LemonSqueezySignature
     public static function verifyWithReason(string $rawBody, Request $request): array
     {
         $secret = config('tenrusl.ls_webhook_secret');
-        if (!is_string($secret) || trim($secret) === '') {
+        if (! is_string($secret) || trim($secret) === '') {
             return self::result(false, 'missing_secret');
         }
 
@@ -52,11 +52,12 @@ final class LemonSqueezySignature
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

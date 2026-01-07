@@ -21,34 +21,67 @@ final class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting(): void
     {
+        // NOTE:
+        // Semua limit di sini sengaja dibuat configurable via config('tenrusl.*')
+        // supaya tuning production tidak perlu redeploy.
+        //
+        // IMPORTANT:
+        // Jangan pernah membaca env() di sini. Saat config cache aktif, .env tidak di-load
+        // dan env() di luar file config dapat mengembalikan null.
+
+        $webPerMinute = (int) config('tenrusl.rate_limit.web.per_minute', 240);
+
+        $apiPerSecond = (int) config('tenrusl.rate_limit.api.per_second', 5);
+        $apiPerMinute = (int) config('tenrusl.rate_limit.api.per_minute', 120);
+
+        $whDefaultPerSecond = (int) config('tenrusl.rate_limit.webhooks.per_second', 10);
+        $whDefaultPerMinute = (int) config('tenrusl.rate_limit.webhooks.per_minute', 600);
+
+        $whKeyBy = (string) config('tenrusl.rate_limit.webhooks.key_by', 'ip_provider');
+
+        /** @var array<string, array{per_second?: int, per_minute?: int}> $whProviderOverrides */
+        $whProviderOverrides = (array) config('tenrusl.rate_limit.webhooks.providers', []);
+
         // General web browsing
-        RateLimiter::for('web', function (Request $request) {
+        RateLimiter::for('web', function (Request $request) use ($webPerMinute) {
             return [
-                Limit::perMinute(240)->by('web:min:' . self::rateKey($request)),
+                Limit::perMinute(max(1, $webPerMinute))->by('web:min:'.self::rateKey($request)),
             ];
         });
 
         // Public API access (non-webhook)
-        RateLimiter::for('api', function (Request $request) {
+        RateLimiter::for('api', function (Request $request) use ($apiPerSecond, $apiPerMinute) {
             $key = self::rateKey($request);
 
             return [
                 // Burst window
-                Limit::perSecond(5)->by('api:sec:' . $key),
+                Limit::perSecond(max(1, $apiPerSecond))->by('api:sec:'.$key),
                 // Sustained window
-                Limit::perMinute(120)->by('api:min:' . $key),
+                Limit::perMinute(max(1, $apiPerMinute))->by('api:min:'.$key),
             ];
         });
 
         // Webhooks: strict burst + sustained window
-        RateLimiter::for('webhooks', function (Request $request) {
-            $key = self::webhookRateKey($request);
+        RateLimiter::for('webhooks', function (Request $request) use ($whDefaultPerSecond, $whDefaultPerMinute, $whProviderOverrides, $whKeyBy) {
+            $key = self::webhookRateKey($request, $whKeyBy);
+
+            $provider = strtolower((string) $request->route('provider', ''));
+            $provider = $provider !== '' ? $provider : 'global';
+
+            $override = $whProviderOverrides[$provider] ?? null;
+            $perSecond = is_array($override) && isset($override['per_second'])
+                ? (int) $override['per_second']
+                : $whDefaultPerSecond;
+
+            $perMinute = is_array($override) && isset($override['per_minute'])
+                ? (int) $override['per_minute']
+                : $whDefaultPerMinute;
 
             return [
                 // Burst: kalau kamu tes “burst 200 request”, ini harus cepat nahan.
-                Limit::perSecond(10)->by('wh:sec:' . $key),
+                Limit::perSecond(max(1, $perSecond))->by('wh:sec:'.$key),
                 // Sustained
-                Limit::perMinute(600)->by('wh:min:' . $key),
+                Limit::perMinute(max(1, $perMinute))->by('wh:min:'.$key),
             ];
         });
     }
@@ -63,22 +96,36 @@ final class RouteServiceProvider extends ServiceProvider
 
     /**
      * Key webhook:
-     * - Jika TRUSTED_PROXIES dikonfigurasi (TrustProxies aktif), segmentasi dengan IP + provider.
-     * - Jika tidak, jangan bergantung pada IP (bisa salah: IP proxy), fallback ke provider saja.
+     * - Strategi ditentukan oleh config('tenrusl.rate_limit.webhooks.key_by'):
+     *   - ip: berdasarkan IP (butuh TrustProxies benar)
+     *   - provider: berdasarkan provider path param saja
+     *   - ip_provider: gabungan provider + ip
+     * - Jika trusted proxies tidak diset, jangan bergantung pada IP (bisa salah: IP proxy),
+     *   fallback ke provider saja.
      */
-    protected static function webhookRateKey(Request $request): string
+    protected static function webhookRateKey(Request $request, string $keyBy): string
     {
         $provider = strtolower((string) $request->route('provider', 'global'));
         $provider = $provider !== '' ? $provider : 'global';
 
-        if (self::webhookUsesIp()) {
-            $ip = $request->ip();
-            if ($ip !== null && $ip !== '') {
-                return "provider:{$provider}|ip:{$ip}";
-            }
+        $keyBy = strtolower(trim($keyBy));
+        if ($keyBy === '') {
+            $keyBy = 'ip_provider';
         }
 
-        return "provider:{$provider}";
+        $useIp = self::webhookUsesIp();
+        $ip = $useIp ? $request->ip() : null;
+        $ip = is_string($ip) ? trim($ip) : '';
+        $hasIp = $ip !== '';
+
+        // Jika disuruh pakai IP tapi kita tidak punya IP yang valid (proxy belum trusted),
+        // fallback ke provider supaya tidak “open season”.
+        return match ($keyBy) {
+            'provider' => "provider:{$provider}",
+            'ip' => $hasIp ? "ip:{$ip}" : "provider:{$provider}",
+            'ip_provider', 'provider_ip' => $hasIp ? "provider:{$provider}|ip:{$ip}" : "provider:{$provider}",
+            default => $hasIp ? "provider:{$provider}|ip:{$ip}" : "provider:{$provider}",
+        };
     }
 
     /**
@@ -87,8 +134,16 @@ final class RouteServiceProvider extends ServiceProvider
      */
     protected static function webhookUsesIp(): bool
     {
-        $trusted = env('TRUSTED_PROXIES');
+        $trusted = config('tenrusl.trusted_proxies');
 
-        return is_string($trusted) && trim($trusted) !== '';
+        if (is_string($trusted)) {
+            return trim($trusted) !== '';
+        }
+
+        if (is_array($trusted)) {
+            return $trusted !== [];
+        }
+
+        return false;
     }
 }

@@ -14,9 +14,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Model Payment
  *
- * - meta di-cast ke array agar stabil di API response. :contentReference[oaicite:3]{index=3}
- * - status di-cast ke Enum/Cast class (PaymentStatus) sesuai dukungan Enum casting Eloquent. :contentReference[oaicite:4]{index=4}
- * - relasi webhookEvents untuk kebutuhan GET /payments/{id} (include associated events). :contentReference[oaicite:5]{index=5}
+ * Catatan:
+ * - meta di-cast ke array agar stabil di API response.
+ * - status di-cast ke Enum/Cast class (PaymentStatus).
+ * - relasi webhookEvents dipakai untuk kebutuhan GET /payments/{id}
+ *   (include event-event webhook yang terkait).
  */
 class Payment extends Model
 {

@@ -8,13 +8,11 @@ namespace App\Services\Idempotency;
 
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Contracts\Cache\LockProvider;
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 final class IdempotencyKeyService
 {
@@ -41,12 +39,12 @@ final class IdempotencyKeyService
         $raw = trim($raw);
 
         if ($raw === '') {
-            return 'fp_' . $this->fingerprint->hash($request);
+            return 'fp_'.$this->fingerprint->hash($request);
         }
 
         // Reject/normalize odd keys defensively (control chars / extremely long)
         if ($this->hasControlChars($raw) || strlen($raw) > 255) {
-            return 'h_' . hash('sha256', $raw);
+            return 'h_'.hash('sha256', $raw);
         }
 
         return $raw;
@@ -89,7 +87,6 @@ final class IdempotencyKeyService
         return Cache::add($this->lockKey($key), 1, now()->addSeconds($lockSeconds));
     }
 
-
     public function releaseLock(string $key): void
     {
         if (isset($this->locks[$key])) {
@@ -128,6 +125,7 @@ final class IdempotencyKeyService
         if ($existing === '') {
             // Race or eviction; set again
             $cache->put($rk, $requestHash, Carbon::now()->addSeconds($ttl));
+
             return true;
         }
 
@@ -240,17 +238,17 @@ final class IdempotencyKeyService
 
     private function lockKey(string $key): string
     {
-        return 'tenrusl:idemp:lock:' . $this->keySlug($key);
+        return 'tenrusl:idemp:lock:'.$this->keySlug($key);
     }
 
     private function respKey(string $key): string
     {
-        return 'tenrusl:idemp:resp:' . $this->keySlug($key);
+        return 'tenrusl:idemp:resp:'.$this->keySlug($key);
     }
 
     private function reqHashKey(string $key): string
     {
-        return 'tenrusl:idemp:reqhash:' . $this->keySlug($key);
+        return 'tenrusl:idemp:reqhash:'.$this->keySlug($key);
     }
 
     private function keySlug(string $key): string
@@ -262,7 +260,7 @@ final class IdempotencyKeyService
 
         // Keep keys reasonably short and cache-safe
         if (strlen($k) > 160) {
-            return 'sha_' . hash('sha256', $k);
+            return 'sha_'.hash('sha256', $k);
         }
 
         return $k;
@@ -345,6 +343,6 @@ final class IdempotencyKeyService
             return 'empty';
         }
 
-        return strlen($key) <= 32 ? $key : substr($key, 0, 12) . '…' . substr($key, -8);
+        return strlen($key) <= 32 ? $key : substr($key, 0, 12).'…'.substr($key, -8);
     }
 }

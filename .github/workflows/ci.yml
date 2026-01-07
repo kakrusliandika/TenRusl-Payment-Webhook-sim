@@ -2,7 +2,47 @@ name: CI
 
 on:
   push:
+    paths:
+      # PHP / Laravel
+      - "app/**"
+      - "bootstrap/**"
+      - "config/**"
+      - "database/**"
+      - "routes/**"
+      - "tests/**"
+      - "composer.json"
+      - "composer.lock"
+      - "phpunit.xml*"
+      - "pest.php"
+      # Docs toolchain
+      - "docs/**"
+      - "postman/**"
+      - "redocly.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - "npm-shrinkwrap.json"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      # PHP / Laravel
+      - "app/**"
+      - "bootstrap/**"
+      - "config/**"
+      - "database/**"
+      - "routes/**"
+      - "tests/**"
+      - "composer.json"
+      - "composer.lock"
+      - "phpunit.xml*"
+      - "pest.php"
+      # Docs toolchain
+      - "docs/**"
+      - "postman/**"
+      - "redocly.yaml"
+      - "package.json"
+      - "package-lock.json"
+      - "npm-shrinkwrap.json"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -18,7 +58,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
-    # Tambahan: env diseragamkan supaya hasil CI konsisten di semua step.
     env:
       APP_ENV: testing
       APP_DEBUG: true
@@ -44,7 +83,6 @@ jobs:
           tools: composer
           extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, intl, pcntl
 
-      # Tambahan: info versi tooling untuk debugging kalau CI merah.
       - name: Show tool versions
         run: |
           php -v

@@ -67,7 +67,7 @@ final class AmazonBwpSignature
 
     private static function getPublicKeyPemByKid(string $kid): ?string
     {
-        $cacheKey = 'tenrusl:amzn_bwp:jwks_pem:' . hash('sha256', $kid);
+        $cacheKey = 'tenrusl:amzn_bwp:jwks_pem:'.hash('sha256', $kid);
         $cached = Cache::get($cacheKey);
 
         if (is_string($cached) && $cached !== '') {
@@ -94,7 +94,7 @@ final class AmazonBwpSignature
             return null;
         }
 
-        if (!$resp->ok()) {
+        if (! $resp->ok()) {
             Log::warning('amzn_bwp_jwks_fetch_failed', [
                 'kid' => $kid,
                 'status' => $resp->status(),
@@ -104,7 +104,7 @@ final class AmazonBwpSignature
         }
 
         $jwks = $resp->json();
-        if (!is_array($jwks) || !isset($jwks['keys']) || !is_array($jwks['keys'])) {
+        if (! is_array($jwks) || ! isset($jwks['keys']) || ! is_array($jwks['keys'])) {
             return null;
         }
 
@@ -116,7 +116,7 @@ final class AmazonBwpSignature
             }
         }
 
-        if (!is_array($jwk)) {
+        if (! is_array($jwk)) {
             return null;
         }
 
@@ -142,7 +142,7 @@ final class AmazonBwpSignature
             return null;
         }
 
-        $uncompressedPoint = "\x04" . $xBin . $yBin;
+        $uncompressedPoint = "\x04".$xBin.$yBin;
 
         $pem = self::spkiPemFromP384Point($uncompressedPoint);
         if ($pem === null) {
@@ -163,6 +163,7 @@ final class AmazonBwpSignature
         }
 
         $out = base64_decode($b64, true);
+
         return $out === false ? null : $out;
     }
 
@@ -178,25 +179,26 @@ final class AmazonBwpSignature
         $oidEcPublicKey = "\x06\x07\x2A\x86\x48\xCE\x3D\x02\x01";
         $oidSecp384r1 = "\x06\x05\x2B\x81\x04\x00\x22";
 
-        $algId = self::derSequence($oidEcPublicKey . $oidSecp384r1);
+        $algId = self::derSequence($oidEcPublicKey.$oidSecp384r1);
 
         // BIT STRING: 0 unused bits + point bytes
-        $bitString = self::derBitString("\x00" . $uncompressedPoint);
+        $bitString = self::derBitString("\x00".$uncompressedPoint);
 
-        $spki = self::derSequence($algId . $bitString);
+        $spki = self::derSequence($algId.$bitString);
 
         $b64 = chunk_split(base64_encode($spki), 64, "\n");
+
         return "-----BEGIN PUBLIC KEY-----\n{$b64}-----END PUBLIC KEY-----\n";
     }
 
     private static function derSequence(string $content): string
     {
-        return "\x30" . self::derLength(strlen($content)) . $content;
+        return "\x30".self::derLength(strlen($content)).$content;
     }
 
     private static function derBitString(string $content): string
     {
-        return "\x03" . self::derLength(strlen($content)) . $content;
+        return "\x03".self::derLength(strlen($content)).$content;
     }
 
     private static function derLength(int $len): string
@@ -212,21 +214,22 @@ final class AmazonBwpSignature
         $bytes = '';
         $v = $len;
         while ($v > 0) {
-            $bytes = chr($v & 0xFF) . $bytes;
+            $bytes = chr($v & 0xFF).$bytes;
             $v >>= 8;
         }
 
-        return chr(0x80 | strlen($bytes)) . $bytes;
+        return chr(0x80 | strlen($bytes)).$bytes;
     }
 
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 
         $v = trim($v);
+
         return $v !== '' ? $v : null;
     }
 

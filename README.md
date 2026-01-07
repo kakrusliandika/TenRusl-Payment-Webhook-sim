@@ -9,16 +9,17 @@
 ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539?logo=openapi-initiative&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 
-Demo **Laravel 12** yang mencontohkan arsitektur payment “production-minded”: **idempotency**, **dedup webhook**, **signature verification (gate)**, dan **exponential backoff retry** — semuanya dalam mode **simulator** (tanpa kredensial gateway asli). Cocok untuk **portfolio** & belajar pola reliabilitas API.
+Demo **Laravel 12** yang niru pola aplikasi payment/webhook yang *production-minded*: **idempotency**, **dedup webhook**, **signature verification (gate)**, dan **exponential backoff retry** — tapi semuanya dalam mode **simulator** (tanpa kredensial gateway asli).
 
 🌍 Live Demo: **https://tenrusl.alwaysdata.net/payment-webhook-sim/**
 
-> **Catatan**: seluruh provider di repo ini berjalan sebagai simulator. Jangan menaruh kredensial produksi.
+> Semua provider di repo ini simulator. Jangan pernah taruh kredensial produksi di repo ini (atau di log).
 
 ---
 
 ## 🧭 Daftar Isi
 
+- [Production Contract (wajib dibaca)](#-production-contract-wajib-dibaca)
 - [Fitur](#-fitur)
 - [Arsitektur Singkat](#-arsitektur-singkat)
 - [Reliability Guarantees](#-reliability-guarantees)
@@ -26,19 +27,135 @@ Demo **Laravel 12** yang mencontohkan arsitektur payment “production-minded”
 - [Demo Data untuk Admin Panel](#-demo-data-untuk-admin-panel)
 - [Admin API (Protected)](#-admin-api-protected)
 - [Commands Cheat Sheet](#-commands-cheat-sheet)
-- [Konfigurasi (config/tenrusl.php + .env)](#-konfigurasi-configtenruslphp--env)
+- [Konfigurasi](#-konfigurasi)
 - [Endpoint API](#-endpoint-api)
-- [Webhook Signature (Simulator)](#-webhook-signature-simulator)
+- [Webhook Signature Cookbook](#-webhook-signature-cookbook)
 - [Retry Engine & Scheduler](#-retry-engine--scheduler)
 - [OpenAPI → Bundle → Postman](#-openapi--bundle--postman)
 - [Testing](#-testing)
 - [CI Workflows](#-ci-workflows)
+- [Observability (logs/queue/horizon)](#-observability-logsqueuehorizon)
 - [Docker (Dev)](#-docker-dev)
 - [Deploy (Render/Railway)](#-deploy-renderrain)
 - [Struktur Direktori](#-struktur-direktori)
 - [Limitations & Next Steps](#-limitations--next-steps)
+- [Production Hardening Checklist](#-production-hardening-checklist)
 - [Troubleshooting](#-troubleshooting)
 - [Lisensi](#-lisensi)
+
+---
+
+## 🧾 Production Contract (wajib dibaca)
+
+Kalau kamu mau bilang “ini siap production”, minimal ini harus **dipenuhi**. Kalau enggak, biasanya kelihatan aman pas traffic sepi, terus panik pas ada burst 😂
+
+### 0) TL;DR checklist
+
+- ✅ `APP_ENV=production`, `APP_DEBUG=false`, `APP_KEY` **wajib**
+- ✅ DB managed (Postgres/MySQL), **jangan SQLite**
+- ✅ Redis wajib untuk lock/queue (apalagi kalau scale > 1)
+- ✅ **3 proses**: web + worker + scheduler (cron `schedule:run`)
+- ✅ Healthcheck platform pakai **`/up`**
+- ✅ Signature gate aktif di webhook route
+- ✅ Worker `timeout` selaras sama `retry_after` (biar job gak double-run)
+- ✅ Deploy step jalanin cache yang bener (config/route/view/event)
+
+### 1) Tiga proses wajib (web / worker / scheduler)
+
+**Web**
+- tugas: nerima request (API + webhook)
+- start: `sh ./start.sh web`
+
+**Worker (queue)**
+- tugas: proses job (kalau `TENRUSL_SCHEDULER_QUEUE=true` atau kamu dispatch job)
+- start: `sh ./start.sh worker`
+- catatan: aman diskalakan, tapi jangan kebablasan (lihat bagian scaling)
+
+**Scheduler trigger**
+- tugas: tiap menit trigger `php artisan schedule:run --no-interaction`
+- ini bukan “service yang long-running” wajib; yang wajib itu trigger per menitnya.
+
+Contoh setup scheduler (Linux cron):
+```bash
+* * * * * cd /path/to/app && php artisan schedule:run --no-interaction
+```
+
+> Render/Railway paling enak: bikin cron service/job terpisah, share env yang sama.
+
+### 2) Health endpoint resmi
+
+- Endpoint health **resmi**: **`/up`**
+  Ini yang dipakai buat container/service healthcheck dan uptime monitor.
+- Kalau kamu masih punya `/health`, gapapa, tapi jadikan `/up` sebagai “kontrak publik”.
+
+> Biasanya `/up` cukup return status `200` tanpa logic berat. Jangan bikin healthcheck ikut query DB berat yang bikin healthcheck malah ikut bikin outage 😄
+
+### 3) Env wajib (tanpa rahasia di docs)
+
+**Core**
+- `APP_ENV=production`
+- `APP_DEBUG=false`
+- `APP_KEY=base64:...` (jangan generate tiap boot)
+- `APP_URL=https://...`
+
+**Database**
+- `DB_CONNECTION=pgsql` / `mysql`
+- `DB_URL=...` (recommended) atau `DB_HOST/DB_DATABASE/DB_USERNAME/DB_PASSWORD`
+
+**Redis & Queue**
+- `CACHE_STORE=redis`
+- `QUEUE_CONNECTION=redis`
+- `SESSION_DRIVER=redis` (recommended)
+- `REDIS_HOST`, `REDIS_PORT`, (optional) `REDIS_PASSWORD`
+
+**TenRusl runtime knobs**
+- `TENRUSL_PROVIDERS_ALLOWLIST=mock,xendit,midtrans,...`
+- `TENRUSL_MAX_RETRY_ATTEMPTS=8` (contoh)
+- `TENRUSL_RETRY_BASE_MS=500`
+- `TENRUSL_RETRY_CAP_MS=60000`
+- `TENRUSL_SCHEDULER_BACKOFF_MODE=decorrelated`
+- `TENRUSL_SCHEDULER_LIMIT=500`
+- `TENRUSL_SCHEDULER_QUEUE=true` (kalau mau scheduler cuma enqueue)
+
+**Admin**
+- `TENRUSL_ADMIN_HEADER=X-Admin-Key`
+- `TENRUSL_ADMIN_KEY=...` (secret)
+- `TENRUSL_ADMIN_DEMO_KEY=...` (secret)
+
+> Provider secret/token (Stripe webhook secret, Midtrans server key, dll) **wajib** via platform secrets.
+
+### 4) “No demo mode” di production
+
+Di production, ini pantang:
+- SQLite
+- `APP_DEBUG=true`
+- `APP_KEY` ephemeral
+- cache store `array`/`file` (buat lock, itu jebakan 😅)
+
+`start.sh` sengaja dibuat fail-fast supaya salah config ketahuan dari awal.
+
+### 5) Deploy step: cache yang bener (biar boot cepet + konsisten)
+
+Buat Laravel, set cache saat deploy itu “power move”:
+- `php artisan config:cache`
+- `php artisan route:cache` (optional; kadang bisa gagal kalau ada route closure)
+- `php artisan view:cache` (optional)
+- `php artisan event:cache` (kalau app punya event discovery/listener yang stable)
+
+Migrations sebaiknya jadi release step (bukan saat boot container):
+```bash
+php artisan migrate --force --no-interaction
+```
+
+### 6) Queue timeout vs retry_after harus selaras
+
+Rule of thumb: `retry_after` harus **lebih besar** dari `--timeout` worker + buffer.
+
+Contoh aman:
+- `WORKER_TIMEOUT=90`
+- `retry_after=120` (buffer 30s)
+
+Kalau enggak selaras, job bisa dianggap “expired” lalu diambil worker lain, hasilnya: **double-run**.
 
 ---
 
@@ -48,31 +165,26 @@ Demo **Laravel 12** yang mencontohkan arsitektur payment “production-minded”
 - Header: `Idempotency-Key`
 - Store hasil response (status+headers+body) untuk replay yang konsisten.
 - Lock untuk mencegah eksekusi paralel dengan key yang sama (menghindari double-create).
-- (Opsional) Deteksi konflik: key sama tapi body berbeda → bisa ditolak (`409`) memakai fingerprint request (hash) agar kasusnya “tercatat” rapi.
+- (Opsional) Deteksi konflik: key sama tapi body beda → bisa ditolak (`409`) pakai fingerprint request (hash).
 
 ### 🧬 Dedup Webhook — `(provider, event_id)`
-- Unique constraint di DB untuk memastikan **race-condition safe**.
-- Insert → jika duplicate-key → ambil row existing dan **lock row** (agar state konsisten).
+- Unique constraint di DB untuk race-condition safe.
+- Insert → kalau duplicate → ambil row existing dan lock row (agar state konsisten).
 - Attempts di-*touch* saat duplicate datang dari provider (bukan internal retry).
 
 ### 🔏 Signature Verification Gate (sebelum masuk domain)
-- Route webhook dipasangi middleware `verify.webhook.signature`.
-- Raw body disimpan ke request attribute `tenrusl_raw_body` agar hashing selalu memakai body mentah (bukan `json_encode` ulang).
-- `SignatureVerifier` jadi source-of-truth: mapping `provider → <VerifierClass>` + enforce allowlist.
+- Webhook route dipasangi middleware `verify.webhook.signature`.
+- Raw body disimpan ke request attribute (mis. `tenrusl_raw_body`) biar signature hitungannya presisi.
+- `SignatureVerifier` jadi source-of-truth: mapping `provider → VerifierClass` + enforce allowlist.
 
 ### 🔁 Retry dengan Exponential Backoff + Jitter
-- `RetryBackoff` mendukung mode: `full`, `equal`, `decorrelated` (AWS-style).
+- `RetryBackoff` dukung mode: `full`, `equal`, `decorrelated` (AWS-style).
 - Scheduler/command memilih event “due” dan melakukan claiming agar tidak double-process.
-- Jalur retry bisa **inline** atau **queue** (job `ProcessWebhookEvent`) dan tetap aman dipanggil ulang (idempotent di level event).
+- Jalur retry bisa inline atau queue (job `ProcessWebhookEvent`), dan aman dipanggil ulang.
 
-### 🧪 Tests & CI
-- Pest Feature tests untuk payments, webhooks, dedup, signature gate, retry command.
-- Test penting untuk mencegah regresi refactor:
-  - create payment idempotent (key sama → id sama)
-  - get payment by id/status (resource shape stabil)
-  - admin list membutuhkan auth (tanpa key harus ditolak)
-  - update test lama agar tidak hanya mengandalkan `provider_ref` saja
-- GitHub Actions: QA (pint + larastan + tests), docs sync, artifacts OpenAPI.
+### 🧾 Correlation ID buat tracing incident
+- Middleware `CorrelationIdMiddleware` inject `X-Request-ID`
+- Masuk ke response header + masuk ke logging context (jadi enak cari 1 request end-to-end)
 
 ---
 
@@ -83,7 +195,7 @@ flowchart TD
   A[Client] -->|"Idempotency-Key"| B["POST /api/v1/payments"]
   B -->|"create pending"| P[(payments)]
 
-  W[Provider] -->|"POST /api/v1/webhooks/&#123;provider&#125;"| M[VerifyWebhookSignature]
+  W[Provider] -->|"POST /api/v1/webhooks/{provider}"| M[VerifyWebhookSignature]
   M -->|"rawBody saved to request attr"| C[WebhooksController]
   C -->|"Dedup + orchestrate"| R[WebhookProcessor]
   R -->|"Update status (atomic)"| P
@@ -99,34 +211,31 @@ flowchart TD
 - **SignatureVerifier**: gate signature per provider + allowlist.
 - **WebhookProcessor**: dedup + update payment + update event audit + scheduling retry.
 - **RetryWebhookCommand**: selection due events + claiming/locking + dispatch inline/queue.
-- **ProcessWebhookEvent Job**: proses async, aman dipanggil ulang, punya guard agar event “final” tidak diproses lagi.
+- **ProcessWebhookEvent Job**: proses async, aman dipanggil ulang.
 - **CorrelationIdMiddleware**: inject `X-Request-ID` untuk tracing konsisten.
 
 ---
 
 ## 🧷 Reliability Guarantees
 
-Bagian ini menjelaskan “janji” sistem dan kenapa implementasinya aman:
+Bagian ini menjelaskan “janji” sistem (yang bikin dia tahan banting) dan kenapa implementasinya aman.
 
 1) **Idempotent create payment**
-   - Kunci: `Idempotency-Key`
-   - Replay: request yang sama → response sama (body/status/headers).
-   - Paralel call dengan key sama → ditahan oleh lock; kalau collision → `409` (opsional, tergantung kebijakan implementasi).
+   - Replay request yang sama → response sama (body/status/headers).
+   - Paralel request key sama → ditahan lock; collision bisa jadi `409` (opsional).
 
-2) **Dedup webhook benar-benar race-safe**
-   - Unique DB: `(provider, event_id)`
-   - On conflict: ambil row existing + `FOR UPDATE` untuk menghindari update state yang saling timpa.
-   - Duplikasi event dari provider tidak mengubah makna domain, hanya menambah audit/attempts sesuai kebutuhan.
+2) **Dedup webhook race-safe**
+   - Unique DB `(provider, event_id)` bikin event yang sama *cuma ada satu*.
+   - Duplikasi event dari provider tidak bikin domain jadi “ke-trigger dua kali”.
 
 3) **Update event + payment konsisten**
-   - Saat event berhasil memfinalkan status payment, event juga ditandai `processed` + `processed_at` + `payment_provider_ref` + `payment_status` dalam orkestrasi yang konsisten.
-   - Status event (`received|processed|failed`) dipisah dari status payment (`pending|succeeded|failed`) agar audit jelas.
+   - Saat event berhasil memfinalkan payment, event ditandai `processed` + timestamp.
+   - Status event (`received|processed|failed`) dipisah dari status payment (`pending|succeeded|failed`) biar audit jelas.
 
-4) **Retry tidak “mandek”**
-   - Event due: `next_retry_at IS NULL OR next_retry_at <= now()`
-   - Claiming: attempts/lease di-update dulu dalam transaction, baru diproses.
-   - Guard tambahan di job: skip jika event sudah final atau belum due (antisipasi delay queue yang tidak presisi).
-   - Scheduler: jalan tiap menit + `withoutOverlapping()`.
+4) **Retry enggak gampang mandek**
+   - Query event due: `next_retry_at <= now OR next_retry_at IS NULL`
+   - Claiming via transaksi + lock, lalu proses inline/queue
+   - Guard tambahan di job: skip kalau event sudah final / belum due (antisipasi delay queue)
 
 ---
 
@@ -146,32 +255,25 @@ php artisan key:generate
 # SQLite dev cepat
 mkdir -p database && touch database/database.sqlite
 
-# migrate + seed (supaya admin panel langsung ada data demo)
+# migrate + seed biar demo panel langsung ada data
 php artisan migrate --seed
 
 php artisan serve
 # http://127.0.0.1:8000
 ```
 
-Swagger UI (jika `l5-swagger` diaktifkan):
+Swagger UI (kalau `l5-swagger` aktif):
 - `http://127.0.0.1:8000/api/documentation`
-
-> Tips dev: kalau kamu ingin reset data demo cepat:
-> ```bash
-> php artisan migrate:fresh --seed
-> ```
 
 ---
 
 ## 🧪 Demo Data untuk Admin Panel
 
-Folder `database/` sengaja dibuat “bernilai demo”: setelah deploy/migrate, admin UI tidak kosong.
+Folder `database/` sengaja dibuat “bernilai demo” biar UI/admin panel enggak kosong pas pertama buka.
 
-Yang tersedia:
+Yang biasanya tersedia:
 - **Factories**: `PaymentFactory`, `WebhookEventFactory`, `UserFactory`
-- **Seeders**: `DatabaseSeeder` mengisi:
-  - beberapa payment status `pending` + `succeeded`
-  - beberapa webhook event status `received` + `processed`
+- **Seeders**: `DatabaseSeeder` isi beberapa payment + webhook events
 
 Cara pakai:
 ```bash
@@ -180,44 +282,27 @@ php artisan migrate --seed
 php artisan migrate:fresh --seed
 ```
 
-> Jika kamu deploy di platform yang menjalankan migration otomatis, pastikan ada jalur seed (atau minimal “first-run seed”) supaya demo admin langsung hidup.
-
 ---
 
 ## 🛡️ Admin API (Protected)
 
-Repo ini mendukung skenario “admin/demo panel”:
-- list payments (paginated / filterable)
+Skenario admin/demo panel:
+- list payments (paginated/filter)
 - list webhook events (status/attempts/next_retry_at)
 - (opsional) trigger retry/replay
 
-**Keamanan:**
-- Endpoint admin **wajib** auth sederhana (misalnya API key).
-- Tests memastikan: **tanpa key → ditolak**.
+**Kontrak keamanan sederhana (disarankan):**
+- `.env`: `TENRUSL_ADMIN_API_KEY=changeme`
+- Header: `X-Admin-Key: changeme`
+- Alternatif: `Authorization: Bearer <key>`
 
-Konvensi yang disarankan (sesuaikan dengan implementasi kamu):
-- `.env`:
-  - `TENRUSL_ADMIN_API_KEY=changeme`
-- Header (contoh):
-  - `X-Admin-Key: changeme`
-- Atau gunakan `Authorization: Bearer <key>` jika ingin pola lebih standar.
-
-> Lihat OpenAPI (`docs/openapi.yaml`) untuk nama header dan security scheme yang jadi source-of-truth di repo kamu.
-
-**React Admin UI (Front-end):**
-- Repo admin panel (opsional): `TenRusl-ReactTS-Admin-Payment`
-- Idealnya admin panel hanya butuh:
-  - Base URL API (`VITE_API_BASE_URL`)
-  - Admin key / token (untuk endpoint protected)
-  - Mode demo (seeded database) agar langsung ada list
+> Nama header final tetap ngikut OpenAPI (`docs/openapi.yaml`) kalau repo kamu sudah jadikan itu source-of-truth.
 
 ---
 
 ## 🧰 Commands Cheat Sheet
 
 ### 🐘 Composer scripts (composer.json)
-
-> Jalankan dari root project
 
 ```bash
 # Setup lengkap (install + env + key + migrate + npm + build)
@@ -275,46 +360,40 @@ php artisan tenrusl:webhooks:retry-once
 # Jalankan scheduler loop (local/dev)
 php artisan schedule:work
 
-# Jalankan queue worker khusus webhook (jika mode queue dipakai)
+# Jalankan queue worker khusus webhook (kalau mode queue dipakai)
 php artisan queue:work --queue=webhooks
 
 # Utility
 php artisan route:list --path=api/v1
-php artisan tenrusl:route:list-v1
 php artisan migrate --seed
 php artisan test
 ```
 
 ---
 
-## 🔧 Konfigurasi (config/tenrusl.php + .env)
+## 🔧 Konfigurasi
 
-Konfigurasi utama ada di `config/tenrusl.php` dan dikontrol via `.env`.
+Konfigurasi utama di `config/tenrusl.php` dan dikontrol via `.env`.
 
 ### 🎛️ Knob inti (dipakai nyata di service)
 | Config Key | Env | Default | Dipakai oleh |
 |---|---|---:|---|
 | `tenrusl.max_retry_attempts` | `TENRUSL_MAX_RETRY_ATTEMPTS` | `5` | WebhookProcessor, RetryWebhookCommand, scheduler |
-| `tenrusl.retry_base_ms` | `TENRUSL_RETRY_BASE_MS` | `500` | RetryBackoff (via command/processor) |
-| `tenrusl.retry_cap_ms` | `TENRUSL_RETRY_CAP_MS` | `30000` | RetryBackoff (cap) |
-| `tenrusl.retry_min_lease_ms` | `TENRUSL_RETRY_MIN_LEASE_MS` | `250` | RetryWebhookCommand (lease minimum) |
-| `tenrusl.scheduler_limit` | `TENRUSL_SCHEDULER_LIMIT` | `200` | Scheduler definition (routes/console.php) |
-| `tenrusl.scheduler_backoff_mode` | `TENRUSL_SCHEDULER_BACKOFF_MODE` | `full` | Scheduler → RetryWebhookCommand |
-| `tenrusl.scheduler_provider` | `TENRUSL_SCHEDULER_PROVIDER` | `""` | Scheduler filter provider |
-| `tenrusl.idempotency.ttl_seconds` | `TENRUSL_IDEMPOTENCY_TTL_SECONDS` | `7200` | IdempotencyKeyService |
-| `tenrusl.idempotency.lock_seconds` | `IDEMPOTENCY_LOCK_SECONDS` | `30` | IdempotencyKeyService |
-| `tenrusl.webhook.dedup_ttl_seconds` | `TENRUSL_WEBHOOK_DEDUP_TTL_SECONDS` | `86400` | pruning/maintenance (future) |
-| `tenrusl.signature.timestamp_leeway_seconds` | `TENRUSL_SIG_TS_LEEWAY` | `300` | verifiers yang pakai timestamp |
-| `tenrusl.admin.api_key` | `TENRUSL_ADMIN_API_KEY` | `""` | Admin endpoints (protect list/retry) |
-
-> Catatan: penamaan key `admin.api_key` bisa berbeda tergantung implementasi. Source-of-truth tetap config + OpenAPI di repo.
+| `tenrusl.retry_base_ms` | `TENRUSL_RETRY_BASE_MS` | `500` | RetryBackoff |
+| `tenrusl.retry_cap_ms` | `TENRUSL_RETRY_CAP_MS` | `30000` | RetryBackoff |
+| `tenrusl.retry_min_lease_ms` | `TENRUSL_RETRY_MIN_LEASE_MS` | `250` | RetryWebhookCommand |
+| `tenrusl.scheduler_limit` | `TENRUSL_SCHEDULER_LIMIT` | `200` | scheduler |
+| `tenrusl.scheduler_backoff_mode` | `TENRUSL_SCHEDULER_BACKOFF_MODE` | `full` | scheduler |
+| `tenrusl.scheduler_provider` | `TENRUSL_SCHEDULER_PROVIDER` | `""` | scheduler filter provider |
+| `tenrusl.signature.timestamp_leeway_seconds` | `TENRUSL_SIG_TS_LEEWAY_SECONDS` | `300` | verifiers yang pakai timestamp |
+| `tenrusl.admin.api_key` | `TENRUSL_ADMIN_API_KEY` | `""` | Admin endpoints |
 
 ### ✅ Allowlist provider
-Allowlist diset di `tenrusl.providers_allowlist` dan dipakai konsisten oleh:
+Allowlist dipakai konsisten oleh:
 - constraint route (`whereIn('provider', $providers)`)
 - SignatureVerifier allowlist gate
 
-Default allowlist (contoh):
+Contoh:
 ```text
 mock, xendit, midtrans, stripe, paypal, paddle, lemonsqueezy,
 airwallex, tripay, doku, dana, oy, payoneer, skrill, amazon_bwp
@@ -329,131 +408,119 @@ Base URL: `http://127.0.0.1:8000/api/v1`
 | Method | Path | Deskripsi | Catatan |
 |---:|---|---|---|
 | POST | `/payments` | Create payment (idempotent) | Header `Idempotency-Key` |
-| GET | `/payments/{provider}/{provider_ref}/status` | Status check | provider constrained allowlist |
-| GET | `/payments/{id}` | Get payment by id | berguna untuk admin/detail view |
-| POST | `/webhooks/{provider}` | Receive webhook | Middleware signature wajib |
-| OPTIONS | `/webhooks/{provider}` | Preflight | untuk CORS strict client |
-| GET | `/admin/*` | Admin list/ops | Protected (API key/token) |
+| GET | `/payments/{provider}/{provider_ref}/status` | Status check | provider constrained |
+| GET | `/payments/{id}` | Get payment by id | cocok buat admin/detail |
+| POST | `/webhooks/{provider}` | Receive webhook | middleware signature wajib |
+| OPTIONS | `/webhooks/{provider}` | Preflight | untuk CORS |
+| GET | `/admin/*` | Admin list/ops | protected |
 
-> Lihat `docs/openapi.yaml` untuk daftar endpoint dan security scheme yang pasti.
-
-### Contoh cURL — create payment (idempotent)
-
+### Contoh cURL — create payment
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/payments   -H "Content-Type: application/json"   -H "Idempotency-Key: 123e4567-e89b-12d3-a456-426614174000"   -H "X-Request-ID: req-demo-001"   -d '{"provider":"mock","amount":25000,"currency":"IDR","description":"Topup","metadata":{"order_id":"ORD-123"}}'
 ```
 
-### Contoh response envelope (201)
-
-```json
-{
-  "data": {
-    "id": "01JCDZQ2F1G8W3X1R7SZM3KZ2S",
-    "provider": "mock",
-    "provider_ref": "sim_mock_01JCDZQ2F1G8W3X1R7SZM3KZ2S",
-    "amount": 25000,
-    "currency": "IDR",
-    "status": "pending",
-    "meta": { "order_id": "ORD-123" },
-    "created_at": "2025-12-01T09:00:00Z",
-    "updated_at": "2025-12-01T09:00:00Z"
-  }
-}
-```
-
 ---
 
-## 🔏 Webhook Signature (Simulator)
+## 🔏 Webhook Signature Cookbook
 
-Webhook lewat gate middleware: `VerifyWebhookSignature` → `SignatureVerifier` → `<ProviderSignature>::verify(rawBody, Request)`.
+Prinsip umum (yang selalu sama):
+1) Ambil **raw body** persis yang dikirim provider
+2) Hitung signature sesuai kontrak provider
+3) Compare **constant-time**
+4) (Kalau ada timestamp) enforce leeway
 
-| Provider | Header/Metode | Catatan ringkas |
+Webhook lewat gate middleware: `VerifyWebhookSignature` → `SignatureVerifier` → `ProviderSignature::verify(rawBody, Request)`.
+
+| Provider | Header/Metode | Cara validasi (ringkas, tanpa rahasia) |
 |---|---|---|
 | `mock` | `X-Mock-Signature` | `hex(hmac_sha256(raw_body, MOCK_SECRET))` |
-| `xendit` | `X-CALLBACK-TOKEN` | harus sama dengan `XENDIT_CALLBACK_TOKEN` |
+| `xendit` | `X-CALLBACK-TOKEN` | token header harus match env |
 | `midtrans` | `signature_key` | `sha512(order_id + status_code + gross_amount + MIDTRANS_SERVER_KEY)` |
-| `stripe` | `Stripe-Signature` | HMAC + timestamp leeway |
-| `paddle` | `p_signature` / signing secret | dukung pola lama (RSA) dan baru (HMAC) |
+| `stripe` | `Stripe-Signature` | HMAC + timestamp (leeway) |
+| `paddle` | `p_signature` | simulasi RSA/HMAC (edukatif) |
 | `lemonsqueezy` | `X-Signature` | HMAC raw body |
-| `airwallex` | `x-timestamp` + `x-signature` | HMAC SHA256 `timestamp + body` |
+| `airwallex` | `x-timestamp`, `x-signature` | HMAC SHA256 `timestamp + body` |
 | `tripay` | `X-Callback-Signature` | HMAC raw JSON |
-| `doku` | `Signature` (+Digest, dll.) | signer style DOKU (disederhanakan untuk demo) |
+| `doku` | `Signature` (+Digest, dll.) | gaya signer DOKU (disederhanakan) |
 | `dana` | RSA signature header | verifikasi RSA (public key) |
 | `oy` | secret/whitelist | dipersiapkan (simulasi) |
 | `payoneer` | shared secret | dipersiapkan (simulasi) |
 | `skrill` | MD5/IPN | dipersiapkan (simulasi) |
 | `amazon_bwp` | RSA signature header | dipersiapkan (simulasi) |
 
-> Karena ini simulator, beberapa provider dibuat “edukatif”: fokus pada pola gate + raw body + constant-time compare + timestamp leeway.
+> Karena ini simulator, beberapa provider dibuat “edukatif”: fokus pada pola gate + raw body + compare aman.
 
 ---
 
 ## 🔁 Retry Engine & Scheduler
 
-### RetryBackoff modes
+### Backoff modes
 - **full**: `random(0, exp)`
 - **equal**: `exp/2 + random(0, exp/2)`
 - **decorrelated**: `min(cap, random(base, prev*3))`
 
-### RetryWebhookCommand — prinsip penting
-- Query event **due**: `next_retry_at <= now OR next_retry_at IS NULL`
-- Filter provider: `--provider=<name>`
-- Limit batch: `--limit=<n>`
-- Claiming via transaction + `FOR UPDATE`:
+### Prinsip command retry
+- Ambil event due (`next_retry_at <= now OR next_retry_at IS NULL`)
+- Claiming via transaksi + lock:
   - `attempts++`
   - `last_attempt_at = now`
-  - set “lease” `next_retry_at = now + backoff`
-- Proses inline atau queue (`--queue`) tanpa double-processing
+  - set lease `next_retry_at = now + backoff`
+- Proses inline atau queue (job)
 
-### Scheduler (routes/console.php)
-Scheduler memanggil `tenrusl:webhooks:retry` tiap menit dengan:
-- `withoutOverlapping(10)` untuk mencegah overlap
-- parameter dibaca dari config/env agar knobs benar-benar hidup
+### ✅ Scheduler requirement di production (WAJIB)
 
-> Catatan Laravel 11/12:
-> - Definisi schedule bisa ditulis di `routes/console.php` menggunakan facade `Schedule`.
-> - Jalankan di local/dev: `php artisan schedule:work`
-> - Jalankan di production: cron `* * * * * php artisan schedule:run`
+Laravel scheduler **tidak otomatis jalan** hanya karena definisi schedule ada di repo. Wajib ada trigger per menit:
+
+```bash
+* * * * * cd /path/to/app && php artisan schedule:run --no-interaction
+```
+
+Cara verifikasi:
+```bash
+php artisan schedule:list
+php artisan schedule:run -vvv
+```
+
+Kalau mode queue aktif (`TENRUSL_SCHEDULER_QUEUE=true`), pastikan worker hidup:
+```bash
+php artisan queue:work --queue=webhooks
+```
 
 ---
 
 ## 📜 OpenAPI → Bundle → Postman
 
-### Berkas docs utama
+Berkas:
 - `docs/openapi.yaml` (source of truth)
-- `redocly.yaml` (lint rules + pointer ke openapi)
+- `redocly.yaml` (lint rules)
 - output bundle: `storage/api-docs/openapi.yaml`
 - output Postman: `postman/TenRusl.postman_collection.json`
-- environment contoh (opsional): `postman/*.postman_environment.json`
 
-### One-liner
+One-liner:
 ```bash
 npm run docs:sync
 ```
 
-Yang dijalankan:
-1) buat folder output (`storage/api-docs`, `postman`)
-2) lint OpenAPI (`redocly lint`)
-3) bundle (`redocly bundle`)
-4) generate Postman (`openapi2postmanv2`)
+Biasanya step-nya:
+1) buat folder output
+2) lint OpenAPI
+3) bundle
+4) generate Postman
 
 ---
 
 ## 🧪 Testing
 
-Jalankan test suite:
 ```bash
 composer test
 ```
 
-Test penting yang ada/ditambah:
-- **payments**
-  - idempotency: key sama dua kali → payment id sama + header konsisten
-  - get by id / status: shape konsisten untuk dipakai front-end/admin
-- **dedup**: webhook `event_id` sama dua kali → hanya 1 row + attempts naik
-- **signature invalid**: webhook tanpa signature valid → `401`
-- **retry command**: hanya ambil event due + menghormati `--limit`
-- **admin**: endpoint list harus menolak request tanpa auth
+Skenario yang penting:
+- idempotency key replay konsisten
+- dedup webhook: event_id sama → hanya 1 row + attempts naik
+- signature invalid → 401
+- retry command: cuma ambil event due + hormati limit
+- admin endpoint: tanpa auth → ditolak
 
 ---
 
@@ -461,36 +528,54 @@ Test penting yang ada/ditambah:
 
 Folder: `.github/workflows/`
 
-- **ci.yml**: Composer install → migrate SQLite → pint → larastan → pest → composer audit → docs artifact
-- **docs.yml**: `npm ci` → `npm run docs:sync` + fail jika ada file berubah (generated artifacts harus committed)
-- **php-ci.yml**: jalankan tests cepat (SQLite)
-- **railway-deploy.yml**: deploy ke Railway pada push main
-- **retry-schedule.yml**: workflow schedule untuk menjalankan retry processor (opsional/demo)
+Biasanya isinya:
+- `ci.yml`: install → migrate SQLite → pint → larastan → pest → (opsional) audit → docs artifact
+- `docs.yml`: `npm ci` → `npm run docs:sync` lalu fail kalau ada file generated yang belum dicommit
+- `php-ci.yml`: tests cepat (SQLite)
+- (opsional) `retry-schedule.yml`: schedule workflow buat demo retry processor
+- (opsional) `railway-deploy.yml`: deploy on push main
 
-> Tips: workflow docs biasanya sengaja “ketat” agar OpenAPI/Postman selalu sinkron. Jadi setiap perubahan endpoint sebaiknya diikuti `npm run docs:sync` lalu commit hasilnya.
+---
+
+## 📈 Observability (logs/queue/horizon)
+
+Yang worth dimonitor (minimal):
+- queue depth (terutama queue `webhooks`)
+- failure rate (jobs failed / webhook 4xx/5xx)
+- p95/p99 processing time per webhook
+- jumlah event `due` menumpuk (indikasi scheduler/worker mati)
+- Redis availability (latency/error)
+- DB slow queries / connection errors
+
+### Correlation ID (`X-Request-ID`)
+- Kirim `X-Request-ID` dari client atau gateway.
+- Middleware akan propagate ke response dan masuk ke log context.
+
+### Logging yang enak di produksi
+- Untuk container: log ke **STDERR** (enak diambil platform)
+- Kalau mau rapi, gunakan JSON logger + centralized log aggregator
+
+### Queue yang tahan banting
+- Selaraskan `retry_after` dengan `--timeout` worker (plus buffer).
+- Gunakan failed jobs driver supaya bisa investigasi.
+
+### Horizon (opsional tapi mantap)
+Kalau pakai Redis queue, Horizon enak buat:
+- dashboard throughput/runtime/failures
+- config worker yang versioned
 
 ---
 
 ## 🐳 Docker (Dev)
 
-Repo menyediakan beberapa opsi compose (pilih salah satu sesuai kebutuhan).
-
-### ✅ Opsi: MySQL + Nginx (recommended untuk dev Docker)
-1) Pastikan file compose yang dipakai sudah menunjuk ke `Dockerfile` dan `docker/nginx/default.conf`.
-2) Jalankan:
 ```bash
 docker compose up -d --build
+# http://localhost:8000
 ```
-3) Akses app:
-- `http://localhost:8000`
 
-### Troubleshooting Docker
-- Jika `vendor/` kosong di container, compose menyiapkan volume `tenrusl-vendor` agar install composer tidak hilang saat bind mount.
-- Pastikan MySQL healthcheck “healthy” sebelum app start.
-- Jika admin panel butuh data, gunakan seed:
-  ```bash
-  php artisan migrate --seed
-  ```
+Tips:
+- Kalau vendor kosong, compose pakai volume `tenrusl-vendor` supaya install composer enggak hilang saat bind mount.
+- Kalau admin panel butuh data: `php artisan migrate --seed`
 
 ---
 
@@ -498,18 +583,22 @@ docker compose up -d --build
 
 ### Render (Docker)
 - Blueprint: `render.yaml`
-- Default: SQLite (ephemeral) — cocok untuk demo cepat.
+- Web service + worker + cron scheduler dipisah biar jelas
+
+Wajib:
+- cron job per menit: `php artisan schedule:run --no-interaction`
+- healthcheck: `/up`
+
+Deploy flow yang ideal:
+1) build image
+2) release step: `php artisan migrate --force --no-interaction`
+3) cache step (config/route/view/event)
+4) start web container
 
 ### Railway (Nixpacks)
 - Config: `railway.toml`
-- Start script: `start-postgres.sh` (Postgres) / `start.sh` (SQLite fast mode)
-
-### Catatan deploy untuk demo admin
-Agar admin panel tidak kosong, pastikan jalur deploy menjalankan seeding minimal sekali (pilih salah satu):
-- `php artisan migrate --force --seed`
-- atau `php artisan db:seed --force` setelah migrate
-
-> Untuk demo hosting gratis/ephemeral, seeding membantu “first impression” (list langsung terisi).
+- Pastikan ada scheduler trigger juga (cron job)
+- Untuk demo, kamu bisa seed sekali (optional): `php artisan migrate --seed`
 
 ---
 
@@ -518,22 +607,13 @@ Agar admin panel tidak kosong, pastikan jalur deploy menjalankan seeding minimal
 ```text
 app/
   Console/Commands/RetryWebhookCommand.php
-  Http/Controllers/Api/V1/PaymentsController.php
-  Http/Controllers/Api/V1/WebhooksController.php
+  Http/Controllers/Api/V1/
   Http/Middleware/CorrelationIdMiddleware.php
   Http/Middleware/VerifyWebhookSignature.php
-  Http/Requests/Api/V1/CreatePaymentRequest.php
-  Http/Requests/Api/V1/WebhookRequest.php
   Jobs/ProcessWebhookEvent.php
-  Models/Payment.php
-  Models/WebhookEvent.php
-  Repositories/PaymentRepository.php
-  Repositories/WebhookEventRepository.php
+  Models/
+  Repositories/
   Services/
-    Idempotency/
-    Payments/
-    Signatures/
-    Webhooks/
 config/tenrusl.php
 routes/api.php
 routes/console.php
@@ -543,67 +623,137 @@ postman/
 tests/Feature/
 .github/workflows/
 database/
-  factories/
-  migrations/
-  seeders/
 ```
 
 ---
 
 ## ⚠️ Limitations & Next Steps
 
-Tujuan repo ini adalah edukasi + portfolio.
+Repo ini fokus edukasi + portfolio.
 
-Yang sengaja “disimulasikan”:
-- Provider payload tidak selalu identik 1:1 dengan kontrak terbaru.
-- Verifikasi signature untuk provider tertentu dibuat generik (pola gate + raw body), bukan implementasi produksi lengkap.
+Yang sengaja disederhanakan:
+- payload provider tidak selalu identik 1:1 dengan kontrak terbaru
+- sebagian verifikasi signature dibuat generik (pola gate + raw body), bukan implementasi produksi lengkap
 
-Next steps yang masuk akal:
-- Tabel dedicated untuk idempotency (storage=`database`) + housekeeping TTL.
-- Command maintenance untuk pruning `webhook_events` berdasarkan `dedup_ttl_seconds`.
-- UI kecil untuk melihat event webhook, attempts, next_retry_at, dan status history.
-- Admin action “retry now” untuk event tertentu (service re-use agar tidak dobel logic).
+Next steps yang bagus:
+- housekeeping/pruning event lama
+- UI kecil buat lihat webhook events + retry timeline
+- rate limit / circuit breaker per provider
+- metrics p95/p99 processing time + failure rate
 
 ---
 
-## 🛟 Troubleshooting
+## ➕ Production Hardening Checklist
 
-### 1) Webhook selalu 401
-- Pastikan middleware signature aktif di route webhook.
-- Pastikan signature dihitung dari **raw body yang benar-benar dikirim**, bukan dari array hasil decode.
-- Untuk provider `mock`, hitung `X-Mock-Signature` dari raw JSON string persis.
+Bagian ini opsional, tapi kalau kamu ikutin, biasanya hidup lebih tenang 😄
 
-### 2) Intelephense: “Undefined method 'post'” di Pest
-Jika kamu menulis test Pest seperti `$this->post(...)`, Intelephense bisa menganggap `$this` bukan TestCase (false positive).
-Solusi rapi: pakai helper Pest Laravel:
+### 1) Minimum yang harus ada (prod)
 
-```php
-use function Pest\Laravel\post;
-use function Pest\Laravel\postJson;
-use function Pest\Laravel\getJson;
-use function Pest\Laravel\call;
+- ✅ Trigger scheduler per menit (`schedule:run`)
+- ✅ Cache shared untuk lock (Redis recommended)
+- ✅ Queue worker kalau mode queue aktif
+- ✅ Rotasi secrets bila `.env` pernah kepublikasi
+- ✅ Logs bisa diakses (stderr untuk container, atau log aggregation)
+
+### 2) Multi-instance (horizontal scaling)
+
+Kalau web service discale jadi >1 instance:
+
+- Pastikan schedule pakai `onOneServer()` + `withoutOverlapping()`
+- Pastikan semua instance **pakai Redis yang sama** (`CACHE_STORE=redis`)
+- Verifikasi: `php artisan schedule:list` dan pastikan event tidak dobel-run
+
+### 3) Queue tuning (biar gak “ngunci” DB)
+
+- Mulai kecil dulu: 1–2 worker, cek DB load & p95 processing time
+- Kalau webhook burst, naikkan concurrency pelan-pelan (mis. 2 → 4 → 6)
+- Pisahkan queue `webhooks` dari queue lain biar gak saling ganggu
+
+### 4) Alarm yang kepake (yang bikin kamu tahu duluan)
+
+- Alarm kalau failure rate webhook naik (401/403/5xx)
+- Alarm kalau queue backlog `webhooks` naik terus (worker mati/lambat)
+- Alarm kalau banyak event due menumpuk (scheduler mati / lock stuck)
+- Alarm kalau p95 processing time naik terus (DB/Redis slow)
+
+### 5) Timezone notes (biar gak salah baca jadwal)
+
+Banyak platform cron pakai **UTC**. Untuk WIB (UTC+7):
+- 09:00 WIB = 02:00 UTC
+- 17:00 WIB = 10:00 UTC
+
+Kalau scheduler kamu cuma “tiap menit”, timezone bukan isu besar, tapi buat job harian/mingguan itu penting.
+
+### 6) Template env produksi (aman buat dicopy)
+
+> Ini contoh placeholder, bukan value beneran.
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_KEY=base64:CHANGE_ME
+APP_URL=https://example.com
+
+DB_CONNECTION=pgsql
+DB_URL=postgresql://user:pass@host:5432/dbname
+
+CACHE_STORE=redis
+QUEUE_CONNECTION=redis
+SESSION_DRIVER=redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+TENRUSL_PROVIDERS_ALLOWLIST=mock,xendit,midtrans,stripe,lemonsqueezy,tripay
+TENRUSL_MAX_RETRY_ATTEMPTS=8
+TENRUSL_RETRY_BASE_MS=500
+TENRUSL_RETRY_CAP_MS=60000
+TENRUSL_SCHEDULER_BACKOFF_MODE=decorrelated
+TENRUSL_SCHEDULER_LIMIT=500
+TENRUSL_SCHEDULER_QUEUE=true
+
+TENRUSL_ADMIN_HEADER=X-Admin-Key
+TENRUSL_ADMIN_KEY=CHANGE_ME
+TENRUSL_ADMIN_DEMO_KEY=CHANGE_ME
 ```
 
-Lalu ganti `$this->post(...)` menjadi `post(...)` atau `call(...)` sesuai kebutuhan.
+---
 
-### 3) Swagger UI 404
-- `l5-swagger` optional (continue-on-error di CI). Jalankan:
-  ```bash
-  php artisan l5-swagger:generate
-  ```
+> Butuh SOP operasi yang lebih detail (incident, lonjakan retry, backlog queue, Redis down, dll)? cek **RUNBOOK.md**.
+## 🛟 Troubleshooting
 
-### 4) Retry tidak jalan di local
-- Pastikan scheduler hidup:
+### Webhook selalu 401
+- Pastikan middleware signature aktif di route webhook.
+- Pastikan signature dihitung dari **raw body** persis.
+
+### Retry enggak jalan
+- Pastikan scheduler trigger ada:
   ```bash
-  php artisan schedule:work
+  php artisan schedule:run -vvv
   ```
-- Jika mode queue dipakai, jalankan worker:
+- Kalau mode queue aktif, worker harus hidup:
   ```bash
   php artisan queue:work --queue=webhooks
   ```
+- Kalau lock overlap nyangkut (jarang, tapi bisa), coba:
+  ```bash
+  php artisan schedule:clear-cache
+  ```
+
+### Swagger UI 404
+Kalau `l5-swagger` dipakai:
+```bash
+php artisan l5-swagger:generate
+```
 
 ---
 
 ## 📝 Lisensi
 
 MIT © TenRusl - Andika Rusli
+
+---
+
+> Butuh SOP operasi yang lebih detail (incident, lonjakan retry, backlog queue, Redis down, dll)? cek **RUNBOOK.md**.
+
+
+---

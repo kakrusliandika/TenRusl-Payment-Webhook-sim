@@ -1,5 +1,5 @@
 # Redocly CLI config (root project)
-# Dipakai untuk lint/bundle/preview oleh Redocly tooling. :contentReference[oaicite:3]{index=3}
+# Dipakai untuk lint/bundle/preview oleh Redocly tooling.
 
 apis:
   tenrusl:

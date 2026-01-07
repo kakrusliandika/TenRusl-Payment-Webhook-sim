@@ -27,7 +27,7 @@ return [
      *
      * Available Value: 'on', 'off'
      */
-    'x-dns-prefetch-control' => '',
+    'x-dns-prefetch-control' => 'off',
 
     /**
      * X-Download-Options
@@ -87,7 +87,7 @@ return [
      * Available Value: 'no-referrer', 'no-referrer-when-downgrade', 'origin', 'origin-when-cross-origin',
      *                  'same-origin', 'strict-origin', 'strict-origin-when-cross-origin', 'unsafe-url'
      */
-    'referrer-policy' => 'no-referrer',
+    'referrer-policy' => 'strict-origin-when-cross-origin',
 
     /**
      * Cross-Origin-Embedder-Policy
@@ -145,13 +145,13 @@ return [
      * Note: Please ensure your website had set up ssl/tls before enable hsts.
      */
     'hsts' => [
-        'enable' => false,
+        'enable' => (bool) env('SECURE_HEADERS_HSTS', false),
 
         'max-age' => 31536000,
 
-        'include-sub-domains' => false,
+        'include-sub-domains' => (bool) env('SECURE_HEADERS_HSTS_INCLUDE_SUBDOMAINS', true),
 
-        'preload' => false,
+        'preload' => (bool) env('SECURE_HEADERS_HSTS_PRELOAD', true),
     ],
 
     /**
@@ -615,7 +615,10 @@ return [
      * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
      */
     'csp' => [
-        'enable' => true,
+        // CSP dipindahkan ke spatie/laravel-csp supaya:
+        // - kebijakan lebih mudah dirawat
+        // - bisa pakai nonce & integrasi Vite bila dibutuhkan
+        'enable' => false,
 
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy-Report-Only
         'report-only' => false,

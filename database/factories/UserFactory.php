@@ -30,7 +30,7 @@ final class UserFactory extends Factory
             'name' => $this->faker->name(),
             'email' => $this->faker->unique()->safeEmail(),
             'email_verified_at' => Carbon::now(),
-            'password' => static::$password ??= Hash::make('password'),
+            'password' => self::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
         ];
     }

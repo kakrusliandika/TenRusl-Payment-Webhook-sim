@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,8 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
 
-        // Health endpoint (opsional)
-        health: '/up',
+        // Single health endpoint (standard)
+        health: '/health',
 
         // Catatan:
         // - Prefix "/api" biasanya otomatis untuk routes/api.php.
@@ -22,51 +24,40 @@ return Application::configure(basePath: dirname(__DIR__))
         // ============================================================
         // 1) GLOBAL MIDDLEWARE
         // ============================================================
-        // Correlation ID idealnya global supaya tracing konsisten untuk:
-        // - /api/*
-        // - / (web)
-        //
-        // Kita gunakan prepend agar request id sudah ada sejak paling awal pipeline.
         $middleware->prepend(\App\Http\Middleware\CorrelationIdMiddleware::class);
-
-        // Catatan:
-        // - HandleCors umumnya sudah ada di global middleware stack default Laravel.
-        //   Jadi biasanya tidak perlu ditambahkan manual di sini, kecuali kamu remove/override stack.
 
         // ============================================================
         // 2) MIDDLEWARE ALIASES (dipakai di routes)
         // ============================================================
-        // Alias ini memungkinkan kita menulis ->middleware('verify.webhook.signature')
-        // di routes/api.php.
         $middleware->alias([
-            // Boleh dipakai di route/group kalau suatu saat tidak ingin global.
             'correlation.id' => \App\Http\Middleware\CorrelationIdMiddleware::class,
-
-            // Dipakai hanya pada route webhook:
-            // POST /api/v1/webhooks/{provider}
             'verify.webhook.signature' => \App\Http\Middleware\VerifyWebhookSignature::class,
-
-            // Optional: localization & security hardening
             'setlocale' => \App\Http\Middleware\SetLocale::class,
-            'security.headers' => \App\Http\Middleware\SecurityHeaders::class,
+
+            // Package-based hardening (menghilangkan duplikasi custom)
+            'secure.headers' => \Bepsvpt\SecureHeaders\SecureHeadersMiddleware::class,
+            'csp' => \Spatie\Csp\AddCspHeaders::class,
+
+            // Backward compatible alias (kalau ada route lama pakai ini)
+            'security.headers' => \Bepsvpt\SecureHeaders\SecureHeadersMiddleware::class,
         ]);
 
         // ============================================================
         // 3) GROUP MIDDLEWARE (web / api)
         // ============================================================
-        // Web UI: locale + security headers
+        // Web UI: locale + secure headers + CSP
         $middleware->appendToGroup('web', [
             \App\Http\Middleware\SetLocale::class,
-            \App\Http\Middleware\SecurityHeaders::class,
+            \Bepsvpt\SecureHeaders\SecureHeadersMiddleware::class,
+            \Spatie\Csp\AddCspHeaders::class,
         ]);
 
-        // API: security headers
-        // (CorrelationIdMiddleware sudah global, jadi tidak perlu ditambah lagi)
+        // API: secure headers (tanpa CSP agar tidak “rame” di response JSON)
         $middleware->appendToGroup('api', [
-            \App\Http\Middleware\SecurityHeaders::class,
+            \Bepsvpt\SecureHeaders\SecureHeadersMiddleware::class,
         ]);
 
-        // Catatan penting:
+        // Catatan:
         // - VerifyWebhookSignature sengaja TIDAK dibuat global / group "api"
         //   karena hanya relevan untuk endpoint webhook.
         // - Pemasangan yang benar ada di routes/api.php:

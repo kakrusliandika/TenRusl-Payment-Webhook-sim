@@ -9,6 +9,7 @@ use App\Repositories\WebhookEventRepository;
 use App\Services\Payments\PaymentsService;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -38,6 +39,32 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Tambahkan bootstrap logic jika diperlukan (macro, morphMap, dll.)
+        // Fail-fast di production: deny-by-default membutuhkan allowlist non-kosong.
+        if ($this->app->environment('production')) {
+            $allowlist = $this->normalizeAllowlist((array) config('tenrusl.providers_allowlist', []));
+            if ($allowlist === []) {
+                throw new RuntimeException(
+                    'TENRUSL_PROVIDERS_ALLOWLIST is required in production (deny-by-default). '.
+                    'Set it via environment variables / secret manager.'
+                );
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, mixed>  $providers
+     * @return array<int, string>
+     */
+    private function normalizeAllowlist(array $providers): array
+    {
+        $normalized = array_map(
+            static fn ($p) => strtolower(trim((string) $p)),
+            $providers
+        );
+
+        $normalized = array_filter($normalized, static fn ($p) => $p !== '');
+        $normalized = array_values(array_unique($normalized));
+
+        return $normalized;
     }
 }

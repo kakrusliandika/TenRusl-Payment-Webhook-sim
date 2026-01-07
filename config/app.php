@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Links
+    |--------------------------------------------------------------------------
+    |
+    | These values are used by the UI (footer / error pages) to link to the
+    | repository and status page. Keep them empty if not applicable.
+    |
+    */
+
+    'repo_url' => env('APP_REPO_URL'),
+    'status_url' => env('APP_STATUS_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
@@ -88,6 +101,7 @@ return [
     'available_locales' => [
         'en', 'id', 'ar', 'de', 'hi', 'ja', 'ko', 'pt', 'ru', 'th', 'zh', 'es',
     ],
+
     /*
     |--------------------------------------------------------------------------
     | Encryption Key

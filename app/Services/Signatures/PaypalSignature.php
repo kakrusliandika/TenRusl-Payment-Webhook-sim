@@ -70,7 +70,7 @@ final class PaypalSignature
         }
 
         $event = json_decode($rawBody, true);
-        if (!is_array($event)) {
+        if (! is_array($event)) {
             self::logWarn($request, 'paypal_invalid_json', [
                 'env' => $env,
             ]);
@@ -107,7 +107,7 @@ final class PaypalSignature
                 ->acceptJson()
                 ->timeout(self::verifyTimeoutSeconds())
                 ->retry(self::verifyRetries(), self::verifyRetryDelayMs(), throw: false)
-                ->post($base . '/v1/notifications/verify-webhook-signature', $payload);
+                ->post($base.'/v1/notifications/verify-webhook-signature', $payload);
         } catch (\Throwable $e) {
             // Fail-closed on any exception (including timeout connection exception)
             self::logWarn($request, 'paypal_verify_exception', [
@@ -119,7 +119,7 @@ final class PaypalSignature
             return self::result(false, 'verify_exception');
         }
 
-        if (!$verifyResp->ok()) {
+        if (! $verifyResp->ok()) {
             // If token got revoked/expired unexpectedly, purge cache and stop (fail-closed).
             if (in_array($verifyResp->status(), [401, 403], true)) {
                 self::forgetOAuthTokenCache($clientId, $env);
@@ -167,7 +167,7 @@ final class PaypalSignature
                 ->withBasicAuth($clientId, $clientSecret)
                 ->timeout(self::tokenTimeoutSeconds())
                 ->retry(self::tokenRetries(), self::tokenRetryDelayMs(), throw: false)
-                ->post($base . '/v1/oauth2/token', ['grant_type' => 'client_credentials']);
+                ->post($base.'/v1/oauth2/token', ['grant_type' => 'client_credentials']);
         } catch (\Throwable $e) {
             self::logWarn($request, 'paypal_oauth_exception', [
                 'env' => $env,
@@ -177,7 +177,7 @@ final class PaypalSignature
             return null;
         }
 
-        if (!$resp->ok()) {
+        if (! $resp->ok()) {
             self::logWarn($request, 'paypal_oauth_http_failed', [
                 'env' => $env,
                 'status' => $resp->status(),
@@ -214,13 +214,13 @@ final class PaypalSignature
     private static function oauthCacheKey(string $clientId, string $env): string
     {
         // Do not store clientId in plaintext as cache key
-        return 'tenrusl:paypal:oauth_token:' . strtolower($env) . ':' . hash('sha256', $clientId);
+        return 'tenrusl:paypal:oauth_token:'.strtolower($env).':'.hash('sha256', $clientId);
     }
 
     private static function headerString(Request $request, string $key): ?string
     {
         $v = $request->headers->get($key);
-        if (!is_string($v)) {
+        if (! is_string($v)) {
             return null;
         }
 

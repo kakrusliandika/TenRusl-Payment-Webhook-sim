@@ -1,58 +1,261 @@
-# Render Blueprint for TenRusl Payment Webhook Simulator
-services:
-  - type: web
-    name: tenrusl-payment-webhook-sim
-    runtime: docker
-    repo: https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim
-    branch: main
-    plan: free
-    region: singapore
-    autoDeploy: true
+# Render Blueprint — TenRusl Payment Webhook Simulator (Production)
+# Notes:
+# - Worker & Cron availability tergantung plan Render kamu.
+# - preDeployCommand dipakai untuk langkah release (migrate + cache), bukan saat boot.
 
-    # Laravel health endpoint (Laravel default)
-    healthCheckPath: /up
-
-    # Jika kamu ingin APP_KEY persisten:
-    # - Set APP_KEY sebagai "Secret" di dashboard Render (Recommended)
-    # - Kalau tidak, start.sh/Dockerfile kamu sudah generate ephemeral APP_KEY (aman untuk demo)
+envVarGroups:
+  - name: tenrusl-common
     envVars:
+      # Core
       - key: APP_ENV
         value: production
       - key: APP_DEBUG
         value: "false"
 
-      # SQLite quick demo (ephemeral FS)
+      # Database
       - key: DB_CONNECTION
-        value: sqlite
-      - key: DB_DATABASE
-        value: database/database.sqlite
+        value: pgsql
 
-      # Runtime knobs (aman & sederhana untuk demo)
+      # Distributed cache/session/queue (WAJIB untuk multi-instance)
       - key: CACHE_STORE
-        value: file
+        value: redis
       - key: SESSION_DRIVER
-        value: file
+        value: redis
       - key: QUEUE_CONNECTION
-        value: sync
+        value: redis
+      - key: QUEUE_AFTER_COMMIT
+        value: "true"
 
-      # TenRusl knobs
+      # Redis client
+      - key: REDIS_CLIENT
+        value: phpredis
+
+      # Logging: container-friendly
+      - key: LOG_CHANNEL
+        value: stack
+      - key: LOG_STACK
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+
+      # Security / proxy
+      - key: TRUSTED_PROXIES
+        value: "*"
+
+      # TenRusl — deny-by-default (allowlist wajib didefinisikan)
+      - key: TENRUSL_PROVIDERS_ALLOWLIST
+        value: mock,xendit,midtrans,stripe,paypal,paddle,lemonsqueezy,airwallex,tripay,doku,dana,oy,payoneer,skrill,amazon_bwp
+
+      # TenRusl — runtime knobs
       - key: TENRUSL_MAX_RETRY_ATTEMPTS
-        value: "5"
+        value: "8"
       - key: TENRUSL_RETRY_BASE_MS
         value: "500"
       - key: TENRUSL_RETRY_CAP_MS
-        value: "30000"
+        value: "60000"
       - key: TENRUSL_SCHEDULER_BACKOFF_MODE
-        value: full
+        value: decorrelated
       - key: TENRUSL_SCHEDULER_LIMIT
-        value: "200"
-      - key: TENRUSL_SIG_TS_LEEWAY
+        value: "500"
+      - key: TENRUSL_SCHEDULER_QUEUE
+        value: "true"
+
+      - key: TENRUSL_SIG_TS_LEEWAY_SECONDS
         value: "300"
 
-      # Mock/demo secrets (untuk production beneran: pindahkan ke secrets)
-      - key: MOCK_SECRET
-        value: changeme
-      - key: XENDIT_CALLBACK_TOKEN
-        value: changeme
-      - key: MIDTRANS_SERVER_KEY
-        value: changeme
+      # Admin header (non-secret)
+      - key: TENRUSL_ADMIN_HEADER
+        value: X-Admin-Key
+
+      # Worker tuning (opsional)
+      - key: WORKER_SLEEP
+        value: "1"
+      - key: WORKER_TRIES
+        value: "3"
+      - key: WORKER_TIMEOUT
+        value: "90"
+      - key: WORKER_QUEUE
+        value: "default"
+
+databases:
+  - name: tenrusl-db
+    databaseName: tenrusl_webhook
+    user: tenrusl
+    region: singapore
+
+services:
+  - type: keyvalue
+    name: tenrusl-redis
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+    plan: starter
+    region: singapore
+    maxmemoryPolicy: allkeys-lru
+
+  # 1) WEB (HTTP receiver)
+  - type: web
+    name: tenrusl-payment-webhook-sim
+    runtime: docker
+    repo: https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim
+    branch: main
+    plan: starter
+    region: singapore
+    autoDeploy: true
+
+    dockerCommand: sh ./start.sh web
+
+    # Single source of truth: health endpoint
+    healthCheckPath: /health
+
+    # Release step: migrate + caches (including event cache)
+    preDeployCommand: >
+      sh -lc "
+      php artisan migrate --force --no-interaction
+      && php artisan config:cache --no-interaction
+      && php artisan route:cache --no-interaction || true
+      && php artisan view:cache --no-interaction || true
+      && php artisan event:cache --no-interaction || true
+      "
+
+    envVars:
+      - fromGroup: tenrusl-common
+
+      # Core (service-specific)
+      - key: APP_URL
+        sync: false
+      - key: APP_KEY
+        sync: false
+
+      # Web listen port (nginx akan listen di PORT)
+      - key: PORT
+        value: "10000"
+
+      # Database URL (platform-managed)
+      - key: DB_URL
+        fromDatabase:
+          name: tenrusl-db
+          property: connectionString
+
+      # Redis host/port dari Key Value
+      - key: REDIS_HOST
+        fromService:
+          type: keyvalue
+          name: tenrusl-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: keyvalue
+          name: tenrusl-redis
+          property: port
+      - key: REDIS_PASSWORD
+        sync: false
+
+      # Admin keys (wajib set via Secrets)
+      - key: TENRUSL_ADMIN_KEY
+        sync: false
+      - key: TENRUSL_ADMIN_DEMO_KEY
+        sync: false
+
+      # Provider secrets (Render Secrets)
+      - key: TENRUSL_MOCK_SECRET
+        sync: false
+      - key: TENRUSL_XENDIT_CALLBACK_TOKEN
+        sync: false
+      - key: TENRUSL_MIDTRANS_SERVER_KEY
+        sync: false
+      - key: TENRUSL_STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: TENRUSL_PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: TENRUSL_PAYPAL_CLIENT_ID
+        sync: false
+      - key: TENRUSL_PAYPAL_CLIENT_SECRET
+        sync: false
+
+  # 2) WORKER (queue processor)
+  - type: worker
+    name: tenrusl-worker
+    runtime: docker
+    repo: https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim
+    branch: main
+    plan: starter
+    region: singapore
+    autoDeploy: true
+
+    dockerCommand: sh ./start.sh worker
+
+    envVars:
+      - fromGroup: tenrusl-common
+
+      - key: APP_URL
+        sync: false
+      - key: APP_KEY
+        sync: false
+
+      - key: DB_URL
+        fromDatabase:
+          name: tenrusl-db
+          property: connectionString
+
+      - key: REDIS_HOST
+        fromService:
+          type: keyvalue
+          name: tenrusl-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: keyvalue
+          name: tenrusl-redis
+          property: port
+      - key: REDIS_PASSWORD
+        sync: false
+
+      - key: TENRUSL_ADMIN_KEY
+        sync: false
+      - key: TENRUSL_ADMIN_DEMO_KEY
+        sync: false
+
+  # 3) CRON (scheduler tiap menit → jalanin Laravel schedule:run)
+  - type: cron
+    name: tenrusl-scheduler
+    runtime: docker
+    repo: https://github.com/kakrusliandika/TenRusl-Payment-Webhook-sim
+    branch: main
+    plan: starter
+    region: singapore
+    autoDeploy: true
+
+    schedule: "*/1 * * * *"
+    dockerCommand: sh ./start.sh scheduler-run
+
+    envVars:
+      - fromGroup: tenrusl-common
+
+      - key: APP_URL
+        sync: false
+      - key: APP_KEY
+        sync: false
+
+      - key: DB_URL
+        fromDatabase:
+          name: tenrusl-db
+          property: connectionString
+
+      - key: REDIS_HOST
+        fromService:
+          type: keyvalue
+          name: tenrusl-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: keyvalue
+          name: tenrusl-redis
+          property: port
+      - key: REDIS_PASSWORD
+        sync: false
+
+      - key: TENRUSL_ADMIN_KEY
+        sync: false
+      - key: TENRUSL_ADMIN_DEMO_KEY
+        sync: false

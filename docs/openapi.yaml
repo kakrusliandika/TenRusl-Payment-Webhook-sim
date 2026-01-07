@@ -246,7 +246,7 @@ paths:
 
 components:
   securitySchemes:
-    # Admin security (documented): API key header OR Bearer token. :contentReference[oaicite:1]{index=1}
+    # Admin security (documented): API key header OR Bearer token.
     adminApiKey:
       type: apiKey
       in: header
@@ -256,8 +256,8 @@ components:
     adminBearer:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-      description: Bearer token (Authorization: Bearer <token>)
+      bearerFormat: "JWT"
+      description: "Bearer token (Authorization: Bearer <token>)"
 
     webhookSignature:
       type: apiKey

@@ -11,7 +11,6 @@ use DateTimeInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 final class WebhookEventRepository
@@ -62,11 +61,16 @@ final class WebhookEventRepository
         array $payload,
         ?DateTimeInterface $receivedAt = null,
         bool $lockExisting = true,
+        ?string $requestId = null,
+        ?string $sourceIp = null,
+        array $headers = [],
+        ?string $signatureHash = null,
+        ?string $signatureSource = null,
     ): array {
         $now = $this->asCarbon($receivedAt) ?? now();
 
         try {
-            $event = new WebhookEvent();
+            $event = new WebhookEvent;
 
             $event->provider = $provider;
             $event->event_id = $eventId;
@@ -74,6 +78,24 @@ final class WebhookEventRepository
 
             $event->payload_raw = $rawBody;
             $event->payload = $payload;
+
+            // -------------------------
+            // Audit fields (best-effort)
+            // -------------------------
+            // request_id: correlation id dari middleware (untuk tracing end-to-end)
+            if (is_string($requestId) && trim($requestId) !== '') {
+                $event->request_id = trim($requestId);
+            }
+
+            // source_ip: ip setelah TrustProxies benar (proxy/LB)
+            if (is_string($sourceIp) && trim($sourceIp) !== '') {
+                $event->source_ip = trim($sourceIp);
+            }
+
+            // headers: simpan subset aman saja (controller wajib sanitize)
+            if ($headers !== []) {
+                $event->headers = $this->sanitizeHeaders($headers);
+            }
 
             $event->status = 'received';
 
@@ -84,7 +106,15 @@ final class WebhookEventRepository
             $event->last_attempt_at = $now;
 
             // Audit signature hash (best-effort, tanpa menyimpan secret)
-            $event->signature_hash = $this->computeSignatureHash($provider, $payload, $rawBody);
+            // Prefer fingerprint dari middleware VerifyWebhookSignature.
+            $event->signature_hash = $this->normalizeSignatureHash(
+                $signatureHash
+                ?? $this->computeSignatureHash($provider, $payload, $rawBody)
+            );
+
+            if (is_string($signatureSource) && trim($signatureSource) !== '') {
+                $event->signature_source = trim($signatureSource);
+            }
 
             $event->save();
 
@@ -282,8 +312,10 @@ final class WebhookEventRepository
         }
         if (is_string($v)) {
             $t = strtolower(trim($v));
+
             return in_array($t, ['1', 'true', 'yes', 'y', 'on'], true);
         }
+
         return false;
     }
 
@@ -298,6 +330,7 @@ final class WebhookEventRepository
         if ($dt instanceof Carbon) {
             return $dt;
         }
+
         return new Carbon($dt);
     }
 
@@ -332,7 +365,8 @@ final class WebhookEventRepository
      *
      * Prioritas:
      * 1) signature di payload (contoh Midtrans: signature_key)
-     * 2) signature headers (contoh Stripe/Paddle/OY/Payoneer/dst) dari current request()
+     * 2) jika signature header sudah difingerprint oleh middleware VerifyWebhookSignature,
+     *    gunakan nilai itu (dipassing sebagai parameter $signatureHash saat store)
      * 3) fallback: body fingerprint (tetap berguna untuk audit) dengan prefix "body:"
      */
     private function computeSignatureHash(string $provider, array $payload, string $rawBody): string
@@ -343,7 +377,7 @@ final class WebhookEventRepository
         if ($provider === 'midtrans') {
             $sigKey = $payload['signature_key'] ?? null;
             if (is_string($sigKey) && trim($sigKey) !== '') {
-                return hash('sha256', 'midtrans:' . trim($sigKey));
+                return hash('sha256', 'midtrans:'.trim($sigKey));
             }
         }
 
@@ -353,57 +387,91 @@ final class WebhookEventRepository
             $sha2sig = $payload['sha2sig'] ?? null;
 
             if (is_string($sha2sig) && trim($sha2sig) !== '') {
-                return hash('sha256', 'skrill:sha2:' . trim($sha2sig));
+                return hash('sha256', 'skrill:sha2:'.trim($sha2sig));
             }
             if (is_string($md5sig) && trim($md5sig) !== '') {
-                return hash('sha256', 'skrill:md5:' . trim($md5sig));
+                return hash('sha256', 'skrill:md5:'.trim($md5sig));
             }
         }
 
-        $req = $this->currentRequest();
-        if ($req instanceof Request) {
-            $candidates = [
-                // Stripe
-                'Stripe-Signature',
-                // Paddle Billing
-                'Paddle-Signature',
-                'paddle-signature',
-                // OY / Payoneer / TriPay / generic
-                'X-OY-Signature',
-                'X-Payoneer-Signature',
-                'X-Callback-Signature',
-                // Xendit token style
-                'X-CALLBACK-TOKEN',
-                'X-Callback-Token',
-                // Generic / legacy
-                'X-Signature',
-                'X-Webhook-Signature',
-                'X-Hub-Signature',
-                'X-Hub-Signature-256',
-                'Signature',
-                'Authorization',
-            ];
-
-            foreach ($candidates as $h) {
-                $v = $req->headers->get($h);
-                if (is_string($v) && trim($v) !== '') {
-                    return hash('sha256', $provider . ':hdr:' . strtolower($h) . ':' . trim($v));
-                }
-            }
-        }
-
-        // Fallback audit fingerprint (bukan material signature, tapi tetap berguna untuk forensik)
-        return hash('sha256', 'body:' . $rawBody);
+        // Untuk provider lain, kita tidak menyimpan raw signature header (bisa sensitif).
+        // Fingerprint signature header seharusnya diambil dari middleware VerifyWebhookSignature
+        // dan dipassing sebagai $signatureHash. Kalau tidak ada, fallback ke body fingerprint.
+        return hash('sha256', 'body:'.$rawBody);
     }
 
-    private function currentRequest(): ?Request
+    /**
+     * Normalisasi signature hash (sha256 hex) agar konsisten.
+     */
+    private function normalizeSignatureHash(string $hash): string
     {
-        try {
-            $r = request();
-            return $r instanceof Request ? $r : null;
-        } catch (\Throwable) {
-            return null;
+        $h = strtolower(trim($hash));
+
+        // Jika bukan hex sha256, tetap hash ulang agar stabil.
+        if ($h === '' || ! preg_match('/^[a-f0-9]{64}$/', $h)) {
+            return hash('sha256', 'sig:'.$hash);
         }
+
+        return $h;
+    }
+
+    /**
+     * Sanitasi headers untuk audit:
+     * - simpan hanya string scalar
+     * - buang header yang berpotensi mengandung secret/credential
+     * - batasi panjang value
+     *
+     * @param  array<string, mixed>  $headers
+     * @return array<string, string>
+     */
+    private function sanitizeHeaders(array $headers): array
+    {
+        $deny = [
+            'authorization',
+            'cookie',
+            'set-cookie',
+            'x-api-key',
+            'api-key',
+            'x-callback-token',
+            'x-callback-signature',
+            'stripe-signature',
+            'paddle-signature',
+            'signature',
+        ];
+
+        $out = [];
+
+        foreach ($headers as $k => $v) {
+            $key = strtolower(trim((string) $k));
+            if ($key === '' || in_array($key, $deny, true)) {
+                continue;
+            }
+
+            // Flatten common header shapes (string|array)
+            if (is_array($v)) {
+                $v = implode(',', array_map(static fn ($x) => (string) $x, $v));
+            }
+
+            if (! is_string($v)) {
+                $v = (string) $v;
+            }
+
+            $val = trim($v);
+            if ($val === '') {
+                continue;
+            }
+
+            // Prevent giant blobs
+            if (strlen($val) > 512) {
+                $val = substr($val, 0, 512).'...';
+            }
+
+            $out[$key] = $val;
+        }
+
+        ksort($out);
+
+        return $out;
     }
 
     /**

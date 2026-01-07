@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -22,7 +23,7 @@ use Throwable;
  *     - traceparent (W3C Trace Context) -> pakai trace-id sebagai correlation id
  * - Jika tidak ada / invalid -> generate ULID
  * - Simpan ke request attribute
- * - Inject ke Log context
+ * - Inject ke Context (agar ikut ke logging metadata + terbawa ke queued job)
  * - Propagate ke response header X-Request-ID
  *
  * Catatan:
@@ -70,8 +71,8 @@ class CorrelationIdMiddleware
         $request->attributes->set(self::ATTR_SOURCE, $source);
         $request->headers->set(self::HEADER, $requestId);
 
-        // Log context (shareContext jika ada, fallback withContext)
-        $this->addToLogContext($requestId, $source);
+        // Context (utama): otomatis ikut ke metadata log & ikut kebawa ke queued jobs.
+        $this->addToContext($requestId, $source);
 
         try {
             /** @var \Symfony\Component\HttpFoundation\Response $response */
@@ -117,6 +118,7 @@ class CorrelationIdMiddleware
                 if ($traceId !== null) {
                     return [$traceId, 'traceparent'];
                 }
+
                 continue;
             }
 
@@ -131,18 +133,35 @@ class CorrelationIdMiddleware
     }
 
     /**
-     * Inject context ke log (agar semua log line punya request_id).
+     * Tambahkan request id ke Context (ideal) atau fallback ke Log context.
+     *
+     * - Context: akan otomatis ditambahkan sebagai metadata di log
+     *   dan ikut terbawa ke job queue.
+     * - Fallback Log context dipakai hanya jika Context tidak tersedia.
      */
-    private function addToLogContext(string $requestId, string $source): void
+    private function addToContext(string $requestId, string $source): void
     {
-        $ctx = [
+        $data = [
             'request_id' => $requestId,
             'request_id_source' => $source,
         ];
 
+        // Laravel Context (recommended)
+        try {
+            if (class_exists(Context::class)) {
+                Context::add($data);
+
+                return;
+            }
+        } catch (Throwable) {
+            // lanjut fallback
+        }
+
+        // Fallback: inject ke Log context (untuk Laravel lama)
         try {
             if (method_exists(Log::class, 'shareContext')) {
-                Log::shareContext($ctx);
+                Log::shareContext($data);
+
                 return;
             }
         } catch (Throwable) {
@@ -150,7 +169,7 @@ class CorrelationIdMiddleware
         }
 
         try {
-            Log::withContext($ctx);
+            Log::withContext($data);
         } catch (Throwable) {
             // ignore
         }
