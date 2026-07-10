@@ -37,7 +37,7 @@ if [ -z "${APP_KEY:-}" ]; then
   fi
 fi
 
-# Force Postgres as default for this entrypoint
+# Force Postgres as the default database driver for this entrypoint.
 export DB_CONNECTION="${DB_CONNECTION:-pgsql}"
 
 # --------------------------------------------------------
@@ -103,7 +103,7 @@ fi
 # --------------------------------------------------------
 # 6) Start the web process (one process per container)
 # --------------------------------------------------------
-START_MODE="${START_MODE:-fpm}" # fpm | builtin
+START_MODE="${START_MODE:-builtin}" # fpm | builtin
 PORT="${PORT:-8080}"
 
 if [ "${START_MODE}" = "builtin" ]; then

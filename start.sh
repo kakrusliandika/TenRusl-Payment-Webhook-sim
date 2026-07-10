@@ -81,7 +81,6 @@ if [ "${APP_ENV}" = "production" ] || [ "${STRICT_BOOT}" = "1" ]; then
     fail "Production requires QUEUE_CONNECTION=redis (for retry + burst traffic)."
   fi
 
-  # Session tidak selalu kritikal utk webhook, tapi aman disentralisasi
   if [ "${SESSION_DRIVER:-}" != "redis" ]; then
     warn "SESSION_DRIVER is not redis. Recommended: SESSION_DRIVER=redis for multi-instance."
   fi
@@ -180,7 +179,6 @@ EOF
 
     trap 'kill -TERM "${FPM_PID}" "${NGINX_PID}" 2>/dev/null || true; wait || true' INT TERM
 
-    # monitor: kalau salah satu mati, matikan yang lain
     while kill -0 "${FPM_PID}" 2>/dev/null && kill -0 "${NGINX_PID}" 2>/dev/null; do
       sleep 1
     done
@@ -192,7 +190,7 @@ EOF
     ;;
 
   fpm)
-    # php-fpm only (untuk compose + nginx terpisah)
+    # php-fpm only for Compose stacks with a separate Nginx service.
     exec php-fpm -F
     ;;
 
@@ -211,12 +209,12 @@ EOF
     ;;
 
   scheduler-run)
-    # dipanggil cron job (sekali eksekusi)
+    # Called by cron or a scheduler service as a single execution.
     exec php artisan schedule:run --no-interaction
     ;;
 
   scheduler-work)
-    # loop worker (enak utk local/dev)
+    # Long-running scheduler loop for local development.
     run_graceful php artisan schedule:work --no-interaction
     ;;
 
